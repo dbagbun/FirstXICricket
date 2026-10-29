@@ -106,7 +106,7 @@ function stageRank(st){return{group:1,super:2,playoff:2,quarter:3,semi:4,final:5
 function coachNews(text,cls=''){S.coach.news.push({date:careerDate(),text,cls});if(S.coach.news.length>40)S.coach.news.shift();}
 // Objectives for a series as soon as your next match belongs to it.
 function ensureObjectives(fx){
-  const C=S.coach;if(!C||!C.team||!fx||![fx.a,fx.b].includes(C.team)||C.objs.some(o=>o.sid===fx.sid))return;
+  const C=S.coach;if(!C||!C.team||!fx||fx.friendly||!fx.sid||![fx.a,fx.b].includes(C.team)||C.objs.some(o=>o.sid===fx.sid))return;
   const all=allFixtures().filter(x=>x.sid===fx.sid&&x.playable),mine=all.filter(x=>x.a===C.team||x.b===C.team);
   const teams=[...new Set(all.flatMap(x=>[x.a,x.b]))],fmt=fx.fmt==='TEST'?'TEST':fx.fmt==='T20'?'T20':'ODI';
   let o;

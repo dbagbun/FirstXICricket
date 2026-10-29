@@ -79,7 +79,8 @@ function captainPanel(M){
     if(left.length)rows.push(`<div class="row"><span class="sub">${esc(teamShort(I.bat))} - next in:</span><select id="cap-next">${left.map(p=>`<option value="${p}">${esc(pName(p))} (${BAT_NAME[batColour(M,p,I.wkts+2,I.bowl)]})</option>`).join('')}</select></div>`);
     rows.push(`<div class="row">${seg(I.bat,'Batting:')}</div>`);
   }
-  return`<div class="stack" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)"><h3 style="margin:0">Captain</h3>${rows.join('')}
+  const head=M.h2h?`<h3 style="margin:0">${esc(M.h2h[I.bowl])} (${esc(teamShort(I.bowl))}) bowls · ${esc(M.h2h[I.bat])} (${esc(teamShort(I.bat))}) bats</h3>`:'<h3 style="margin:0">Captain</h3>';
+  return`<div class="stack" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)">${head}${rows.join('')}
     <div class="muted" style="font-size:12px">Attack moves every over one card faster (more runs, more wickets), defend one slower. Batting and field settings add up.</div></div>`;
 }
 function wireCaptain(M){
@@ -89,14 +90,14 @@ function wireCaptain(M){
 }
 
 // ---------- start a fixture ----------
-function startFixture(key){
+function startFixture(key,fxObj){
   if(S.live&&S.live.state!=='done'){
     if(S.live.key===key){go('match');return;}
     if(!confirm('A match is in progress. Abandon it and start this one?'))return;
   }
-  const fx=fixtureByKey(key);if(!fx)return;
+  const fx=fxObj||fixtureByKey(key);if(!fx)return;
   if(S.coach&&S.coach.team)ensureObjectives(fx);
-  LM=buildMatch(fx);
+  LM=buildMatch(fx);if(fx.friendly)LM.friendly=true;
   LM.manual=S.settings.dice==='manual';
   if(S.settings.captain==='manual')LM.manualCaptain=captainOf(LM);
   S.live=LM;saveGame();
@@ -146,9 +147,19 @@ function renderPre(el,M){
       <select id="toss-c"><option value="">Captain decides</option><option value="bat">and bat</option><option value="bowl">and bowl</option></select>
       <button class="btn pri" id="toss-go">Toss &amp; start</button>
       <button class="btn" id="pre-sim">Quick sim</button></div>
+      <div class="row" style="margin-top:10px"><label class="row" style="gap:6px"><input type="checkbox" id="h2h" ${M.friendly?'checked':''}> Two players (head-to-head)</label>
+        <span id="h2h-names" class="row ${M.friendly?'':'hidden'}">${M.teams.map((t,i)=>`<label>${badge(t)} <input type="text" id="h2h-${i}" value="Player ${i+1}" style="width:120px"></label>`).join('')}
+        <label class="row" style="gap:6px"><input type="checkbox" id="h2h-dice" checked> roll real dice</label></span></div>
       <div class="muted" style="margin-top:6px;font-size:12px">Dice: ${S.settings.dice==='manual'?'you roll (enter each 1-100 roll)':'automatic'} · Captain: ${M.manualCaptain?(Object.keys(M.manualCaptain).length>1?'you, for both sides':'you, for '+esc(teamName(+Object.keys(M.manualCaptain)[0]))):'AI'} - change in Settings.</div></div>
   </div>`;
-  $('#toss-go').onclick=()=>{const w=$('#toss-w').value;doToss(M,w==='r'?null:+w,$('#toss-c').value||null);
+  $('#h2h').onchange=e=>$('#h2h-names').classList.toggle('hidden',!e.target.checked);
+  $('#toss-go').onclick=()=>{
+    if($('#h2h').checked){
+      M.h2h=Object.fromEntries(M.teams.map((t,i)=>[t,($('#h2h-'+i).value||'Player '+(i+1)).trim()]));
+      M.manualCaptain=Object.fromEntries(M.teams.map(t=>[t,true]));M.manual=$('#h2h-dice').checked;
+    }
+    const w=$('#toss-w').value;doToss(M,w==='r'?null:+w,$('#toss-c').value||null);
+    if(M.h2h)toast(`${esc(M.h2h[curInn(M).bowl])} has the ball, ${esc(M.h2h[curInn(M).bat])} bats.`);
     toast(`${esc(teamName(M.toss.w))} won the toss and chose to ${M.toss.choice}.`);saveGame();rerender();};
   $('#pre-sim').onclick=()=>{doToss(M);M.manual=false;M.manualCaptain=null;simMatch(M);};
   $$('[data-swap]').forEach(b=>b.onclick=()=>{const[t,i]=b.dataset.swap.split(':').map(Number);openSwap(M,t,i);});
@@ -241,7 +252,7 @@ function doneBlock(M){
   const E=S.matches.find(x=>x.id===M.id);
   const n=nextFixture();
   return`<div class="card hi"><div class="spread"><div><div class="result-big">${esc(M.result.text)}</div>
-    ${E&&E.motm?`<div style="margin-top:4px">Man of the Match: <b>${plink(E.motm)}</b></div>`:''}</div>
+    ${E&&E.motm?`<div style="margin-top:4px">Man of the Match: <b>${plink(E.motm)}</b></div>`:''}${M.friendly?'<div class="muted">Friendly - not part of your career.</div>':''}</div>
     <div class="row">${n?`<button class="btn pri" id="d-next">Next: ${esc(teamShort(n.a))} v ${esc(teamShort(n.b))}</button>`:''}<button class="btn" data-go="home">Dashboard</button></div></div></div>`;
 }
 // Steps: ball / over / 5 overs / innings / match. Stops early for a manual roll or a follow-on decision.
@@ -268,7 +279,8 @@ function afterStep(M){
 }
 function askRoll(M){
   const C=M.cur,what=M.needRoll==='comp'?'a fresh roll for the re-bowled ball':'the roll for this over';
-  $('#dice-in').innerHTML=`<span class="dice">🎲 Enter ${what} (RR_${C?C.card:'?'}): <input type="number" id="roll-v" min="1" max="100" style="width:70px"> <button class="btn sm pri" id="roll-ok">Roll in</button> <button class="btn sm" id="roll-auto">Roll for me</button></span>`;
+  const who=M.h2h?`<b>${esc(M.h2h[curInn(M).bowl])}</b>, `:'';
+  $('#dice-in').innerHTML=`<span class="dice">🎲 ${who}${who?'enter':'Enter'} ${what} (RR_${C?C.card:'?'}): <input type="number" id="roll-v" min="1" max="100" style="width:70px"> <button class="btn sm pri" id="roll-ok">Roll in</button> <button class="btn sm" id="roll-auto">Roll for me</button></span>`;
   const go_=v=>{v=+v;if(!(v>=1&&v<=100)){toast('Rolls are 1 to 100.','warn');return;}M.rollIn=v;M.needRoll=null;step(M,'ball');};
   $('#roll-ok').onclick=()=>go_($('#roll-v').value);
   $('#roll-v').onkeydown=e=>{if(e.key==='Enter')go_(e.target.value);};

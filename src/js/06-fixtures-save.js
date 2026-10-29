@@ -88,18 +88,23 @@ function buildMatch(fx){
 // Your side picks from its squad (injuries, squad choices); then form & fatigue become the engine's mods.
 function selectAndMods(M,fx){
   const my=managedTeam();
-  if(my&&M.teams.includes(my)&&M.xi[my]){const r=pickXI(fx,my,M.xi[my]);M.xi[my]=r.xi;M.selNotes=r.notes;}
+  if(my&&!fx.friendly&&M.teams.includes(my)&&M.xi[my]){const r=pickXI(fx,my,M.xi[my]);M.xi[my]=r.xi;M.selNotes=r.notes;}
   M.mods=matchMods(M);
 }
 
 // ---------- end of match ----------
 let uiMatchHook=null,uiDoneHook=null;
 function onMatchEvent(M,e){
+  if(M.friendly){if(uiMatchHook)uiMatchHook(M,e,null);return;}
   const fast=M.sim?null:liveFastest(M,e);
   if(M.sim&&(e.t==='50'||e.t==='100'))liveFastest(M,e);
   if(uiMatchHook)uiMatchHook(M,e,fast);
 }
 function onMatchDone(M){
+  if(M.friendly){   // friendlies don't touch the career: no archive, stats, rankings or milestones
+    const E=archiveMatch(M);if(S.live&&S.live.id===M.id)S.live=null;saveGame();
+    if(uiDoneHook)uiDoneHook(M,E,[],null,[],[]);return;
+  }
   const E=archiveMatch(M);
   if(M.key)S.done[M.key]=E.id;
   if(M.reseeded)S.reseed[M.key]={a:M.teams[0],b:M.teams[1]};

@@ -43,7 +43,7 @@ RENDER.home=(el)=>{
       ${myT?`<div class="card"><h3>${badge(my)} ${esc(teamName(my))}</h3>${FORMATS.filter(f=>S.teams[f][my]).map(f=>{const T=S.teams[f][my];return`<div class="spread"><span class="sub">${f}</span><span class="num">P${T.p} W${T.w} L${T.l}${T.d?' D'+T.d:''}${T.t?' T'+T.t:''}</span></div>`;}).join('')}</div>`:''}
       <div class="card"><h3>Latest milestones</h3>${S.ms.slice(-6).reverse().map(m=>`<div style="margin-bottom:6px">🏅 ${plink(m.pid)} <span class="sub">${esc(m.text)}</span></div>`).join('')||'<p class="muted">None yet.</p>'}
         <button class="btn sm" data-go="miles">All milestones</button></div>
-      <div class="card"><h3>Tests &amp; T20s</h3><p class="sub" style="margin-top:0">The fixture list is the real ODI calendar. Schedule Test, ODI or T20 series between any two sides and they slot into your career by date.</p><button class="btn" id="h-test">Schedule a series</button></div>
+      <div class="card"><h3>Tests &amp; T20s</h3><p class="sub" style="margin-top:0">The fixture list is the real ODI calendar. Schedule Test, ODI or T20 series between any two sides and they slot into your career by date.</p><button class="btn" id="h-test">Schedule a series</button> <button class="btn" id="h-friendly">Friendly / head-to-head</button></div>
     </div></div>`;
   if(n){
     $('#h-play').onclick=()=>startFixture(n.key);
@@ -52,6 +52,7 @@ RENDER.home=(el)=>{
     $('#h-simn').onclick=openSimMore;
   }
   $('#h-test').onclick=()=>openTestCreator();
+  $('#h-friendly').onclick=openFriendly;
   $('#h-simto')&&($('#h-simto').onclick=simToMyMatch);
   $$('[data-playkey]').forEach(b=>b.onclick=()=>startFixture(b.dataset.playkey));
 };
@@ -131,6 +132,25 @@ function openTestCreator(fmt='TEST'){
     const a=+$('#ts-a').value,b=+$('#ts-b').value;if(a===b){toast('Pick two different teams.','warn');return;}
     const T=createSeries({fmt,a,b,n:+$('#ts-n').value,start:$('#ts-d').value||d});
     saveGame();closeModal();toast(esc(T.title)+' scheduled.');rerender();
+  };
+}
+
+// A one-off match between any two sides, any format, any date - for two players at one screen.
+function openFriendly(){
+  const opts=sel=>ALL_TEAMS.map(t=>`<option value="${t}" ${t===sel?'selected':''}>${esc(teamName(t))}</option>`).join('');
+  openModal(`<h2>Friendly</h2><p class="sub">Any two sides, squads as they were on the date. Two players can take a side each and roll their own dice. It doesn't count in your career.</p>
+    <div class="stack"><div class="row"><label>Home <select id="fr-a">${opts(4)}</select></label><label>Away <select id="fr-b">${opts(1)}</select></label></div>
+    <div class="row"><div class="seg">${FORMATS.map(f=>`<button data-frf="${f}" class="${f==='ODI'?'on':''}">${FMT_NAME[f]}</button>`).join('')}</div>
+      <label>Date <input type="date" id="fr-d" value="${careerDate()}"></label></div>
+    <button class="btn pri" id="fr-go">Team sheets</button></div>`);
+  let fmt='ODI';
+  $$('[data-frf]').forEach(b=>b.onclick=()=>{fmt=b.dataset.frf;$$('[data-frf]').forEach(x=>x.classList.toggle('on',x===b));});
+  $('#fr-go').onclick=()=>{
+    const a=+$('#fr-a').value,b=+$('#fr-b').value;if(a===b){toast('Pick two different sides.','warn');return;}
+    let d=$('#fr-d').value||careerDate();if(fmt==='T20'&&d<T20_START)d=T20_START;
+    const v=(HOME_VENUES.get(a)||[{venue:teamName(a)+' Oval',city:''}])[0];
+    closeModal();
+    startFixture('F'+Date.now(),{key:'F'+Date.now(),fmt,date:d,a,b,venue:v.venue,city:v.city,sid:null,title:'Friendly',label:FMT_NAME[fmt]+' friendly',playable:true,custom:true,friendly:true});
   };
 }
 
