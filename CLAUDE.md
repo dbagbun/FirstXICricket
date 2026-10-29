@@ -28,13 +28,14 @@ The repo root holds a prebuilt `first-xi.html` (double-click to open). **After a
 - `data/world.json` - generated, committed: teams, RR cards, fixtures, XIs, bowling plans, players (`[name, style P/S/M/N, rating 1-5 or 7, maxOvers, src h|d, batColour B/G/R/BG or '', batSrc h|d]`), optional `tests`/`txi`.
 - `tools/extract.py` - workbook → `data/world.json` (needs `openpyxl`). Bowling ratings: the workbook's Players sheet (by name) wins, else derived from real BowlingXI spells (percentile of runs/over − 9×wkts/over vs full members; associates +1).
 - `tools/cricsheet_tests.py` - adds real Tests from Cricsheet's `tests_json.zip` (stdlib only). Captain/keeper unknown in Cricsheet → -1, resolved in `testXI` from the nearest ODI XI.
+- `tools/cricsheet_odis.py` - adds what really happened (`WORLD.real[cid]`: result, innings totals, top scorer, best bowling, player of the match) from Cricsheet's `odis_json.zip`. Game side `05b-history.js` (`realOf`, `sameAsHistory`, `timelineDrift`, `realChampion`, `realHTML`): shown only for matches you've played, never mid-match; Settings → Real results hides it.
 - `tools/build.js [out] [world.json]`, `tools/check.js`, `tools/dev/` (eval helper, team-strength report)
 - `tests/` - jsdom end-to-end tests `e2eN.js`, `engine-stats.js`, `runall.sh`, `seed.js`
 
 ## Commands
 - `npm install`, `npm run build`, `npm test` (build + checks + all e2e + engine stats; ~30 s), `npm run check`
 - `python3 tools/extract.py FirstXI.xlsm data/world.json` after changing the workbook data
-- `python3 tools/cricsheet_tests.py tests_json.zip` to add the real Test calendar
+- `python3 tools/cricsheet_tests.py tests_json.zip` to add the real Test calendar; `python3 tools/cricsheet_odis.py odis_json.zip` for real ODI results
 - Reproducible: `FXI_SEED=42 node -r ./tests/seed.js tests/e2e1.js dist/first-xi.html`
 - Engine tuning: `node tests/engine-stats.js 400 150`; balance: `node tools/dev/strength.js`
 

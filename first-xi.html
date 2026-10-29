@@ -856,7 +856,7 @@ let S=null;
 function newCareer(opts={}){
   return{
     v:1,created:Date.now(),name:opts.name||'My career',
-    settings:{dice:'auto',captain:'auto',knockouts:'timeline',batColours:'player',ratings:'era',myTeam:+opts.myTeam||0,ballDelay:250,sound:false},
+    settings:{dice:'auto',captain:'auto',knockouts:'timeline',batColours:'player',ratings:'era',history:'after',myTeam:+opts.myTeam||0,ballDelay:250,sound:false},
     done:{},          // fixture no / test id -> match id
     matches:[],       // archived scorecards (compact), oldest first
     logs:{},          // match id -> compact ball log, last LOG_KEEP matches only
@@ -1184,6 +1184,46 @@ function seriesStatus(sid){
   else if(wa===wb)text=left?`Series level ${wa}-${wb}`:`Series drawn ${wa}-${wb}`;
   else{const[l,ws,ls]=wa>wb?[a,wa,wb]:[b,wb,wa];text=`${teamName(l)} ${left?(ws>ls+left?'have won':'lead'):'won'} ${ws}-${ls}`;}
   return{text,played:R.length,total,wins:w,draws:dr,left};
+}
+
+// ═══ YOUR TIMELINE v HISTORY — real results from Cricsheet (optional, tools/cricsheet_odis.py) ═══
+// WORLD.real[cid] = {r:[winner, 'runs'|'wkts'|'tie'|'nr', margin, dl], inn:[[team,runs,wkts,balls]], pom, top:[pid,r,b], bb:[pid,w,r]}
+// Real results are only shown for fixtures you have played (no spoilers), unless Settings -> History is off.
+const HAS_REAL=!!(WORLD.real&&Object.keys(WORLD.real).length);
+function realOf(E){
+  if(!HAS_REAL||!E||!E.fid||(S&&S.settings.history==='off'))return null;
+  const f=FIX_BY_NO.get(E.fid);return f&&WORLD.real[f.cid]||null;
+}
+function realText(R){
+  const[w,t,m,dl]=R.r;
+  if(t==='nr')return'No result';
+  if(t==='tie')return'Match tied';
+  return`${teamName(w)} won by ${plural(m,t==='runs'?'run':'wicket')}${dl?' (D/L)':''}`;
+}
+// same: the same side won (or both tied); null when history had no result or the teams were re-seeded
+function sameAsHistory(E){
+  const R=realOf(E);if(!R||E.reseeded||R.r[1]==='nr')return null;
+  if(R.r[1]==='tie')return E.result.type==='tie';
+  return E.result.winner===R.r[0];
+}
+function timelineDrift(){
+  let n=0,same=0;const changed=[];
+  for(const E of S.matches){const s=sameAsHistory(E);if(s===null)continue;n++;if(s)same++;else changed.push(E);}
+  return{n,same,changed};
+}
+// The real winner of an edition's final, once you have played that final.
+function realChampion(sid){
+  const E=edition(sid);if(!E||!E.ko.length)return 0;
+  const f=E.ko[E.ko.length-1];if(!S.done['o'+f.no])return 0;
+  const R=HAS_REAL&&WORLD.real[f.cid];return R&&R.r[0]||0;
+}
+function realHTML(E){
+  const R=realOf(E);if(!R)return'';
+  const s=sameAsHistory(E);
+  return`<div class="card" style="margin-top:12px"><div class="spread"><h3 style="margin:0">What really happened</h3>${s===null?'':s?'<span class="pill win">same winner as history</span>':'<span class="pill ko">history changed</span>'}</div>
+    <div class="result-big" style="font-size:16px;margin:6px 0">${esc(realText(R))}</div>
+    ${R.inn.map(i=>`<div class="spread"><span>${badge(i[0])} ${esc(teamName(i[0]))}</span><b class="num">${i[1]}${i[2]<10?'/'+i[2]:''} <span class="muted">(${oversTxt(i[3])})</span></b></div>`).join('')}
+    <div class="sub" style="margin-top:6px">${R.top[0]?`Top score: ${plink(R.top[0])} ${R.top[1]} (${R.top[2]})`:''}${R.bb[0]?` · Best bowling: ${plink(R.bb[0])} ${R.bb[1]}/${R.bb[2]}`:''}${R.pom?` · Player of the match: ${plink(R.pom)}`:''}</div></div>`;
 }
 
 // ═══ FIXTURES, TEST SERIES, MATCH PIPELINE & SAVES ═══
@@ -1928,14 +1968,14 @@ function scorecardHTML(E,M){
     ${I.parts.length?`<details style="margin-top:6px"><summary class="muted" style="cursor:pointer">Partnerships</summary><table class="num">${I.parts.map(p=>`<tr><td>${ordinal(p[4])} wkt</td><td>${esc(pName(p[0]))} &amp; ${esc(pName(p[1]))}</td><td class="r"><b>${p[2]}</b>${p[5]?'':'*'}</td><td class="r muted">(${p[3]} balls)</td></tr>`).join('')}</table></details>`:''}
     </div>`;
   }).join('')+(E.inns.length?'':'<div class="muted">No play yet.</div>')+(E.result&&E.motm&&(!M||M.state==='done')?`<div class="banner">Man of the Match: <b>${plink(E.motm)}</b></div>`:'')
-  +realBlock(E);
+  +(!M||M.state==='done'?realHTML(E)+realBlock(E):'');   // no spoilers mid-match
 }
 // "What really happened": the real bowling figures for a historical ODI.
 function realBlock(E){
   const f=E.fid&&FIX_BY_NO.get(E.fid);if(!f||E.reseeded)return'';
   const rows=E.teams.map(t=>[t,realFigures(f.cid,t)]).filter(x=>x[1].length);
   if(!rows.length)return'';
-  return`<details style="margin-top:12px"><summary class="muted" style="cursor:pointer">What really happened (real bowling figures)</summary>${rows.map(([t,fig])=>`<h3 style="margin-top:10px">${esc(teamName(t))} bowling</h3><table class="num">${fig.map(r=>`<tr><td>${esc(pName(r[0]))}</td><td class="r">${r[1]} ov</td><td class="r">${r[2]} m</td><td class="r">${r[3]} r</td><td class="r"><b>${r[4]} w</b></td></tr>`).join('')}</table>`).join('')}</details>`;
+  return`<details style="margin-top:12px"><summary class="muted" style="cursor:pointer">Real bowling figures</summary>${rows.map(([t,fig])=>`<h3 style="margin-top:10px">${esc(teamName(t))} bowling</h3><table class="num">${fig.map(r=>`<tr><td>${esc(pName(r[0]))}</td><td class="r">${r[1]} ov</td><td class="r">${r[2]} m</td><td class="r">${r[3]} r</td><td class="r"><b>${r[4]} w</b></td></tr>`).join('')}</table>`).join('')}</details>`;
 }
 
 // ---------- charts ----------
@@ -1995,6 +2035,7 @@ RENDER.home=(el)=>{
     <div class="stack">
       ${live&&(!n||live.key!==n.key)?`<div class="card"><div class="spread"><div><span class="pill live">LIVE</span> <b>${esc(teamName(live.teams[0]))} v ${esc(teamName(live.teams[1]))}</b></div><button class="btn pri" data-go="match">Resume</button></div></div>`:''}
       ${nextCard}${tourn}
+      ${driftCard()}
       <div class="card"><h3>Recent results</h3>${recent.length?recent.map(matchLine).join('<hr style="border:0;border-top:1px solid var(--line)">'):'<p class="muted">No matches yet. Your career starts with the '+esc(seriesOf(FIX[0]).title)+'.</p>'}</div>
     </div>
     <div class="stack">
@@ -2015,6 +2056,15 @@ RENDER.home=(el)=>{
   }
   $('#h-test').onclick=openTestCreator;
 };
+function driftCard(){
+  if(!HAS_REAL||S.settings.history==='off')return'';
+  const D=timelineDrift();if(!D.n)return'';
+  return`<div class="card"><div class="spread"><h3 style="margin:0">Your timeline v history</h3><b class="num">${Math.round(100*D.same/D.n)}% as it happened</b></div>
+    <div class="bar" style="margin:8px 0"><i style="width:${(100*D.same/D.n).toFixed(1)}%"></i></div>
+    <div class="sub">${D.same} of ${D.n} results went the way they really did. Latest changes to history:</div>
+    ${D.changed.slice(-4).reverse().map(E=>`<div class="spread" data-mid="${E.id}" style="cursor:pointer;margin-top:4px"><span>${badge(E.result.winner)} beat ${badge(otherOf(E,E.result.winner))} <span class="muted">${fmtDate(E.date)}</span></span><span class="muted" style="font-size:12px">really: ${esc(realText(realOf(E)))}</span></div>`).join('')}
+    <button class="btn sm" style="margin-top:8px" data-go="history" data-arg="changed">All changed results</button></div>`;
+}
 function miniTable(sid){
   const E=edition(sid);if(!E)return'';
   const res=editionResults(sid);if(!res.size)return'';
@@ -2167,6 +2217,8 @@ RENDER.tour=(el,arg)=>{
   const lb=Object.entries(bat).sort((a,b)=>b[1]-a[1]).slice(0,5),lw=Object.entries(bowl).sort((a,b)=>b[1][0]-a[1][0]||a[1][1]-b[1][1]).slice(0,5);
   el.innerHTML=`<div class="card"><div class="row"><select id="tc-sel">${years.map(y=>`<optgroup label="${y}">${TOURNEYS.filter(s=>s.start.startsWith(y)).map(s=>`<option value="${esc(s.sid)}" ${s.sid===sid?'selected':''}>${esc(s.title)}</option>`).join('')}</optgroup>`).join('')}</select>
     <span class="pill">${esc(stageNow)}</span><span class="muted">${fmtDate(E.s.start)} - ${fmtDate(E.s.end)} · ${E.s.teams.size} teams · ${E.fix.length} fixtures · ${R.size} played</span></div>
+    ${(()=>{const rc=S.settings.history!=='off'&&realChampion(sid),fin=E.ko.length&&S.matches.find(m=>m.fid===E.ko[E.ko.length-1].no);
+      return rc&&fin?`<div class="banner" style="margin-top:8px">Champions in your timeline: <b>${esc(teamName(fin.result.winner))}</b> · in history: <b>${esc(teamName(rc))}</b></div>`:'';})()}
     <div class="muted" style="font-size:12px;margin-top:6px">Knockouts: ${S.settings.knockouts==='timeline'?'re-seeded from your tables once the league stage is complete':'follow history'} (Settings).</div></div>
   <div class="grid ${gt.length>1?'g2':''}" style="margin-top:14px">${groupsHTML}</div>
   ${superHTML?`<div class="card" style="margin-top:14px">${superHTML}</div>`:''}
@@ -2228,19 +2280,22 @@ RENDER.players=(el)=>{
   $('#pl-prev')&&($('#pl-prev').onclick=()=>{PL_F.page--;rerender();});$('#pl-next')&&($('#pl-next').onclick=()=>{PL_F.page++;rerender();});
 };
 
-let HI_F={fmt:'',team:'',page:0};
-RENDER.history=(el)=>{
-  const L=S.matches.filter(E=>(!HI_F.fmt||E.fmt===HI_F.fmt)&&(!HI_F.team||E.teams.includes(+HI_F.team))).reverse();
+let HI_F={fmt:'',team:'',page:0,changed:false};
+RENDER.history=(el,arg)=>{
+  if(arg==='changed'){HI_F.changed=true;HI_F.page=0;VIEW_ARG=null;}
+  const L=S.matches.filter(E=>(!HI_F.fmt||E.fmt===HI_F.fmt)&&(!HI_F.team||E.teams.includes(+HI_F.team))&&(!HI_F.changed||sameAsHistory(E)===false)).reverse();
   const pages=Math.max(1,Math.ceil(L.length/25));HI_F.page=clamp(HI_F.page,0,pages-1);
   const teams=[...TEAMS.values()].sort((a,b)=>a.name.localeCompare(b.name));
   const h2h=HI_F.team?Object.entries(L.reduce((o,E)=>{const opp=otherOf(E,+HI_F.team),r=o[opp]=o[opp]||{p:0,w:0,l:0};r.p++;if(E.result.winner===+HI_F.team)r.w++;else if(E.result.winner)r.l++;return o;},{})).sort((a,b)=>b[1].p-a[1].p):[];
   el.innerHTML=`<div class="card"><div class="row"><div class="seg">${[['','All'],['ODI','ODI'],['TEST','Test']].map(([k,n])=>`<button data-hf="${k}" class="${HI_F.fmt===k?'on':''}">${n}</button>`).join('')}</div>
+    ${HAS_REAL?`<label class="row" style="gap:6px"><input type="checkbox" id="hi-ch" ${HI_F.changed?'checked':''}> Changed history only</label>`:''}
     <select id="hi-t"><option value="">All teams</option>${teams.map(t=>`<option value="${t.id}" ${+HI_F.team===t.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select><span class="muted">${L.length} matches</span></div></div>
   ${h2h.length?`<div class="card" style="margin-top:14px"><h3>${esc(teamName(+HI_F.team))} head to head</h3><div class="grid g4">${h2h.map(([t,r])=>`<div class="spread"><span>${badge(+t)} ${esc(teamName(+t))}</span><span class="num">P${r.p} W${r.w} L${r.l}</span></div>`).join('')}</div></div>`:''}
   <div class="card stack" style="margin-top:14px">${L.slice(HI_F.page*25,HI_F.page*25+25).map(matchLine).join('<hr style="border:0;border-top:1px solid var(--line)">')||'<div class="empty">No results yet.</div>'}
   <div class="row">${HI_F.page>0?'<button class="btn sm" id="hi-prev">Newer</button>':''}<span class="muted">Page ${HI_F.page+1} of ${pages}</span>${HI_F.page<pages-1?'<button class="btn sm" id="hi-next">Older</button>':''}</div></div>`;
   $$('[data-hf]').forEach(b=>b.onclick=()=>{HI_F.fmt=b.dataset.hf;HI_F.page=0;rerender();});
   $('#hi-t').onchange=e=>{HI_F.team=e.target.value;HI_F.page=0;rerender();};
+  $('#hi-ch')&&($('#hi-ch').onchange=e=>{HI_F.changed=e.target.checked;HI_F.page=0;rerender();});
   $('#hi-prev')&&($('#hi-prev').onclick=()=>{HI_F.page--;rerender();});$('#hi-next')&&($('#hi-next').onclick=()=>{HI_F.page++;rerender();});
 };
 
@@ -2329,6 +2384,7 @@ RENDER.settings=(el)=>{
     <div class="spread"><span>Ratings &amp; colours</span>${seg('ratings',[['era','By era (form)'],['career','Whole career']])}</div>
     <div class="spread"><span>Batting colours</span>${seg('batColours',[['player','Player'],['position','Classic (by position)']])}</div>
     <div class="spread"><span>Tournament knockouts</span>${seg('knockouts',[['timeline','My timeline'],['history','History']])}</div>
+    ${HAS_REAL?`<div class="spread"><span>Real results (after you play a match)</span>${seg('history',[['after','Show'],['off','Hide']])}</div>`:''}
     <div class="spread"><span>Watch speed</span>${seg('ballDelay',[[600,'Slow'],[250,'Normal'],[60,'Fast']])}</div>
     <div class="spread"><span>Follow a team</span><select id="st-team"><option value="0">None</option>${[...TEAMS.values()].map(t=>`<option value="${t.id}" ${st.myTeam===t.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select></div>
     <button class="btn" id="st-guide">How to play</button></div>
@@ -2388,6 +2444,7 @@ uiDoneHook=(M,E,ms,pos,aw)=>{
       ${E.inns.map(I=>`<div class="spread"><span>${badge(I.bat)} ${esc(teamName(I.bat))}</span><b class="num">${innsShort(I,E.fmt)}</b></div>`).join('')}
       ${E.motm?`<div class="banner" style="margin-top:10px">Man of the Match: <b>${plink(E.motm)}</b></div>`:''}
       ${ss&&SERIES.get(E.sid)?.kind!=='tournament'?`<p class="sub">${esc(ss.text)}</p>`:''}
+      ${realOf(E)?`<p class="sub">In history: <b>${esc(realText(realOf(E)))}</b> ${sameAsHistory(E)===false?'<span class="pill ko">history changed</span>':sameAsHistory(E)?'<span class="pill win">as it happened</span>':''}</p>`:''}
       ${pos?`<div class="banner" style="margin-top:10px">Player of the series (${esc(pos.title)}): <b>${plink(pos.pid)}</b></div>`:''}
       ${ms.length?`<h3 style="margin-top:12px">Milestones</h3>${ms.map(m=>`<div>🏅 ${plink(m.pid)} <span class="sub">${esc(m.text)}</span></div>`).join('')}`:''}
       ${aw&&aw.length?`<h3 style="margin-top:12px">Season review</h3><div class="stack">${honoursHTML(aw.map(a=>a.year))}</div>`:''}

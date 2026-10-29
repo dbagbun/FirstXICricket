@@ -28,6 +28,7 @@ RENDER.home=(el)=>{
     <div class="stack">
       ${live&&(!n||live.key!==n.key)?`<div class="card"><div class="spread"><div><span class="pill live">LIVE</span> <b>${esc(teamName(live.teams[0]))} v ${esc(teamName(live.teams[1]))}</b></div><button class="btn pri" data-go="match">Resume</button></div></div>`:''}
       ${nextCard}${tourn}
+      ${driftCard()}
       <div class="card"><h3>Recent results</h3>${recent.length?recent.map(matchLine).join('<hr style="border:0;border-top:1px solid var(--line)">'):'<p class="muted">No matches yet. Your career starts with the '+esc(seriesOf(FIX[0]).title)+'.</p>'}</div>
     </div>
     <div class="stack">
@@ -48,6 +49,15 @@ RENDER.home=(el)=>{
   }
   $('#h-test').onclick=openTestCreator;
 };
+function driftCard(){
+  if(!HAS_REAL||S.settings.history==='off')return'';
+  const D=timelineDrift();if(!D.n)return'';
+  return`<div class="card"><div class="spread"><h3 style="margin:0">Your timeline v history</h3><b class="num">${Math.round(100*D.same/D.n)}% as it happened</b></div>
+    <div class="bar" style="margin:8px 0"><i style="width:${(100*D.same/D.n).toFixed(1)}%"></i></div>
+    <div class="sub">${D.same} of ${D.n} results went the way they really did. Latest changes to history:</div>
+    ${D.changed.slice(-4).reverse().map(E=>`<div class="spread" data-mid="${E.id}" style="cursor:pointer;margin-top:4px"><span>${badge(E.result.winner)} beat ${badge(otherOf(E,E.result.winner))} <span class="muted">${fmtDate(E.date)}</span></span><span class="muted" style="font-size:12px">really: ${esc(realText(realOf(E)))}</span></div>`).join('')}
+    <button class="btn sm" style="margin-top:8px" data-go="history" data-arg="changed">All changed results</button></div>`;
+}
 function miniTable(sid){
   const E=edition(sid);if(!E)return'';
   const res=editionResults(sid);if(!res.size)return'';

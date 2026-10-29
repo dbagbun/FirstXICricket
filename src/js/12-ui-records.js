@@ -48,19 +48,22 @@ RENDER.players=(el)=>{
   $('#pl-prev')&&($('#pl-prev').onclick=()=>{PL_F.page--;rerender();});$('#pl-next')&&($('#pl-next').onclick=()=>{PL_F.page++;rerender();});
 };
 
-let HI_F={fmt:'',team:'',page:0};
-RENDER.history=(el)=>{
-  const L=S.matches.filter(E=>(!HI_F.fmt||E.fmt===HI_F.fmt)&&(!HI_F.team||E.teams.includes(+HI_F.team))).reverse();
+let HI_F={fmt:'',team:'',page:0,changed:false};
+RENDER.history=(el,arg)=>{
+  if(arg==='changed'){HI_F.changed=true;HI_F.page=0;VIEW_ARG=null;}
+  const L=S.matches.filter(E=>(!HI_F.fmt||E.fmt===HI_F.fmt)&&(!HI_F.team||E.teams.includes(+HI_F.team))&&(!HI_F.changed||sameAsHistory(E)===false)).reverse();
   const pages=Math.max(1,Math.ceil(L.length/25));HI_F.page=clamp(HI_F.page,0,pages-1);
   const teams=[...TEAMS.values()].sort((a,b)=>a.name.localeCompare(b.name));
   const h2h=HI_F.team?Object.entries(L.reduce((o,E)=>{const opp=otherOf(E,+HI_F.team),r=o[opp]=o[opp]||{p:0,w:0,l:0};r.p++;if(E.result.winner===+HI_F.team)r.w++;else if(E.result.winner)r.l++;return o;},{})).sort((a,b)=>b[1].p-a[1].p):[];
   el.innerHTML=`<div class="card"><div class="row"><div class="seg">${[['','All'],['ODI','ODI'],['TEST','Test']].map(([k,n])=>`<button data-hf="${k}" class="${HI_F.fmt===k?'on':''}">${n}</button>`).join('')}</div>
+    ${HAS_REAL?`<label class="row" style="gap:6px"><input type="checkbox" id="hi-ch" ${HI_F.changed?'checked':''}> Changed history only</label>`:''}
     <select id="hi-t"><option value="">All teams</option>${teams.map(t=>`<option value="${t.id}" ${+HI_F.team===t.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select><span class="muted">${L.length} matches</span></div></div>
   ${h2h.length?`<div class="card" style="margin-top:14px"><h3>${esc(teamName(+HI_F.team))} head to head</h3><div class="grid g4">${h2h.map(([t,r])=>`<div class="spread"><span>${badge(+t)} ${esc(teamName(+t))}</span><span class="num">P${r.p} W${r.w} L${r.l}</span></div>`).join('')}</div></div>`:''}
   <div class="card stack" style="margin-top:14px">${L.slice(HI_F.page*25,HI_F.page*25+25).map(matchLine).join('<hr style="border:0;border-top:1px solid var(--line)">')||'<div class="empty">No results yet.</div>'}
   <div class="row">${HI_F.page>0?'<button class="btn sm" id="hi-prev">Newer</button>':''}<span class="muted">Page ${HI_F.page+1} of ${pages}</span>${HI_F.page<pages-1?'<button class="btn sm" id="hi-next">Older</button>':''}</div></div>`;
   $$('[data-hf]').forEach(b=>b.onclick=()=>{HI_F.fmt=b.dataset.hf;HI_F.page=0;rerender();});
   $('#hi-t').onchange=e=>{HI_F.team=e.target.value;HI_F.page=0;rerender();};
+  $('#hi-ch')&&($('#hi-ch').onchange=e=>{HI_F.changed=e.target.checked;HI_F.page=0;rerender();});
   $('#hi-prev')&&($('#hi-prev').onclick=()=>{HI_F.page--;rerender();});$('#hi-next')&&($('#hi-next').onclick=()=>{HI_F.page++;rerender();});
 };
 

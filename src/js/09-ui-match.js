@@ -321,14 +321,14 @@ function scorecardHTML(E,M){
     ${I.parts.length?`<details style="margin-top:6px"><summary class="muted" style="cursor:pointer">Partnerships</summary><table class="num">${I.parts.map(p=>`<tr><td>${ordinal(p[4])} wkt</td><td>${esc(pName(p[0]))} &amp; ${esc(pName(p[1]))}</td><td class="r"><b>${p[2]}</b>${p[5]?'':'*'}</td><td class="r muted">(${p[3]} balls)</td></tr>`).join('')}</table></details>`:''}
     </div>`;
   }).join('')+(E.inns.length?'':'<div class="muted">No play yet.</div>')+(E.result&&E.motm&&(!M||M.state==='done')?`<div class="banner">Man of the Match: <b>${plink(E.motm)}</b></div>`:'')
-  +realBlock(E);
+  +(!M||M.state==='done'?realHTML(E)+realBlock(E):'');   // no spoilers mid-match
 }
 // "What really happened": the real bowling figures for a historical ODI.
 function realBlock(E){
   const f=E.fid&&FIX_BY_NO.get(E.fid);if(!f||E.reseeded)return'';
   const rows=E.teams.map(t=>[t,realFigures(f.cid,t)]).filter(x=>x[1].length);
   if(!rows.length)return'';
-  return`<details style="margin-top:12px"><summary class="muted" style="cursor:pointer">What really happened (real bowling figures)</summary>${rows.map(([t,fig])=>`<h3 style="margin-top:10px">${esc(teamName(t))} bowling</h3><table class="num">${fig.map(r=>`<tr><td>${esc(pName(r[0]))}</td><td class="r">${r[1]} ov</td><td class="r">${r[2]} m</td><td class="r">${r[3]} r</td><td class="r"><b>${r[4]} w</b></td></tr>`).join('')}</table>`).join('')}</details>`;
+  return`<details style="margin-top:12px"><summary class="muted" style="cursor:pointer">Real bowling figures</summary>${rows.map(([t,fig])=>`<h3 style="margin-top:10px">${esc(teamName(t))} bowling</h3><table class="num">${fig.map(r=>`<tr><td>${esc(pName(r[0]))}</td><td class="r">${r[1]} ov</td><td class="r">${r[2]} m</td><td class="r">${r[3]} r</td><td class="r"><b>${r[4]} w</b></td></tr>`).join('')}</table>`).join('')}</details>`;
 }
 
 // ---------- charts ----------

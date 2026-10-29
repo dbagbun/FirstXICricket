@@ -50,6 +50,8 @@ RENDER.tour=(el,arg)=>{
   const lb=Object.entries(bat).sort((a,b)=>b[1]-a[1]).slice(0,5),lw=Object.entries(bowl).sort((a,b)=>b[1][0]-a[1][0]||a[1][1]-b[1][1]).slice(0,5);
   el.innerHTML=`<div class="card"><div class="row"><select id="tc-sel">${years.map(y=>`<optgroup label="${y}">${TOURNEYS.filter(s=>s.start.startsWith(y)).map(s=>`<option value="${esc(s.sid)}" ${s.sid===sid?'selected':''}>${esc(s.title)}</option>`).join('')}</optgroup>`).join('')}</select>
     <span class="pill">${esc(stageNow)}</span><span class="muted">${fmtDate(E.s.start)} - ${fmtDate(E.s.end)} · ${E.s.teams.size} teams · ${E.fix.length} fixtures · ${R.size} played</span></div>
+    ${(()=>{const rc=S.settings.history!=='off'&&realChampion(sid),fin=E.ko.length&&S.matches.find(m=>m.fid===E.ko[E.ko.length-1].no);
+      return rc&&fin?`<div class="banner" style="margin-top:8px">Champions in your timeline: <b>${esc(teamName(fin.result.winner))}</b> · in history: <b>${esc(teamName(rc))}</b></div>`:'';})()}
     <div class="muted" style="font-size:12px;margin-top:6px">Knockouts: ${S.settings.knockouts==='timeline'?'re-seeded from your tables once the league stage is complete':'follow history'} (Settings).</div></div>
   <div class="grid ${gt.length>1?'g2':''}" style="margin-top:14px">${groupsHTML}</div>
   ${superHTML?`<div class="card" style="margin-top:14px">${superHTML}</div>`:''}
