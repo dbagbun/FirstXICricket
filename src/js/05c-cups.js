@@ -52,6 +52,7 @@ function createCup({name,fmt='ODI',format='rr',host,start,teams}){
       round=next;}
   }
   (S.cups=S.cups||[]).push(cup);fxDirty();
+  if(!S.sandbox&&typeof achieve==='function')achieve('cupBuilt');
   return cup;
 }
 const cupById=id=>(S.cups||[]).find(c=>c.id===id);

@@ -1532,6 +1532,7 @@ function createCup({name,fmt='ODI',format='rr',host,start,teams}){
       round=next;}
   }
   (S.cups=S.cups||[]).push(cup);fxDirty();
+  if(!S.sandbox&&typeof achieve==='function')achieve('cupBuilt');
   return cup;
 }
 const cupById=id=>(S.cups||[]).find(c=>c.id===id);
@@ -1693,7 +1694,8 @@ function onMatchEvent(M,e){
 }
 function onMatchDone(M){
   if(M.friendly){   // friendlies don't touch the career: no archive, stats, rankings or milestones
-    const E=archiveMatch(M);if(S.live&&S.live.id===M.id)S.live=null;saveGame();
+    const E=archiveMatch(M);if(S.live&&S.live.id===M.id)S.live=null;
+    if(M.h2h)achieve('h2h');if(M.manual)achieve('dice');saveGame();
     if(uiDoneHook)uiDoneHook(M,E,[],null,[],[]);return;
   }
   const E=archiveMatch(M);
@@ -1709,6 +1711,8 @@ function onMatchDone(M){
   const cn=coachAfter(E);
   const ms=checkMilestones(E),pos=playerOfSeries(E.sid),aw=yearEnd(E);
   if(S.live&&S.live.id===M.id)S.live=null;
+  achCheck(E,M);
+  if(S.sandbox)challengeAfter(M,E);
   if(!M.sim)saveGame();
   if(uiDoneHook)uiDoneHook(M,E,ms,pos,aw,cn);
 }
@@ -1729,9 +1733,9 @@ function readSlot(i){try{return parseSave(localStorage.getItem(SLOT_KEYS[i]));}c
 function saveGame(){
   if(!S)return false;
   S.savedAt=Date.now();
-  const write=()=>localStorage.setItem(SLOT_KEYS[SLOT],lzPack(JSON.stringify(S)));
+  const write=()=>localStorage.setItem(S.sandbox?SANDBOX_KEY:SLOT_KEYS[SLOT],lzPack(JSON.stringify(S)));   // challenges never touch your slot
   if(typeof askPersist==='function')askPersist();
-  if(typeof FILE_HANDLE!=='undefined'&&FILE_HANDLE)writeSaveFile();
+  if(typeof FILE_HANDLE!=='undefined'&&FILE_HANDLE&&!S.sandbox)writeSaveFile();
   try{write();return true;}
   catch(e){
     try{S.logs={};write();toast('Storage nearly full: old ball-by-ball logs were cleared.','warn');return true;}
@@ -2143,6 +2147,7 @@ function leaveJob(why){
   C.team=0;S.settings.myTeam=0;
 }
 function takeJob(team){
+  achieve('coach1');
   const C=S.coach;if(C.team)leaveJob('moved on');
   Object.assign(C,{team:+team,start:careerDate(),until:addDays(careerDate(),CONTRACT_DAYS),conf:C.history.length?55:60,offers:[],stop:null});
   S.settings.myTeam=+team;S.settings.captain='manual';
@@ -2238,6 +2243,215 @@ function groundStats(fmt){
   return[...V.values()].map(v=>({...v,avg1:v.first.reduce((a,b)=>a+b,0)/v.first.length})).sort((a,b)=>b.m-a.m);
 }
 
+// ═══ CHALLENGES — start from a match situation (or a tournament) and beat it; played in a sandbox ═══
+// A challenge runs in its own temporary career (S.sandbox), saved to SANDBOX_KEY, so your real career is
+// untouched; CH.main holds the real career while it runs. Results (stars) and achievements are kept per device.
+// def: {id, title, desc, kind:'chase'|'defend'|'survive'|'bowlout'|'cup', fmt, bat, bowl, date, target, need, balls,
+//       wkts (down), overs (Tests: left), cup:{teams, format, host, fmt}, team (cup: who you are)}
+const SANDBOX_KEY='fxi_challenge',CH_STARS_KEY='fxi_challenge_stars';
+const CH={main:null};
+const CHALLENGES=[
+  {id:'lastover',title:'Last-over thriller',desc:'England need 12 off the final over with 8 down against Australia.',kind:'chase',fmt:'ODI',bat:4,bowl:1,date:'2005-06-19',target:241,need:12,balls:6,wkts:8},
+  {id:'defend10',title:'Hold your nerve',desc:'Defend 10 off the last over: India bowl to Pakistan, who have 4 wickets left.',kind:'defend',fmt:'ODI',bat:6,bowl:3,date:'2004-03-13',target:291,need:10,balls:6,wkts:6},
+  {id:'big435',title:'The great chase',desc:'South Africa need 435 to beat Australia. All 50 overs to come.',kind:'chase',fmt:'ODI',bat:5,bowl:1,date:'2006-03-12',target:435,need:435,balls:300,wkts:0},
+  {id:'tail60',title:'Tail-end rescue',desc:'New Zealand are 8 down and need 60 off 10 overs against Sri Lanka.',kind:'chase',fmt:'ODI',bat:9,bowl:7,date:'2007-02-03',target:240,need:60,balls:60,wkts:8},
+  {id:'ire328',title:'Shock the giants',desc:'Ireland chase 328 against England with 25 overs left - and 5 down already.',kind:'chase',fmt:'ODI',bat:13,bowl:4,date:'2011-03-02',target:328,need:180,balls:150,wkts:5},
+  {id:'semi16',title:'Semi-final heartbreak?',desc:'South Africa need 16 off 2 overs with 2 wickets left in a World Cup semi-final.',kind:'chase',fmt:'ODI',bat:5,bowl:1,date:'2007-04-25',target:231,need:16,balls:12,wkts:8,stage:'Semi-final'},
+  {id:'t20death',title:'Death-overs maths',desc:'India need 25 off the last 2 overs of a T20 against Pakistan.',kind:'chase',fmt:'T20',bat:3,bowl:6,date:'2007-09-24',target:158,need:25,balls:12,wkts:5},
+  {id:'t20defend',title:'Squeeze them',desc:'Defend 18 off 2 overs in a T20: West Indies bowl to England.',kind:'defend',fmt:'T20',bat:4,bowl:8,date:'2010-05-13',target:166,need:18,balls:12,wkts:4},
+  {id:'save',title:'Save the Test',desc:'Day 5 at Lord\'s: England, 4 down, must bat out 70 more overs against Australia.',kind:'survive',fmt:'TEST',bat:4,bowl:1,date:'2005-07-21',target:420,need:320,overs:70,wkts:4},
+  {id:'bowlout',title:'Bowl them out',desc:'Australia need 7 more wickets in 50 overs on the last day to beat India.',kind:'bowlout',fmt:'TEST',bat:3,bowl:1,date:'2004-10-06',target:450,need:330,overs:50,wkts:3},
+  {id:'kenya',title:'Kenya\'s World Cup',desc:'Take Kenya all the way: win a 14-team World Cup in South Africa.',kind:'cup',team:12,cup:{fmt:'ODI',format:'groups2',host:5,start:'2003-02-09',teams:[1,3,4,5,6,7,8,9,10,11,12,16,14,18]}},
+  {id:'dutch',title:'Oranje glory',desc:'Win an eight-team T20 cup with the Netherlands.',kind:'cup',team:14,cup:{fmt:'T20',format:'rr',host:14,start:'2009-06-05',teams:[14,4,6,7,3,1,13,15]}},
+];
+const challengeById=id=>CHALLENGES.find(c=>c.id===id)||null;
+// share codes: "FXI1." + base64 of the definition
+function challengeCode(def){return'FXI1.'+btoa(unescape(encodeURIComponent(JSON.stringify(def))));}
+function parseChallengeCode(code){
+  try{const t=String(code).trim();if(!t.startsWith('FXI1.'))return null;const d=JSON.parse(decodeURIComponent(escape(atob(t.slice(5)))));
+    if(!d||!['chase','defend','survive','bowlout','cup'].includes(d.kind))return null;d.id=d.id||'code-'+Math.abs([...t].reduce((h,c)=>(h*31+c.charCodeAt(0))|0,7));return d;}catch(e){return null;}
+}
+function readStars(){try{return JSON.parse(localStorage.getItem(CH_STARS_KEY)||'{}');}catch(e){return{};}}
+function writeStars(o){try{localStorage.setItem(CH_STARS_KEY,JSON.stringify(o));}catch(e){}}
+
+// ---------- building a mid-match position ----------
+// Fabricated innings keep the scorecard consistent: batters' runs + extras = total, bowlers' balls = legal balls.
+function fakeBatting(I,order,n,runs,ballsTotal,outs){
+  const w=order.slice(0,n).map((p,i)=>Math.max(1,10-i));const tw=sum(w)||1;let left=runs,bl=ballsTotal;
+  order.slice(0,n).forEach((p,i)=>{
+    const r=i===n-1?left:Math.round(runs*w[i]/tw);const b=i===n-1?bl:Math.max(r?Math.round(r*1.2):1,Math.round(ballsTotal*w[i]/tw));
+    left-=r;bl-=b;const B=newBat(i);B.r=Math.max(0,r);B.b=Math.max(0,b);B.f4=Math.floor(B.r/12);B.f6=Math.floor(B.r/40);
+    if(i<outs)B.out={how:pick(['b','ct','ctof','lbw','ctwk']),bowler:0,fielder:0};
+    I.bt[p]=B;
+  });
+}
+function fakeBowling(M,I,overs,runs,wkts){
+  const B=I.eng.B.slice().sort((a,b)=>a.rating-b.rating).slice(0,5);let ov=overs,r=runs,w=wkts;
+  B.forEach((b,i)=>{
+    const o=i===B.length-1?ov:Math.min(b.max===999?Math.ceil(overs/5)+2:b.max,Math.round(overs/B.length));
+    const rr=i===B.length-1?r:Math.round(runs*o/Math.max(1,overs)),ww=i===B.length-1?w:Math.min(w,Math.round(wkts*o/Math.max(1,overs)));
+    ov-=o;r-=rr;w-=ww;b.used=o;
+    I.bw[b.pid]={b:o*6,r:Math.max(0,rr),w:Math.max(0,ww),md:0,wd:0,nb:0};I.bwOrder.push(b.pid);
+  });
+  // credit dismissals to bowlers who have wickets
+  const wb=I.bwOrder.flatMap(p=>Array(I.bw[p].w).fill(p));
+  Object.values(I.bt).filter(x=>x.out).forEach((x,k)=>{x.out.bowler=wb[k]||I.bwOrder[0];if(/ct|st/.test(x.out.how))x.out.fielder=pick(M.xi[I.bowl].bat);});
+}
+function fakeInnings(M,I,runs,wkts,balls,closed,why){
+  const ex=Math.min(runs,Math.round(balls/40));
+  const bats=Math.min(11,wkts+2);
+  fakeBatting(I,I.order,closed&&wkts>=10?11:bats,runs-ex,Math.round(balls*1.03),wkts);
+  I.ex.lb=ex;I.runs=runs;I.wkts=wkts;I.lb=balls;
+  fakeBowling(M,I,Math.floor(balls/6),runs-ex,Object.values(I.bt).filter(b=>b.out).length);
+  if(!closed){
+    I.st=I.order[wkts];I.ns=I.order[wkts+1];
+    for(const p of[I.st,I.ns])if(I.bt[p])I.bt[p].out=null;else I.bt[p]=newBat(I.order.indexOf(p));
+    I.part={a:I.st,b:I.ns,r:0,bl:0,ra:0,rb:0,w:wkts+1};
+    // the batters at the crease are the last two in, not out
+    let outs=0;for(const p of I.order.slice(0,wkts+2)){const B=I.bt[p];if(B&&p!==I.st&&p!==I.ns&&!B.out)B.out={how:'b',bowler:I.bwOrder[0],fielder:0};if(B&&B.out)outs++;}
+    I.fow=I.order.slice(0,wkts).filter(p=>p!==I.st&&p!==I.ns).map((p,k)=>({w:k+1,r:Math.round(runs*(k+1)/(wkts+1)),pid:p,ov:'-'}));
+  }else{I.closed=true;I.why=why;I.fow=[];}
+}
+function buildChallengeMatch(def){
+  const fmt=def.fmt,date=def.date,home=def.bowl;
+  const v=(HOME_VENUES.get(home)||[{venue:teamName(home)+' Oval',city:''}])[0];
+  const M=newMatch({fmt,a:def.bowl,b:def.bat,date,venue:v.venue,city:v.city,series:'Challenge: '+def.title,stage:def.stage||'',
+    xiA:nearestXI(def.bowl,date),xiB:nearestXI(def.bat,date),home});
+  M.noWeather=true;M.challenge=def;M.key='CH.'+def.id;M.mods={bat:{},bowl:{}};
+  M.toss={w:def.bowl,choice:'bat',bat:def.bowl};M.state='live';
+  if(fmt!=='TEST'){
+    const I1=startInnings(M,def.bowl);fakeInnings(M,I1,def.target-1,rndInt(5,9),M.maxOv*6,true,'overs');
+    const I2=startInnings(M,def.bat);I2.target=def.target;
+    fakeInnings(M,I2,def.target-def.need,def.wkts,M.maxOv*6-def.balls,false);
+  }else{
+    // three innings done, the fourth under way; the clock set so def.overs remain
+    const A=def.bowl,B=def.bat,t=def.target;
+    const I1=startInnings(M,A);fakeInnings(M,I1,Math.round(t*.55),10,6*112,true,'all out');
+    const I2=startInnings(M,B);fakeInnings(M,I2,Math.round(t*.35),10,6*96,true,'all out');
+    const I3=startInnings(M,A);fakeInnings(M,I3,t-1-I1.runs+I2.runs,6,6*70,true,'declared');
+    const I4=startInnings(M,B);I4.target=t;
+    const made=t-def.need,ovNow=Math.max(1,Math.round(450-def.overs-112-96-70-8-60));
+    fakeInnings(M,I4,made,def.wkts,6*Math.min(ovNow,140),false);
+    M.lost=Math.max(0,TEST_OVERS-def.overs-testBallsBowled(M)/6-TEST_CHANGEOVER*3);M.wxDay=5;
+  }
+  const you=def.kind==='chase'||def.kind==='survive'?def.bat:def.bowl;
+  M.manualCaptain={[you]:true};M.you=you;
+  return M;
+}
+// ---------- the sandbox ----------
+function enterSandbox(def){
+  if(S&&!S.sandbox){saveGame();CH.main=S;}
+  const keep=CH.main?CH.main.settings:{};
+  S=newCareer({name:'Challenge: '+def.title});S.sandbox={def,started:Date.now()};
+  for(const k of['dice','broadcast','font','sound','tv','voice','voiceName','voiceRate','ballDelay','batColours','ratings','form'])if(keep[k]!==undefined)S.settings[k]=keep[k];
+  S.settings.captain='manual';
+  if(def.kind==='cup'){
+    const c=createCup({...def.cup,name:def.title});S.sandbox.cup=c.id;
+    S.coach=newCoach(def.team,def.cup.start);S.settings.myTeam=def.team;S.settings.captain='manual';
+  }
+  saveGame();
+}
+function leaveSandbox(){
+  if(!S||!S.sandbox)return;
+  try{localStorage.removeItem(SANDBOX_KEY);}catch(e){}
+  S=CH.main||readSlot(SLOT)||null;CH.main=null;LM=null;
+  if(S)loadSlot(SLOT);
+}
+function startChallenge(def){
+  enterSandbox(def);
+  if(def.kind==='cup'){go('tour',S.sandbox.cup);return;}
+  LM=buildChallengeMatch(def);S.live=LM;saveGame();go('match');
+}
+// Stars: 0 lost, 1 close, 2 done, 3 done in style.
+function judgeChallenge(def,E,M){
+  let ok=false,stars=0,text='';
+  const r=E.result,you=M?M.you:def.team;
+  if(def.kind==='chase'){const I=E.inns[E.inns.length-1],left=(I.mo||50)*6-I.lb;ok=r.winner===def.bat;
+    stars=ok?(left>=Math.max(6,def.balls*.15)||10-I.wkts>=3?3:2):(r.type==='runs'&&r.margin<=3?1:0);
+    text=ok?`Chased down with ${plural(left,'ball')} and ${plural(10-I.wkts,'wicket')} to spare.`:`Fell short by ${r.margin||0}.`;}
+  else if(def.kind==='defend'){ok=r.winner===def.bowl;const I=E.inns[E.inns.length-1];
+    stars=ok?(r.margin>=Math.max(4,def.need*.3)||I.wkts>=10?3:2):((I.mo||50)*6-I.lb<=1?1:0);text=ok?`Defended - won by ${plural(r.margin,'run')}.`:'They got there.';}
+  else if(def.kind==='survive'){const I=E.inns[3];ok=r.type==='draw'||r.winner===def.bat;stars=ok?(I&&10-I.wkts>=3?3:2):(I&&I.wkts>=10&&testOversLeft(M)<=5?1:0);text=ok?'Saved it.':'Bowled out.';}
+  else if(def.kind==='bowlout'){ok=r.winner===def.bowl;stars=ok?3:0;text=ok?'Bowled them out.':'They survived.';}
+  return{ok,stars,text,you};
+}
+// after each match in the sandbox: a scenario is judged at once, a cup when its last game is done
+function challengeAfter(M,E){
+  const def=S.sandbox.def;
+  if(M.challenge){S.sandbox.res=judgeChallenge(def,E,M);recordChallenge(def,S.sandbox.res);return;}
+  if(def.kind==='cup'&&S.sandbox.cup){
+    const cup=cupById(S.sandbox.cup);if(!cup.fix.every(f=>S.done[f.key])||S.sandbox.res)return;
+    const champ=cupChampion(cup),mine=cupMatches(cup).filter(x=>x.teams.includes(def.team));
+    const fin=mine.some(x=>x.stage==='Final'),lost=mine.filter(x=>x.result.winner&&x.result.winner!==def.team).length;
+    const ok=champ===def.team,stars=ok?(lost===0?3:2):fin?1:0;
+    S.sandbox.res={ok,stars,text:ok?`${teamName(def.team)} are champions${lost?'':' - unbeaten'}!`:`${teamName(champ)} won it. ${fin?'So close - you made the final.':''}`};
+    recordChallenge(def,S.sandbox.res);
+  }
+}
+function recordChallenge(def,res){
+  const st=readStars(),prev=st[def.id]||{stars:0};
+  if(res.stars>prev.stars)st[def.id]={stars:res.stars,date:new Date().toISOString().slice(0,10),title:def.title};
+  writeStars(st);
+  achieve('challenge1');if(res.stars===3)achieve('challenge3');
+  if(CHALLENGES.every(c=>(st[c.id]||{}).stars>=1))achieve('challengeAll');
+  if(CHALLENGES.every(c=>(st[c.id]||{}).stars===3))achieve('challengeAll3');
+}
+
+// ═══ ACHIEVEMENTS — unlocked anywhere (careers and challenges), kept per device in ACH_KEY ═══
+const ACH_KEY='fxi_ach';
+const ACHIEVEMENTS=[
+  ['first','🏏','First ball','Play your first match.'],
+  ['m100','📅','Season ticket','100 matches in a career.'],['m500','📚','Almanack','500 matches in a career.'],['m1000','🗂️','Wisden','1,000 matches in a career.'],
+  ['calendar','🏁','The whole lot','Play out the entire real ODI calendar, 2002-2026.'],
+  ['test1','⚪','Whites on','Play a Test.'],['t20','⚡','Twenty20 vision','Play a T20.'],['h2h','🤝','Grudge match','Finish a two-player head-to-head.'],
+  ['dice','🎲','Old school','Finish a match rolling your own dice.'],['cupBuilt','🏟️','Organiser','Build your own tournament.'],
+  ['ton','💯','Three figures','See a hundred scored.'],['dbl','🌟','Double top','An ODI double hundred.'],['t20ton','🚀','Short-form century','A T20 hundred.'],['triple','👑','Triple','A Test triple hundred.'],
+  ['big400','🔥','Four hundred','A team makes 400 in an ODI.'],['under50','🧊','Collapse','A side bowled out for under 50.'],['chase350','🏃','Mountain climbed','Chase down 350 or more.'],
+  ['hat','🎩','Hat-trick','Witness a hat-trick.'],['seven','7️⃣','Seventh heaven','Seven wickets in an innings.'],['tenfor','🔟','Ten in the match','Ten wickets in a Test.'],
+  ['tie','🟰','Honours even','A tied match.'],['so','⏱️','Super over','A super over decides it.'],['dl','🌧️','Duckworth what?','A rain-affected D/L result.'],
+  ['draw','🛡️','Rain-soaked stalemate','A drawn Test.'],['inns','🧱','Innings and plenty','An innings victory.'],
+  ['assocWC','😲','Giant-killers','An associate nation wins a World Cup final.'],['no1','🥇','Top of the world','The team you follow goes No.1 in the ODI rankings.'],
+  ['awards','🎤','Awards night','Reach an end-of-year awards ceremony.'],
+  ['coach1','📋','The job','Take a coaching job.'],['target10','🎯','Delivering','Meet 10 board targets.'],['sacked','📦','Clear your desk','Get sacked.'],
+  ['nations3','✈️','Journeyman','Coach three different nations.'],['coachWC','🏆','World champion coach','Win a World Cup final as coach.'],
+  ['challenge1','🧩','Up for it','Complete a challenge.'],['challenge3','⭐','Three stars','Three-star a challenge.'],
+  ['challengeAll','🗺️','Full set','Complete every built-in challenge.'],['challengeAll3','🌠','Perfectionist','Three-star every built-in challenge.'],
+];
+function readAch(){try{return JSON.parse(localStorage.getItem(ACH_KEY)||'{}');}catch(e){return{};}}
+function achieve(id){
+  const A=readAch();if(A[id])return false;
+  const d=ACHIEVEMENTS.find(a=>a[0]===id);if(!d)return false;
+  A[id]=new Date().toISOString().slice(0,10);try{localStorage.setItem(ACH_KEY,JSON.stringify(A));}catch(e){}
+  if(typeof toast==='function'&&typeof document!=='undefined')toast(`${d[1]} Achievement: <b>${esc(d[2])}</b> - ${esc(d[3])}`,'ms');
+  return true;
+}
+// After every archived match (careers and the sandbox): what happened in it, and where the career stands.
+function achCheck(E,M){
+  const a=achieve;
+  a('first');
+  if(!S.sandbox){const n=S.matches.length;if(n>=100)a('m100');if(n>=500)a('m500');if(n>=1000)a('m1000');
+    if(E.fmt==='ODI'&&E.fid&&ODI_FX.every(x=>!x.playable||S.done[x.key]))a('calendar');}
+  if(E.fmt==='TEST')a('test1');if(E.fmt==='T20')a('t20');
+  if(M&&M.h2h)a('h2h');if(M&&M.manual&&!M.sim)a('dice');
+  for(const I of E.inns){
+    for(const r of I.bt){if(r[1]>=100)a('ton');if(E.fmt==='ODI'&&r[1]>=200)a('dbl');if(E.fmt==='T20'&&r[1]>=100)a('t20ton');if(E.fmt==='TEST'&&r[1]>=300)a('triple');}
+    for(const w of I.bw)if(w[4]>=7)a('seven');
+    if(E.fmt==='ODI'&&I.runs>=400)a('big400');if(I.why==='all out'&&I.runs<50)a('under50');
+  }
+  const last=E.inns[E.inns.length-1],r=E.result;
+  if(E.fmt!=='TEST'&&r.type==='wkts'&&last&&last.target>=350)a('chase350');
+  if(E.ev.some(e=>e[0]==='hat'))a('hat');
+  if(E.fmt==='TEST'){const L=playerMatchLines(E);if(Object.values(L).some(l=>l.w>=10))a('tenfor');}
+  if(r.type==='tie')a('tie');if(r.type==='so')a('so');if(E.dl)a('dl');if(r.type==='draw')a('draw');if(r.type==='inns')a('inns');
+  const final=/^final/i.test(E.stage||'')&&/World Cup/i.test(E.series||'')&&!/Qualif|League/i.test(E.series||'');
+  if(final&&r.winner&&!TEAMS.get(r.winner)?.full&&!COMPOSITE.has(r.winner))a('assocWC');
+  if(final&&S.coach&&S.coach.team&&r.winner===S.coach.team)a('coachWC');
+  const my=S.settings.myTeam;if(my&&teamRanking('ODI')[0]?.team===my&&S.matches.length>30)a('no1');
+  if(S.rk&&Object.keys(S.rk.awards).length)a('awards');
+  if(S.coach){if(S.coach.objs.filter(o=>o.status==='met').length>=10)a('target10');if(S.coach.history.some(h=>h.why==='sacked'))a('sacked');
+    if(new Set([...S.coach.history.map(h=>h.team),S.coach.team].filter(Boolean)).size>=3)a('nations3');}
+}
+
 // ═══ UI SHELL — navigation, views, modal, shared widgets ═══
 const TEAM_COL={AUS:'#c9a400',IND:'#1f4fbf',ENG:'#1d3a8a',RSA:'#0f7a3e',PAK:'#0b6e2e',SL:'#173f8f',WI:'#7a1f2b',NZ:'#222',ZIM:'#b8341b',
   BAN:'#05683f',KEN:'#9c1b1b',IRE:'#169b62',NED:'#e8601c',SCO:'#1b3f94',CAN:'#c8102e',UAE:'#00732f',NAM:'#003580',USA:'#3c3b6e',NEP:'#dc143c',
@@ -2245,7 +2459,7 @@ const TEAM_COL={AUS:'#c9a400',IND:'#1f4fbf',ENG:'#1d3a8a',RSA:'#0f7a3e',PAK:'#0b
 const badge=t=>`<span class="tbadge" style="background:${TEAM_COL[teamShort(t)]||'#334155'}">${esc(teamShort(t))}</span>`;
 const tlabel=t=>`${badge(t)} ${esc(teamName(t))}`;
 const plink=pid=>`<span class="plink" data-pid="${pid}">${esc(pName(pid))}</span>`;
-const VIEWS=[['home','Dashboard'],['match','Match'],['coach','Coach'],['fixtures','Fixtures'],['tour','Tournament Centre'],['rank','Rankings'],['records','Records'],['query','Stats lab'],['players','Players'],['history','Results'],['miles','Milestones'],['settings','Settings']];
+const VIEWS=[['home','Dashboard'],['match','Match'],['coach','Coach'],['play','Challenges'],['fixtures','Fixtures'],['tour','Tournament Centre'],['rank','Rankings'],['records','Records'],['query','Stats lab'],['players','Players'],['history','Results'],['miles','Milestones'],['settings','Settings']];
 let VIEW='home',VIEW_ARG=null;
 const RENDER={};
 
@@ -2254,6 +2468,7 @@ function go(v,arg){
   renderNav();
   const el=$('#view');el.innerHTML='';
   try{RENDER[v](el,arg);}catch(e){console.error(e);el.innerHTML=`<div class="card red">Something went wrong drawing this screen: ${esc(e.message)}</div>`;}
+  if(S&&S.sandbox&&v!=='play')el.insertAdjacentHTML('afterbegin',sandboxBanner());
   window.scrollTo?.(0,0);
 }
 function rerender(){go(VIEW,VIEW_ARG);}
@@ -3240,6 +3455,7 @@ const formIcon=(pid,fmt,col)=>{const f=formLevel(pid,fmt,col);return(f.bat>0||f.
 const fatigueTag=(pid,date)=>{const f=fatigueOf(pid,date);return f>=60?`<span class="pill loss" title="Tired: one rating weaker with the ball">tired ${f}</span>`:f>=35?`<span class="pill">${f}</span>`:'';};
 function confBar(c){const col=c>=60?'var(--green)':c>=35?'var(--gold)':'var(--red)';return`<div class="bar" style="height:10px"><i style="width:${c}%;background:${col}"></i></div>`;}
 function startCoach(team){
+  achieve('coach1');
   S.coach=newCoach(team,careerDate());S.settings.myTeam=+team;S.settings.captain='manual';
   coachNews(`You are the new coach of ${teamName(team)}. Contract until ${fmtDate(S.coach.until)}.`,'good');
   const nx=coachNext();if(nx)ensureObjectives(nx);
@@ -3622,6 +3838,68 @@ function voiceEvent(M,e){
 }
 function voiceTest(){FX.allow=true;return say('Good afternoon, and welcome to the cricket. A lovely day for it.',true);}
 
+// ═══ CHALLENGES & ACHIEVEMENTS SCREEN ═══
+let PLAY_TAB='list';
+const starsHTML=n=>`<span class="gold" style="letter-spacing:2px">${'★'.repeat(n)}<span class="muted">${'★'.repeat(3-n)}</span></span>`;
+function challengeCard(c,st){
+  const s=(st[c.id]||{}).stars||0;
+  return`<div class="card stack"><div class="spread"><b>${esc(c.title)}</b>${starsHTML(s)}</div>
+    <div class="sub">${esc(c.desc)}</div>
+    <div class="row muted" style="font-size:12px">${c.kind==='cup'?`${FMT_NAME[c.cup.fmt]} tournament · ${c.cup.teams.length} teams`:`${FMT_NAME[c.fmt]} · ${fmtDate(c.date)} · ${badge(c.bat)} v ${badge(c.bowl)}`}</div>
+    <div class="row"><button class="btn pri sm" data-chal="${c.id}">Play</button><button class="btn sm" data-code="${c.id}">Share code</button></div></div>`;
+}
+function sandboxBanner(){
+  if(!S||!S.sandbox)return'';
+  return`<div class="banner" style="margin-bottom:14px"><div class="spread"><span>🧩 Challenge: <b>${esc(S.sandbox.def.title)}</b> - a sandbox, your career is safe.</span><button class="btn sm" id="sb-leave">Back to your career</button></div></div>`;
+}
+RENDER.play=(el)=>{
+  const st=readStars(),A=readAch();
+  let body='';
+  if(PLAY_TAB==='list')body=`<div class="grid g3">${CHALLENGES.map(c=>challengeCard(c,st)).join('')}</div>`;
+  else if(PLAY_TAB==='build'){
+    const opts=sel=>ALL_TEAMS.filter(t=>!COMPOSITE.has(t)).map(t=>`<option value="${t}" ${t===sel?'selected':''}>${esc(teamName(t))}</option>`).join('');
+    body=`<div class="card stack" style="max-width:720px"><h3>Build a scenario</h3>
+      <div class="row"><div class="seg">${['ODI','T20'].map(f=>`<button data-bf="${f}" class="${f==='ODI'?'on':''}">${f}</button>`).join('')}</div>
+        <label>Batting <select id="cb-bat">${opts(4)}</select></label><label>Bowling <select id="cb-bowl">${opts(1)}</select></label></div>
+      <div class="row"><label>Date <input type="date" id="cb-d" value="2008-06-01"></label><label>Target <input type="number" id="cb-t" value="250" style="width:80px"></label>
+        <label>Need <input type="number" id="cb-n" value="40" style="width:70px"></label><label>Overs left <input type="number" id="cb-o" value="5" style="width:60px"></label>
+        <label>Wickets down <input type="number" id="cb-w" value="6" min="0" max="9" style="width:60px"></label></div>
+      <div class="row"><label class="row" style="gap:6px"><input type="radio" name="cb-you" value="chase" checked> I bat (chase)</label><label class="row" style="gap:6px"><input type="radio" name="cb-you" value="defend"> I bowl (defend)</label>
+        <input type="text" id="cb-title" placeholder="Name it" value="My scenario"></div>
+      <div class="row"><button class="btn pri" id="cb-play">Play it</button><button class="btn" id="cb-code">Get a share code</button></div>
+      <h3 style="margin-top:12px">Got a code from a friend?</h3>
+      <div class="row"><input type="text" id="cb-in" placeholder="FXI1...." style="flex:1"><button class="btn" id="cb-go">Play code</button></div></div>`;
+  }else{
+    const got=ACHIEVEMENTS.filter(a=>A[a[0]]).length;
+    body=`<div class="card"><div class="spread"><h3 style="margin:0">Trophy cabinet</h3><b class="num">${got} / ${ACHIEVEMENTS.length}</b></div>
+      <div class="bar" style="margin:8px 0 14px"><i style="width:${100*got/ACHIEVEMENTS.length}%"></i></div>
+      <div class="grid g4">${ACHIEVEMENTS.map(a=>`<div class="card" style="padding:10px;${A[a[0]]?'':'opacity:.4;filter:grayscale(1)'}"><div style="font-size:26px">${a[1]}</div><b>${esc(a[2])}</b><div class="sub" style="font-size:12px">${esc(a[3])}</div>${A[a[0]]?`<div class="muted" style="font-size:11px">${fmtDate(A[a[0]])}</div>`:''}</div>`).join('')}</div></div>`;
+  }
+  el.innerHTML=sandboxBanner()+`<div class="card"><div class="seg">${[['list','Challenges'],['build','Build your own'],['ach','Achievements']].map(([k,n])=>`<button data-pt="${k}" class="${PLAY_TAB===k?'on':''}">${n}</button>`).join('')}</div></div>
+    <div style="margin-top:14px">${body}</div>`;
+  $$('[data-pt]').forEach(b=>b.onclick=()=>{PLAY_TAB=b.dataset.pt;rerender();});
+  $$('[data-chal]').forEach(b=>b.onclick=()=>startChallenge(challengeById(b.dataset.chal)));
+  $$('[data-code]').forEach(b=>b.onclick=()=>showCode(challengeById(b.dataset.code)));
+  if(PLAY_TAB==='build'){
+    let fmt='ODI';$$('[data-bf]').forEach(b=>b.onclick=()=>{fmt=b.dataset.bf;$$('[data-bf]').forEach(x=>x.classList.toggle('on',x===b));});
+    const read=()=>{const kind=document.querySelector('input[name=cb-you]:checked').value,o=clamp(+$('#cb-o').value||1,1,fmt==='T20'?20:50);
+      const t=Math.max(2,+$('#cb-t').value||200),need=clamp(+$('#cb-n').value||1,1,t);
+      return{id:'custom-'+Date.now().toString(36),title:$('#cb-title').value.trim()||'My scenario',desc:`${teamName(+$('#cb-bat').value)} need ${need} off ${o} overs with ${clamp(+$('#cb-w').value,0,9)} down.`,
+        kind,fmt,bat:+$('#cb-bat').value,bowl:+$('#cb-bowl').value,date:$('#cb-d').value||'2008-06-01',target:t,need,balls:o*6,wkts:clamp(+$('#cb-w').value,0,9)};};
+    $('#cb-play').onclick=()=>{const d=read();if(d.bat===d.bowl){toast('Pick two different sides.','warn');return;}startChallenge(d);};
+    $('#cb-code').onclick=()=>showCode(read());
+    $('#cb-go').onclick=()=>{const d=parseChallengeCode($('#cb-in').value);if(!d){toast('That code doesn\'t look right.','bad');return;}startChallenge(d);};
+  }
+};
+function showCode(def){
+  const code=challengeCode(def);
+  openModal(`<h2>${esc(def.title)}</h2><p class="sub">Send this code to a friend - they paste it under Challenges → Build your own.</p>
+    <textarea readonly style="width:100%;height:90px;background:var(--card);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px;font-family:var(--mono)">${esc(code)}</textarea>
+    <div class="row" style="margin-top:8px"><button class="btn pri" id="cc-copy">Copy</button></div>`);
+  $('#cc-copy').onclick=()=>{try{navigator.clipboard.writeText(code);toast('Copied.');}catch(e){$('textarea').select();}};
+}
+document.addEventListener('click',e=>{if(e.target.closest('#sb-leave')){leaveSandbox();go(S?'play':'home');if(!S)showSplash();}});
+
 // ═══ SETTINGS, SPLASH, LIVE HOOKS & INIT ═══
 const GUIDE=`<h2>How First XI works</h2>
 <p><b>Every over</b> the bowler's rating picks one of six run-rate cards - RR_3 (tight) up to RR_7 (carnage) - shifted by the match situation:
@@ -3745,6 +4023,11 @@ uiDoneHook=(M,E,ms,pos,aw,cn)=>{
       ${aw&&aw.length?`<h3 style="margin-top:12px">Season review</h3><div class="stack">${honoursHTML(aw.map(a=>a.year))}</div>`:''}
       <div class="row" style="margin-top:14px"><button class="btn pri" id="r-next">Next fixture</button><button class="btn" id="r-card">Full scorecard</button><button class="btn" id="r-img">Save as image</button></div>`);
     $('#r-img').onclick=()=>downloadCanvas(scorecardImage(E),`first-xi-${E.date}-${teamShort(E.teams[0])}-v-${teamShort(E.teams[1])}.png`);
+    if(S.sandbox&&S.sandbox.res&&M.challenge){const R=S.sandbox.res;
+      $('#modal-box').insertAdjacentHTML('afterbegin',`<div class="banner" style="margin:18px 0 10px"><div class="spread"><b>${R.ok?'Challenge complete!':'Challenge failed'}</b>${starsHTML(R.stars)}</div><div class="sub">${esc(R.text)}</div>
+        <div class="row" style="margin-top:8px"><button class="btn pri sm" id="ch-again">Try again</button><button class="btn sm" id="ch-back">Back to your career</button></div></div>`);
+      $('#ch-again').onclick=()=>{const d=S.sandbox.def;closeModal();leaveSandbox();startChallenge(d);};
+      $('#ch-back').onclick=()=>{closeModal();leaveSandbox();go('play');};}
     $('#r-next').onclick=()=>{closeModal();const n=nextFixture();LM=null;if(n)startFixture(n.key);else go('home');};
     $('#r-card').onclick=()=>{closeModal();MATCH_TAB='card';go('match');};
   },50);
@@ -3752,6 +4035,7 @@ uiDoneHook=(M,E,ms,pos,aw,cn)=>{
 
 function init(){
   appInit();
+  try{localStorage.removeItem(SANDBOX_KEY);}catch(e){}   // a challenge left mid-way doesn't come back
   setTimeout(applyBroadcast,0);
   if(loadSlot(SLOT)){LM=S.live||null;applyBroadcast();go('home');}
   else showSplash();

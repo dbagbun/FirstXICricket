@@ -45,6 +45,8 @@ The repo root holds a prebuilt `first-xi.html` (double-click to open). **After a
 
 - Commentator voice (`12i-voice.js`): `say(text, big)` via `speechSynthesis` (English voices from the device, `S.settings.voice/voiceName/voiceRate`), only when `FX.allow`; `voiceBall` (4s, 6s) from `step`/watch, `voiceEvent` (wickets with score, milestones, innings, result, rain) from `uiMatchHook`. No-op without a speech engine.
 
+- Challenges (`07e-challenges.js`, UI `12j-ui-challenges.js`): `CHALLENGES` defs (chase/defend/survive/bowlout/cup); `startChallenge` → `enterSandbox` (a temporary `S` with `S.sandbox`, saved to `SANDBOX_KEY`, never your slot; `CH.main` holds your career; `leaveSandbox` restores it) → `buildChallengeMatch` fabricates the position with consistent scorecards (`fakeInnings`/`fakeBatting`/`fakeBowling`; Tests set `M.lost` so the clock shows the overs left). `challengeAfter` (from `onMatchDone`) → `judgeChallenge` stars 0-3 → `recordChallenge` (per device, `CH_STARS_KEY`). Share codes `FXI1.<base64 json>` (`challengeCode`/`parseChallengeCode`). Achievements (`07f-achievements.js`): `ACHIEVEMENTS`, `achieve(id)` per device (`ACH_KEY`), `achCheck(E,M)` after every archived match.
+
 ## Layout
 - `src/template.html` - page shell with `/*@@CSS@@*/`, `/*@@DATA@@*/`, `/*@@JS@@*/`
 - `src/styles.css` - all CSS (Excel dark palette: navy `#0a0e1a`, panels `#0f172a`/`#1e293b`, cyan `#06b6d4`, gold `#ffd700`)

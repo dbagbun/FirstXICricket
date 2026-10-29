@@ -3,6 +3,7 @@ const formIcon=(pid,fmt,col)=>{const f=formLevel(pid,fmt,col);return(f.bat>0||f.
 const fatigueTag=(pid,date)=>{const f=fatigueOf(pid,date);return f>=60?`<span class="pill loss" title="Tired: one rating weaker with the ball">tired ${f}</span>`:f>=35?`<span class="pill">${f}</span>`:'';};
 function confBar(c){const col=c>=60?'var(--green)':c>=35?'var(--gold)':'var(--red)';return`<div class="bar" style="height:10px"><i style="width:${c}%;background:${col}"></i></div>`;}
 function startCoach(team){
+  achieve('coach1');
   S.coach=newCoach(team,careerDate());S.settings.myTeam=+team;S.settings.captain='manual';
   coachNews(`You are the new coach of ${teamName(team)}. Contract until ${fmtDate(S.coach.until)}.`,'good');
   const nx=coachNext();if(nx)ensureObjectives(nx);

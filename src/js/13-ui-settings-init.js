@@ -121,6 +121,11 @@ uiDoneHook=(M,E,ms,pos,aw,cn)=>{
       ${aw&&aw.length?`<h3 style="margin-top:12px">Season review</h3><div class="stack">${honoursHTML(aw.map(a=>a.year))}</div>`:''}
       <div class="row" style="margin-top:14px"><button class="btn pri" id="r-next">Next fixture</button><button class="btn" id="r-card">Full scorecard</button><button class="btn" id="r-img">Save as image</button></div>`);
     $('#r-img').onclick=()=>downloadCanvas(scorecardImage(E),`first-xi-${E.date}-${teamShort(E.teams[0])}-v-${teamShort(E.teams[1])}.png`);
+    if(S.sandbox&&S.sandbox.res&&M.challenge){const R=S.sandbox.res;
+      $('#modal-box').insertAdjacentHTML('afterbegin',`<div class="banner" style="margin:18px 0 10px"><div class="spread"><b>${R.ok?'Challenge complete!':'Challenge failed'}</b>${starsHTML(R.stars)}</div><div class="sub">${esc(R.text)}</div>
+        <div class="row" style="margin-top:8px"><button class="btn pri sm" id="ch-again">Try again</button><button class="btn sm" id="ch-back">Back to your career</button></div></div>`);
+      $('#ch-again').onclick=()=>{const d=S.sandbox.def;closeModal();leaveSandbox();startChallenge(d);};
+      $('#ch-back').onclick=()=>{closeModal();leaveSandbox();go('play');};}
     $('#r-next').onclick=()=>{closeModal();const n=nextFixture();LM=null;if(n)startFixture(n.key);else go('home');};
     $('#r-card').onclick=()=>{closeModal();MATCH_TAB='card';go('match');};
   },50);
@@ -128,6 +133,7 @@ uiDoneHook=(M,E,ms,pos,aw,cn)=>{
 
 function init(){
   appInit();
+  try{localStorage.removeItem(SANDBOX_KEY);}catch(e){}   // a challenge left mid-way doesn't come back
   setTimeout(applyBroadcast,0);
   if(loadSlot(SLOT)){LM=S.live||null;applyBroadcast();go('home');}
   else showSplash();

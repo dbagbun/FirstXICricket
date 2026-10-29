@@ -104,7 +104,8 @@ function onMatchEvent(M,e){
 }
 function onMatchDone(M){
   if(M.friendly){   // friendlies don't touch the career: no archive, stats, rankings or milestones
-    const E=archiveMatch(M);if(S.live&&S.live.id===M.id)S.live=null;saveGame();
+    const E=archiveMatch(M);if(S.live&&S.live.id===M.id)S.live=null;
+    if(M.h2h)achieve('h2h');if(M.manual)achieve('dice');saveGame();
     if(uiDoneHook)uiDoneHook(M,E,[],null,[],[]);return;
   }
   const E=archiveMatch(M);
@@ -120,6 +121,8 @@ function onMatchDone(M){
   const cn=coachAfter(E);
   const ms=checkMilestones(E),pos=playerOfSeries(E.sid),aw=yearEnd(E);
   if(S.live&&S.live.id===M.id)S.live=null;
+  achCheck(E,M);
+  if(S.sandbox)challengeAfter(M,E);
   if(!M.sim)saveGame();
   if(uiDoneHook)uiDoneHook(M,E,ms,pos,aw,cn);
 }
@@ -140,9 +143,9 @@ function readSlot(i){try{return parseSave(localStorage.getItem(SLOT_KEYS[i]));}c
 function saveGame(){
   if(!S)return false;
   S.savedAt=Date.now();
-  const write=()=>localStorage.setItem(SLOT_KEYS[SLOT],lzPack(JSON.stringify(S)));
+  const write=()=>localStorage.setItem(S.sandbox?SANDBOX_KEY:SLOT_KEYS[SLOT],lzPack(JSON.stringify(S)));   // challenges never touch your slot
   if(typeof askPersist==='function')askPersist();
-  if(typeof FILE_HANDLE!=='undefined'&&FILE_HANDLE)writeSaveFile();
+  if(typeof FILE_HANDLE!=='undefined'&&FILE_HANDLE&&!S.sandbox)writeSaveFile();
   try{write();return true;}
   catch(e){
     try{S.logs={};write();toast('Storage nearly full: old ball-by-ball logs were cleared.','warn');return true;}

@@ -179,6 +179,7 @@ function leaveJob(why){
   C.team=0;S.settings.myTeam=0;
 }
 function takeJob(team){
+  achieve('coach1');
   const C=S.coach;if(C.team)leaveJob('moved on');
   Object.assign(C,{team:+team,start:careerDate(),until:addDays(careerDate(),CONTRACT_DAYS),conf:C.history.length?55:60,offers:[],stop:null});
   S.settings.myTeam=+team;S.settings.captain='manual';
