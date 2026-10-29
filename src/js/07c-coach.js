@@ -21,6 +21,7 @@ function formLevel(pid,fmt,col){
 function updateForm(E){
   if(!S.form)S.form=perFmt(()=>({}));
   const F=S.form[E.fmt]=S.form[E.fmt]||{},base={ODI:4.8,TEST:3.2,T20:7.5}[E.fmt];
+  if(S.gen)for(const t of E.teams)for(const p of E.xi[t].slice(0,11)){const g=S.gen.players[p];if(g&&!g.real&&!g.debut)g.debut=E.date;}
   const push=(pid,k,v)=>{const x=F[pid]=F[pid]||{bat:[],bowl:[]};x[k].push(Math.round(v));if(x[k].length>FORM_N)x[k].shift();};
   for(const I of E.inns){
     for(const r of I.bt)push(r[0],'bat',r[1]);

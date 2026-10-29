@@ -359,7 +359,7 @@ const saveText=raw=>raw&&raw.startsWith(LZ_TAG)?lzUnpack(raw):raw;
 const TEAMS=new Map(WORLD.teams.map(t=>[t.id,t]));
 const teamName=id=>TEAMS.get(+id)?.name||('Team '+id);
 const teamShort=id=>TEAMS.get(+id)?.short||String(id);
-const pName=pid=>(WORLD.players[pid]||['#'+pid])[0];
+const pName=pid=>{const p=WORLD.players[pid];if(p)return p[0];const g=typeof genP==='function'&&genP(pid);return g?g.n:'#'+pid;};
 
 // Player attributes: WORLD.players[pid] = [name, style P/S/M/N, rating 1-5 (7 = does not bowl), max overs, src,
 // batting colour: B/G/R against everyone, or two letters = against associates + against Test nations
@@ -376,12 +376,15 @@ function eraEntry(p,date){
 function pAttr(pid,date){
   const hasS=typeof S!=='undefined'&&S;
   const e=hasS&&S.attrEdits&&S.attrEdits[pid];
-  const p=WORLD.players[pid]||['?','N',7,0,'d','','d'];
   if(date===undefined&&hasS&&typeof careerDate==='function')date=careerDate();
+  if(!WORLD.players[pid]&&hasS&&S.gen&&S.gen.players[pid]){const g=futureAttr(pid,date,null);
+    if(e&&e.style)Object.assign(g,{style:e.style,rating:e.rating,max:e.max,src:'e'});if(e&&e.bat!==undefined)Object.assign(g,{bat:e.bat,batSrc:'e'});return g;}
+  const p=WORLD.players[pid]||['?','N',7,0,'d','','d'];
   const era=(!hasS||S.settings.ratings!=='career')?eraEntry(p,date):null;
   const bw=e&&e.style?e:{style:p[1],rating:era&&p[1]!=='N'?era[1]:p[2],max:p[3]};
   const bat=e&&e.bat!==undefined?e.bat:(era?era[2]:(p[5]||''));
-  return{style:bw.style,rating:bw.rating,max:bw.max,src:e&&e.style?'e':p[4],bat,batSrc:e&&e.bat!==undefined?'e':(p[6]||'d'),era:!!era};
+  const out={style:bw.style,rating:bw.rating,max:bw.max,src:e&&e.style?'e':p[4],bat,batSrc:e&&e.bat!==undefined?'e':(p[6]||'d'),era:!!era};
+  return hasS&&S.gen&&date&&date>LAST_REAL&&!e?futureAttr(pid,date,out):out;   // real players age after the data ends
 }
 const STYLE_NAME={P:'Pace',S:'Spin',M:'Medium',N:'-'};
 const BAT_NAME={B:'BLUE',G:'GREEN',R:'RED',BG:'BLUE (GREEN v Test nations)',GR:'GREEN (RED v Test nations)',BR:'BLUE (RED v Test nations)'};
@@ -441,6 +444,7 @@ for(const f of FIX)for(const t of[f.a,f.b])if(WORLD.xi[f.cid]&&WORLD.xi[f.cid][t
 const DEBUT=new Map();
 for(const f of FIX)if(WORLD.xi[f.cid])for(const t in WORLD.xi[f.cid])for(const p of WORLD.xi[f.cid][t].slice(0,11))if(!DEBUT.has(p))DEBUT.set(p,f.date);
 function nearestXI(tid,date,opts={}){
+  if(typeof S!=='undefined'&&S&&S.gen&&isFuture(date)){const x=genXI(+tid,date);if(x)return x;}
   const games=TEAM_GAMES.get(+tid)||[];
   let best=null,bd=1e9;
   for(const f of games){
@@ -453,6 +457,7 @@ function nearestXI(tid,date,opts={}){
 }
 // Players who turned out for a team within `days` of a date, most appearances first.
 function squadAround(tid,date,days=400){
+  if(typeof S!=='undefined'&&S&&S.gen&&isFuture(date))return activePool(+tid,date).sort((a,b)=>capsOf(b)-capsOf(a));
   const cnt=new Map();
   for(const f of TEAM_GAMES.get(+tid)||[]){
     if(Math.abs(daysBetween(f.date,date))>days)continue;
@@ -1094,7 +1099,7 @@ let S=null;
 function newCareer(opts={}){
   return{
     v:1,created:Date.now(),name:opts.name||'My career',
-    settings:{dice:'auto',captain:'auto',knockouts:'timeline',batColours:'player',ratings:'era',history:'after',selection:'auto',form:'on',broadcast:'standard',font:'barlow',voice:false,voiceRate:1.05,myTeam:+opts.myTeam||0,ballDelay:250,sound:false,tv:true},
+    settings:{dice:'auto',captain:'auto',knockouts:'timeline',batColours:'player',ratings:'era',history:'after',selection:'auto',form:'on',broadcast:'standard',font:'barlow',voice:false,voiceRate:1.05,future:'on',myTeam:+opts.myTeam||0,ballDelay:250,sound:false,tv:true},
     done:{},          // fixture no / test id -> match id
     matches:[],       // archived scorecards (compact), oldest first
     logs:{},          // match id -> compact ball log, last LOG_KEEP matches only
@@ -1651,7 +1656,11 @@ function fixtureByKey(key){
   if(key[0]==='C'){const C=cupById(key.split('.')[0]),f=C&&C.fix.find(x=>x.key===key);if(f)return cupFx(C,f);}
   return null;
 }
-function nextFixture(){return allFixtures().find(x=>x.playable&&!S.done[x.key])||null;}
+function nextFixture(){
+  let n=allFixtures().find(x=>x.playable&&!S.done[x.key])||null;
+  for(let i=0;!n&&i<3&&ensureFuture();i++)n=allFixtures().find(x=>x.playable&&!S.done[x.key])||null;   // the future: next year's calendar
+  return n;
+}
 function careerDate(){const last=S.matches[S.matches.length-1];return last?last.date:CAREER_START;}
 
 // Build the match for a fixture (not tossed yet). ODI knockouts can be re-seeded from your tables.
@@ -1730,16 +1739,29 @@ try{SLOT=+(localStorage.getItem('fxi_slot')||0)||0;}catch(e){}
 function setSlot(i){SLOT=i;try{localStorage.setItem('fxi_slot',String(i));}catch(e){}}
 function parseSave(raw){try{const d=JSON.parse(saveText(raw));return d&&d.v===1&&Array.isArray(d.matches)?d:null;}catch(e){return null;}}
 function readSlot(i){try{return parseSave(localStorage.getItem(SLOT_KEYS[i]));}catch(e){return null;}}
+// Long careers: past SAVE_SOFT characters the oldest matches lose their bulkiest detail (batter-v-bowler
+// matchups and over-by-over chart data); scorecards, stats and records are kept. The newest ARCHIVE_FULL stay whole.
+const SAVE_SOFT=2400000,ARCHIVE_FULL=1500;
+function compactArchive(keep=ARCHIVE_FULL){
+  let n=0;
+  for(const E of S.matches.slice(0,Math.max(0,S.matches.length-keep)))for(const I of E.inns)if(I.mu||I.ov){delete I.mu;delete I.ov;n++;}
+  if(n)S.compacted=(S.compacted||0)+n;
+  return n;
+}
 function saveGame(){
   if(!S)return false;
   S.savedAt=Date.now();
-  const write=()=>localStorage.setItem(S.sandbox?SANDBOX_KEY:SLOT_KEYS[SLOT],lzPack(JSON.stringify(S)));   // challenges never touch your slot
+  const key=S.sandbox?SANDBOX_KEY:SLOT_KEYS[SLOT];   // challenges never touch your slot
+  let data=lzPack(JSON.stringify(S));
+  if(data.length>SAVE_SOFT&&compactArchive())data=lzPack(JSON.stringify(S));
+  if(data.length>SAVE_SOFT&&compactArchive(600))data=lzPack(JSON.stringify(S));
+  const write=()=>localStorage.setItem(key,data);
   if(typeof askPersist==='function')askPersist();
   if(typeof FILE_HANDLE!=='undefined'&&FILE_HANDLE&&!S.sandbox)writeSaveFile();
   try{write();return true;}
   catch(e){
-    try{S.logs={};write();toast('Storage nearly full: old ball-by-ball logs were cleared.','warn');return true;}
-    catch(e2){toast('Could not save - browser storage is full. Export your career from Settings.','bad');return false;}
+    try{S.logs={};compactArchive(300);data=lzPack(JSON.stringify(S));write();toast('Storage nearly full: older match detail was trimmed (scorecards and stats kept).','warn');return true;}
+    catch(e2){toast('Could not save - browser storage is full. Back up your career from Settings.','bad');return false;}
   }
 }
 function loadSlot(i){
@@ -1928,7 +1950,7 @@ function playerOfSeries(sid){
 function awardsFor(year){
   const M=S.matches.filter(E=>E.date.startsWith(year));if(M.length<AWARD_MIN_MATCHES)return null;
   const score={},runs=perFmt(()=>({})),wk=perFmt(()=>({}));
-  const newcomer=p=>{const d=DEBUT.get(p)||'';return d>=(+year-1)+'-01-01'&&daysBetween(CAREER_START,d)>365;};
+  const newcomer=p=>{const g=genP(p),d=DEBUT.get(p)||(g&&!g.real&&g.debut)||'';return d>=(+year-1)+'-01-01'&&daysBetween(CAREER_START,d)>365;};
   for(const E of M){
     for(const[pid,x]of Object.entries(matchScores(E,false))){const o=score[pid]=score[pid]||{s:0,tm:{}};o.s+=x.s;o.tm[x.team]=(o.tm[x.team]||0)+1;}
     for(const I of E.inns){for(const r of I.bt)runs[E.fmt][r[0]]=(runs[E.fmt][r[0]]||0)+r[1];for(const w of I.bw)wk[E.fmt][w[0]]=(wk[E.fmt][w[0]]||0)+w[4];}
@@ -1989,6 +2011,7 @@ function formLevel(pid,fmt,col){
 function updateForm(E){
   if(!S.form)S.form=perFmt(()=>({}));
   const F=S.form[E.fmt]=S.form[E.fmt]||{},base={ODI:4.8,TEST:3.2,T20:7.5}[E.fmt];
+  if(S.gen)for(const t of E.teams)for(const p of E.xi[t].slice(0,11)){const g=S.gen.players[p];if(g&&!g.real&&!g.debut)g.debut=E.date;}
   const push=(pid,k,v)=>{const x=F[pid]=F[pid]||{bat:[],bowl:[]};x[k].push(Math.round(v));if(x[k].length>FORM_N)x[k].shift();};
   for(const I of E.inns){
     for(const r of I.bt)push(r[0],'bat',r[1]);
@@ -2403,6 +2426,7 @@ const ACHIEVEMENTS=[
   ['first','🏏','First ball','Play your first match.'],
   ['m100','📅','Season ticket','100 matches in a career.'],['m500','📚','Almanack','500 matches in a career.'],['m1000','🗂️','Wisden','1,000 matches in a career.'],
   ['calendar','🏁','The whole lot','Play out the entire real ODI calendar, 2002-2026.'],
+  ['future','🔭','Into the unknown','Play a match after the real calendar ends.'],['era','🕰️','A new era','Take a career to 2036.'],
   ['test1','⚪','Whites on','Play a Test.'],['t20','⚡','Twenty20 vision','Play a T20.'],['h2h','🤝','Grudge match','Finish a two-player head-to-head.'],
   ['dice','🎲','Old school','Finish a match rolling your own dice.'],['cupBuilt','🏟️','Organiser','Build your own tournament.'],
   ['ton','💯','Three figures','See a hundred scored.'],['dbl','🌟','Double top','An ODI double hundred.'],['t20ton','🚀','Short-form century','A T20 hundred.'],['triple','👑','Triple','A Test triple hundred.'],
@@ -2431,6 +2455,7 @@ function achCheck(E,M){
   a('first');
   if(!S.sandbox){const n=S.matches.length;if(n>=100)a('m100');if(n>=500)a('m500');if(n>=1000)a('m1000');
     if(E.fmt==='ODI'&&E.fid&&ODI_FX.every(x=>!x.playable||S.done[x.key]))a('calendar');}
+  if(!S.sandbox&&E.date>LAST_REAL)a('future');if(!S.sandbox&&E.date>='2036-01-01')a('era');
   if(E.fmt==='TEST')a('test1');if(E.fmt==='T20')a('t20');
   if(M&&M.h2h)a('h2h');if(M&&M.manual&&!M.sim)a('dice');
   for(const I of E.inns){
@@ -2450,6 +2475,159 @@ function achCheck(E,M){
   if(S.rk&&Object.keys(S.rk.awards).length)a('awards');
   if(S.coach){if(S.coach.objs.filter(o=>o.status==='met').length>=10)a('target10');if(S.coach.history.some(h=>h.why==='sacked'))a('sacked');
     if(new Set([...S.coach.history.map(h=>h.team),S.coach.team].filter(Boolean)).size>=3)a('nations3');}
+}
+
+// ═══ THE FUTURE — after the real calendar: ageing, retirements, new players, a generated calendar ═══
+// S.gen = {on, years:{Y:true}, players:{pid:{n, t, born, st, pot, wk, role, real, ret, debut}}, next}
+// Real players who were active at the end of the data join the pool with an estimated birth year (from their
+// debut); everyone ages: generated players grow into their potential and fade from 33; real players decline from
+// 34. Each new year retires the old, brings youngsters through and schedules tours and ICC events (S.tests/S.cups).
+const LAST_REAL=[...FIX,...TFIX].reduce((m,f)=>f.date>m?f.date:m,'');
+const GEN_ID0=900001;
+const isFuture=date=>!!date&&date>addDays(LAST_REAL,20);
+const genP=pid=>S&&S.gen&&S.gen.players[pid]||null;
+const ageOf=(g,date)=>+date.slice(0,4)-g.born;
+// rating for a generated player at a date: potential, minus youth and age
+function genRating(g,date){const a=ageOf(g,date);return clamp(g.pot+(a<22?2:a<25?1:a<=31?0:a<=34?1:2),1,5);}
+function capsOf(pid){let n=0;if(S)for(const f of FORMATS){const s=S.stats[f][pid];if(s)n+=s.m;}return n;}
+function genColour(g,pid){
+  if(g.role==='tail')return'R';if(g.role==='mid')return'G';
+  const full=TEAMS.get(g.t)?.full,c=capsOf(pid);
+  return full?(c>=20?'B':'G'):(c>=40?'B':'BG');
+}
+// pAttr for generated players, and ageing for real ones in the future (called from pAttr)
+function futureAttr(pid,date,base){
+  const g=genP(pid);if(!g)return base;
+  if(!g.real){const st=g.st;return{style:st,rating:st==='N'?7:genRating(g,date),max:st==='N'?0:10,src:'g',bat:genColour(g,pid),batSrc:'g',era:true};}
+  if(!isFuture(date))return base;
+  const a=ageOf(g,date),dec=a>=37?2:a>=34?1:0;
+  const out={...base};
+  if(out.style!=='N')out.rating=clamp(out.rating+dec,1,5);
+  if(a>=37&&out.bat==='B')out.bat='G';
+  return out;
+}
+// ---------- names in a team's style ----------
+const NAME_CACHE=new Map();
+function namePool(team){
+  if(NAME_CACHE.has(team))return NAME_CACHE.get(team);
+  const names=squadAroundReal(team).map(pName),first=[],last=[];let init=0;
+  for(const n of names){const t=n.split(' ');if(t.length<2)continue;if(/^[A-Z]{1,4}$/.test(t[0]))init++;else first.push(...t.slice(0,-1));last.push(t[t.length-1]);}
+  const P={first:first.length?first:['Sam','Alex','Jordan'],last:last.length?last:['Smith','Khan','Perera'],init:names.length?init/names.length:.5};
+  NAME_CACHE.set(team,P);return P;
+}
+function genName(team){
+  const P=namePool(team),taken=new Set([...Object.values(WORLD.players).map(p=>p[0]),...Object.values(S.gen.players).map(g=>g.n)]);
+  for(let i=0;i<40;i++){
+    const ln=pick(P.last),n=rnd()<P.init?'ABCDEGHJKLMNPRSTW'[rndInt(0,16)]+(rnd()<.6?'ABCDEGHJKLMNPRSTW'[rndInt(0,16)]:'')+' '+ln:pick(P.first)+' '+ln;
+    if(!taken.has(n))return n;
+  }
+  return'New Player '+S.gen.next;
+}
+function squadAroundReal(team){const L=TEAM_GAMES.get(+team)||[];const last=L.slice(-25);const s=new Set();for(const f of last)for(const p of fixtureXI(f.cid,team).bat)s.add(p);return[...s];}
+// ---------- the pool ----------
+function initFuture(){
+  if(S.gen&&S.gen.players&&Object.keys(S.gen.players).length)return;
+  S.gen=Object.assign({on:true,years:{},players:{},next:GEN_ID0},S.gen||{});
+  const cut=addDays(LAST_REAL,-730);
+  for(const[t,games]of TEAM_GAMES){
+    if(COMPOSITE.has(t))continue;
+    const pos={},wk=new Set();
+    for(const f of games){if(f.date<cut)continue;const x=fixtureXI(f.cid,t);x.bat.forEach((p,i)=>(pos[p]=pos[p]||[]).push(i+1));wk.add(x.wk);}
+    for(const p in pos){
+      const P=WORLD.players[p],d=DEBUT.get(+p)||CAREER_START,ps=pos[p].sort((a,b)=>a-b),med=ps[ps.length>>1];
+      const born=d<='2002-12-31'?2002-rndInt(25,31):+d.slice(0,4)-rndInt(20,24);
+      S.gen.players[p]={real:true,n:P[0],t:+t,born,st:P[1],pot:P[2]>5?5:P[2],wk:wk.has(+p),role:med<=5?'top':med<=8?'mid':'tail',debut:d};
+    }
+  }
+}
+function newYoungster(team,year){
+  const full=TEAMS.get(team)?.full,role=pick(['top','top','top','mid','mid','tail','tail','tail']);
+  const st=role==='tail'?pick(['P','P','S','M']):role==='mid'?pick(['M','S','P','N']):(rnd()<.8?'N':pick(['S','M']));
+  const r=rnd(),pot=full?(r<.08?1:r<.25?2:r<.6?3:r<.88?4:5):(r<.02?1:r<.1?2:r<.35?3:r<.7?4:5);
+  const pid=S.gen.next++;
+  S.gen.players[pid]={real:false,n:genName(team),t:team,born:year-rndInt(18,22),st,pot,wk:role!=='tail'&&rnd()<.12,role,debut:null};
+  return pid;
+}
+const activePool=(team,date)=>Object.entries(S.gen.players).filter(([,g])=>g.t===team&&!(g.ret&&g.ret<=date)&&ageOf(g,date)>=17).map(([p])=>+p);
+function yearTurnover(year){
+  const date=year+'-01-01';
+  for(const[p,g]of Object.entries(S.gen.players)){
+    if(g.ret)continue;const a=ageOf(g,date);
+    const pr=a>=40?.9:a>=37?.45:a>=35?.25:a>=33?.08:(g.real&&!capsOf(p)?.15:.01);
+    if(rnd()<pr)g.ret=date;
+  }
+  for(const t of new Set(Object.values(S.gen.players).map(g=>g.t))){
+    const n=activePool(t,date).length;
+    for(let i=0;i<Math.max(2,26-n);i++)newYoungster(t,year);
+  }
+}
+// The best XI from a pool: keeper, four bowlers, then the batters, in a batting order by role.
+function genXI(team,date){
+  const pool=activePool(team,date).filter(p=>!isInjured(p,date));if(pool.length<11)return null;
+  const at=p=>pAttr(p,date),cap=p=>capsOf(p),g=p=>S.gen.players[p];
+  const keeper=pool.filter(p=>g(p).wk).sort((a,b)=>cap(b)-cap(a))[0]??pool.filter(p=>g(p).role!=='tail').sort((a,b)=>cap(b)-cap(a))[0];
+  const bowlers=pool.filter(p=>p!==keeper&&at(p).style!=='N').sort((a,b)=>at(a).rating-at(b).rating||cap(b)-cap(a));
+  const chosen=new Set([keeper]),bw=[];
+  if(bowlers.some(p=>at(p).style==='S'))bw.push(bowlers.find(p=>at(p).style==='S'));
+  for(const p of bowlers){if(bw.length>=5)break;if(!bw.includes(p))bw.push(p);}
+  bw.slice(0,5).forEach(p=>chosen.add(p));
+  const bats=pool.filter(p=>!chosen.has(p)).sort((a,b)=>(g(a).role==='top'?0:g(a).role==='mid'?1:2)-(g(b).role==='top'?0:g(b).role==='mid'?1:2)||(at(a).bat==='B'?0:1)-(at(b).bat==='B'?0:1)||cap(b)-cap(a));
+  for(const p of bats){if(chosen.size>=11)break;chosen.add(p);}
+  const rank=p=>(g(p).role==='top'?0:g(p).role==='mid'?20:40)+(p===keeper?15:0)+(at(p).style!=='N'?8-at(p).rating:0)-Math.min(10,cap(p)/20);
+  const bat=[...chosen].sort((a,b)=>rank(a)-rank(b));
+  const capt=bat.slice().sort((a,b)=>cap(b)-cap(a))[0];
+  return{bat,wk:keeper,cap:capt};
+}
+// ---------- the calendar ----------
+const FUTURE_HOSTS=[3,4,1,5,9,6,8,7,11,10];
+function rankedTeams(fmt,pool){const L=teamRanking(fmt).map(r=>r.team).filter(t=>pool.includes(t));return[...L,...pool.filter(t=>!L.includes(t))];}
+function generateYear(year){
+  initFuture();if(S.gen.years[year])return;
+  S.gen.years[year]=true;
+  if(year>+LAST_REAL.slice(0,4))yearTurnover(year);
+  const start=year===+LAST_REAL.slice(0,4)?addDays(LAST_REAL,25):year+'-01-10';
+  const full=TEST_TEAMS.slice(),assoc=[...new Set(Object.values(S.gen.players).map(g=>g.t))].filter(t=>!TEAMS.get(t)?.full&&!COMPOSITE.has(t));
+  const busy={};const free=(t,a,b)=>!(busy[t]||[]).some(([x,y])=>!(b<x||a>y));
+  const book=(ts,a,b)=>ts.forEach(t=>(busy[t]=busy[t]||[]).push([a,b]));
+  // ICC events
+  const k=year-2026;
+  if(year%2===0){const host=FUTURE_HOSTS[k%FUTURE_HOSTS.length],pool=[host,...rankedTeams('T20',[...full,...assoc]).filter(t=>t!==host)].slice(0,16);
+    const s=year+'-06-02';createCup({name:`ICC T20 World Cup ${year}`,fmt:'T20',format:'groups4',host,start:s,teams:pool});book(pool,s,year+'-07-10');}
+  if(year%4===3){const host=FUTURE_HOSTS[(k+3)%FUTURE_HOSTS.length],pool=[host,...rankedTeams('ODI',[...full,...assoc]).filter(t=>t!==host)].slice(0,10);
+    const s=year+'-10-05';createCup({name:`ICC Cricket World Cup ${year}`,fmt:'ODI',format:'rr',host,start:s,teams:pool});book(pool,s,year+'-11-30');}
+  if(year%4===1){const host=FUTURE_HOSTS[(k+5)%FUTURE_HOSTS.length],pool=[host,...rankedTeams('ODI',full).filter(t=>t!==host)].slice(0,8);
+    const s=year+'-02-18';createCup({name:`ICC Champions Trophy ${year}`,fmt:'ODI',format:'groups2',host,start:s,teams:pool});book(pool,s,year+'-03-12');}
+  // associates' own event
+  if(assoc.length>=4){const pool=rankedTeams('T20',assoc).slice(0,6),host=pool[0],s=year+'-04-08';
+    if(pool.every(t=>free(t,s,addDays(s,20)))){createCup({name:`Associates Cup ${year}`,fmt:pool.length>=4?'T20':'ODI',format:'rr',host,start:s,teams:pool});book(pool,s,addDays(s,20));}}
+  // tours: rotate host/visitor pairs between Test nations, about two home and two away each a year
+  const pairs=[];for(const h of full)for(const v of full)if(h!==v)pairs.push([h,v]);
+  const off=(k*17)%pairs.length,todo=[...pairs.slice(off),...pairs.slice(0,off)].slice(0,18);
+  // an associate or two visit a Test nation
+  if(assoc.length)for(let i=0;i<2;i++)todo.push([full[(k+i*3)%full.length],assoc[(k+i)%assoc.length]]);
+  for(const[h,v]of todo){
+    const both=TEAMS.get(h).full&&TEAMS.get(v).full;
+    const tests=both?rndInt(2,3):0,odis=rndInt(3,5),t20=rndInt(2,3);
+    const len=tests*10+odis*3+t20*2+6;
+    let d=start;
+    for(let tries=0;tries<40;tries++){const e=addDays(d,len);if(e.slice(0,4)!==String(year))break;if(free(h,d,e)&&free(v,d,e))break;d=addDays(d,9);}
+    const e=addDays(d,len);if(e.slice(0,4)!==String(year)||!free(h,d,e)||!free(v,d,e))continue;
+    book([h,v],d,e);
+    let cur=d;
+    if(tests){createSeries({fmt:'TEST',a:h,b:v,n:tests,start:cur});cur=addDays(cur,tests*10);}
+    createSeries({fmt:'ODI',a:h,b:v,n:odis,start:cur});cur=addDays(cur,odis*3+2);
+    createSeries({fmt:'T20',a:h,b:v,n:t20,start:cur});
+  }
+  fxDirty();
+}
+// The calendar runs dry -> schedule the next year (once you're within a few months of the end of the data).
+function ensureFuture(){
+  if(!S||S.sandbox||S.settings.future==='off')return false;
+  const cd=careerDate();if(cd<addDays(LAST_REAL,-120))return false;
+  if(allFixtures().some(x=>x.playable&&!S.done[x.key]))return false;
+  initFuture();
+  let y=Math.max(+LAST_REAL.slice(0,4),...Object.keys(S.gen.years).map(Number).map(v=>v+1));
+  generateYear(y);return true;
 }
 
 // ═══ UI SHELL — navigation, views, modal, shared widgets ═══
@@ -2498,12 +2676,13 @@ function matchLine(E){
 
 // ---------- player profile ----------
 function openPlayer(pid){
-  const a=pAttr(pid),rows=FORMATS.map(f=>[f,S.stats[f][pid]]).filter(x=>x[1]);
+  const a=pAttr(pid),rows=FORMATS.map(f=>[f,S.stats[f][pid]]).filter(x=>x[1]),gp=genP(pid);
   const era=(WORLD.players[pid]||[])[7]||[],bowls=a.style!=='N';
   const recent=S.matches.filter(E=>E.teams.some(t=>E.xi[t].slice(0,11).includes(pid))).slice(-8).reverse();
   const ms=S.ms.filter(m=>m.pid===pid).slice(-10).reverse();
   const line=(E)=>{const parts=[];for(const I of E.inns){const b=I.bt.find(r=>r[0]===pid);if(b)parts.push(b[1]+(b[5]?'':'*'));const w=I.bw.find(r=>r[0]===pid);if(w)parts.push(w[4]+'/'+w[3]);}return parts.join(', ')||'dnb';};
   openModal(`<h2>${esc(pName(pid))}</h2>
+  ${gp?`<div class="sub" style="margin:-6px 0 8px">Age ${ageOf(gp,careerDate())} · ${esc(teamName(gp.t))}${gp.real?'':` · potential ${'★'.repeat(6-gp.pot)}`}${gp.ret&&gp.ret<=careerDate()?` · <span class="red">retired ${gp.ret.slice(0,4)}</span>`:''}</div>`:''}
   <div class="row muted" style="margin-bottom:10px">${rows.length?rows[0][1].teams.map(badge).join(' '):''}
     <span>Batting: <b>${esc(a.bat?BAT_NAME[a.bat]:'by position')}</b> <span class="pill">${a.batSrc==='h'?'from your Excel BatGroup':a.batSrc==='e'?'edited':'derived'}</span></span>
     <span>Bowling: ${a.style==='N'?'does not bowl':`${STYLE_NAME[a.style]}, rating ${a.rating}${a.rating>=5?' (part-timer)':a.rating===1?' (elite)':''}`}
@@ -2948,7 +3127,8 @@ RENDER.home=(el)=>{
   const coachCard=C?`<div class="card hi"><div class="spread"><div>${C.team?`<span class="sub">Coach of</span> <b>${tlabel(C.team)}</b>`:'<b>Out of work</b>'}
       ${C.team?`<div style="width:220px;margin-top:6px">${confBar(C.conf)}</div><span class="muted" style="font-size:12px">Board confidence ${Math.round(C.conf)}</span>`:`<div class="muted">${plural(C.offers.length,'offer')} waiting</div>`}</div>
       <div class="row">${cnx?(nextFixture()&&nextFixture().key===cnx.key?`<button class="btn pri" data-playkey="${cnx.key}">Play ${esc(teamShort(cnx.a))} v ${esc(teamShort(cnx.b))}</button>`:`<button class="btn pri" id="h-simto">Sim to my next match (${fmtDate(cnx.date)})</button>`):''}<button class="btn" data-go="coach">Coach</button></div></div></div>`:'';
-  el.innerHTML=backupBanner()+coachCard+`<div class="grid g3" style="grid-template-columns:2fr 1fr${C?';margin-top:14px':''}">
+  const futureNote=S.gen&&careerDate()>LAST_REAL?`<div class="banner" style="margin-bottom:14px">🔭 <b>The future, ${careerDate().slice(0,4)}.</b> <span class="sub">The real calendar ended in ${fmtDate(LAST_REAL)}. Fixtures are now generated a year at a time; veterans age and retire and new players come through.</span></div>`:'';
+  el.innerHTML=backupBanner()+futureNote+coachCard+`<div class="grid g3" style="grid-template-columns:2fr 1fr${C?';margin-top:14px':''}">
     <div class="stack">
       ${live&&(!n||live.key!==n.key)?`<div class="card"><div class="spread"><div><span class="pill live">LIVE</span> <b>${esc(teamName(live.teams[0]))} v ${esc(teamName(live.teams[1]))}</b></div><button class="btn pri" data-go="match">Resume</button></div></div>`:''}
       ${nextCard}${tourn}
@@ -3935,6 +4115,7 @@ RENDER.settings=(el)=>{
     ${S.coach?'':`<div class="spread"><span>Pick squads for the team you follow</span>${seg('selection',[['auto','No (real XIs)'],['me','Yes']])}</div>`}
     <div class="spread"><span>Form (hot and cold streaks change the cards)</span>${seg('form',[['on','On'],['off','Off']])}</div>
     <div class="spread"><span>Batting colours</span>${seg('batColours',[['player','Player'],['position','Classic (by position)']])}</div>
+    <div class="spread"><span>After the real calendar (2026)</span>${seg('future',[['on','Carry on into the future'],['off','Stop']])}</div>
     <div class="spread"><span>Tournament knockouts</span>${seg('knockouts',[['timeline','My timeline'],['history','History']])}</div>
     ${HAS_REAL?`<div class="spread"><span>Real results (after you play a match)</span>${seg('history',[['after','Show'],['off','Hide']])}</div>`:''}
     <div class="spread"><span>App font</span>${seg('font',APP_FONTS)}</div>

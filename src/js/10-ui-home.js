@@ -28,7 +28,8 @@ RENDER.home=(el)=>{
   const coachCard=C?`<div class="card hi"><div class="spread"><div>${C.team?`<span class="sub">Coach of</span> <b>${tlabel(C.team)}</b>`:'<b>Out of work</b>'}
       ${C.team?`<div style="width:220px;margin-top:6px">${confBar(C.conf)}</div><span class="muted" style="font-size:12px">Board confidence ${Math.round(C.conf)}</span>`:`<div class="muted">${plural(C.offers.length,'offer')} waiting</div>`}</div>
       <div class="row">${cnx?(nextFixture()&&nextFixture().key===cnx.key?`<button class="btn pri" data-playkey="${cnx.key}">Play ${esc(teamShort(cnx.a))} v ${esc(teamShort(cnx.b))}</button>`:`<button class="btn pri" id="h-simto">Sim to my next match (${fmtDate(cnx.date)})</button>`):''}<button class="btn" data-go="coach">Coach</button></div></div></div>`:'';
-  el.innerHTML=backupBanner()+coachCard+`<div class="grid g3" style="grid-template-columns:2fr 1fr${C?';margin-top:14px':''}">
+  const futureNote=S.gen&&careerDate()>LAST_REAL?`<div class="banner" style="margin-bottom:14px">🔭 <b>The future, ${careerDate().slice(0,4)}.</b> <span class="sub">The real calendar ended in ${fmtDate(LAST_REAL)}. Fixtures are now generated a year at a time; veterans age and retire and new players come through.</span></div>`:'';
+  el.innerHTML=backupBanner()+futureNote+coachCard+`<div class="grid g3" style="grid-template-columns:2fr 1fr${C?';margin-top:14px':''}">
     <div class="stack">
       ${live&&(!n||live.key!==n.key)?`<div class="card"><div class="spread"><div><span class="pill live">LIVE</span> <b>${esc(teamName(live.teams[0]))} v ${esc(teamName(live.teams[1]))}</b></div><button class="btn pri" data-go="match">Resume</button></div></div>`:''}
       ${nextCard}${tourn}

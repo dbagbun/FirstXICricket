@@ -80,7 +80,7 @@ function playerOfSeries(sid){
 function awardsFor(year){
   const M=S.matches.filter(E=>E.date.startsWith(year));if(M.length<AWARD_MIN_MATCHES)return null;
   const score={},runs=perFmt(()=>({})),wk=perFmt(()=>({}));
-  const newcomer=p=>{const d=DEBUT.get(p)||'';return d>=(+year-1)+'-01-01'&&daysBetween(CAREER_START,d)>365;};
+  const newcomer=p=>{const g=genP(p),d=DEBUT.get(p)||(g&&!g.real&&g.debut)||'';return d>=(+year-1)+'-01-01'&&daysBetween(CAREER_START,d)>365;};
   for(const E of M){
     for(const[pid,x]of Object.entries(matchScores(E,false))){const o=score[pid]=score[pid]||{s:0,tm:{}};o.s+=x.s;o.tm[x.team]=(o.tm[x.team]||0)+1;}
     for(const I of E.inns){for(const r of I.bt)runs[E.fmt][r[0]]=(runs[E.fmt][r[0]]||0)+r[1];for(const w of I.bw)wk[E.fmt][w[0]]=(wk[E.fmt][w[0]]||0)+w[4];}

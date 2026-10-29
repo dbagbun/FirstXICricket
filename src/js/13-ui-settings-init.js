@@ -33,6 +33,7 @@ RENDER.settings=(el)=>{
     ${S.coach?'':`<div class="spread"><span>Pick squads for the team you follow</span>${seg('selection',[['auto','No (real XIs)'],['me','Yes']])}</div>`}
     <div class="spread"><span>Form (hot and cold streaks change the cards)</span>${seg('form',[['on','On'],['off','Off']])}</div>
     <div class="spread"><span>Batting colours</span>${seg('batColours',[['player','Player'],['position','Classic (by position)']])}</div>
+    <div class="spread"><span>After the real calendar (2026)</span>${seg('future',[['on','Carry on into the future'],['off','Stop']])}</div>
     <div class="spread"><span>Tournament knockouts</span>${seg('knockouts',[['timeline','My timeline'],['history','History']])}</div>
     ${HAS_REAL?`<div class="spread"><span>Real results (after you play a match)</span>${seg('history',[['after','Show'],['off','Hide']])}</div>`:''}
     <div class="spread"><span>App font</span>${seg('font',APP_FONTS)}</div>

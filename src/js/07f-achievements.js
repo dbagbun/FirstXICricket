@@ -4,6 +4,7 @@ const ACHIEVEMENTS=[
   ['first','🏏','First ball','Play your first match.'],
   ['m100','📅','Season ticket','100 matches in a career.'],['m500','📚','Almanack','500 matches in a career.'],['m1000','🗂️','Wisden','1,000 matches in a career.'],
   ['calendar','🏁','The whole lot','Play out the entire real ODI calendar, 2002-2026.'],
+  ['future','🔭','Into the unknown','Play a match after the real calendar ends.'],['era','🕰️','A new era','Take a career to 2036.'],
   ['test1','⚪','Whites on','Play a Test.'],['t20','⚡','Twenty20 vision','Play a T20.'],['h2h','🤝','Grudge match','Finish a two-player head-to-head.'],
   ['dice','🎲','Old school','Finish a match rolling your own dice.'],['cupBuilt','🏟️','Organiser','Build your own tournament.'],
   ['ton','💯','Three figures','See a hundred scored.'],['dbl','🌟','Double top','An ODI double hundred.'],['t20ton','🚀','Short-form century','A T20 hundred.'],['triple','👑','Triple','A Test triple hundred.'],
@@ -32,6 +33,7 @@ function achCheck(E,M){
   a('first');
   if(!S.sandbox){const n=S.matches.length;if(n>=100)a('m100');if(n>=500)a('m500');if(n>=1000)a('m1000');
     if(E.fmt==='ODI'&&E.fid&&ODI_FX.every(x=>!x.playable||S.done[x.key]))a('calendar');}
+  if(!S.sandbox&&E.date>LAST_REAL)a('future');if(!S.sandbox&&E.date>='2036-01-01')a('era');
   if(E.fmt==='TEST')a('test1');if(E.fmt==='T20')a('t20');
   if(M&&M.h2h)a('h2h');if(M&&M.manual&&!M.sim)a('dice');
   for(const I of E.inns){

@@ -2,7 +2,7 @@
 const TEAMS=new Map(WORLD.teams.map(t=>[t.id,t]));
 const teamName=id=>TEAMS.get(+id)?.name||('Team '+id);
 const teamShort=id=>TEAMS.get(+id)?.short||String(id);
-const pName=pid=>(WORLD.players[pid]||['#'+pid])[0];
+const pName=pid=>{const p=WORLD.players[pid];if(p)return p[0];const g=typeof genP==='function'&&genP(pid);return g?g.n:'#'+pid;};
 
 // Player attributes: WORLD.players[pid] = [name, style P/S/M/N, rating 1-5 (7 = does not bowl), max overs, src,
 // batting colour: B/G/R against everyone, or two letters = against associates + against Test nations
@@ -19,12 +19,15 @@ function eraEntry(p,date){
 function pAttr(pid,date){
   const hasS=typeof S!=='undefined'&&S;
   const e=hasS&&S.attrEdits&&S.attrEdits[pid];
-  const p=WORLD.players[pid]||['?','N',7,0,'d','','d'];
   if(date===undefined&&hasS&&typeof careerDate==='function')date=careerDate();
+  if(!WORLD.players[pid]&&hasS&&S.gen&&S.gen.players[pid]){const g=futureAttr(pid,date,null);
+    if(e&&e.style)Object.assign(g,{style:e.style,rating:e.rating,max:e.max,src:'e'});if(e&&e.bat!==undefined)Object.assign(g,{bat:e.bat,batSrc:'e'});return g;}
+  const p=WORLD.players[pid]||['?','N',7,0,'d','','d'];
   const era=(!hasS||S.settings.ratings!=='career')?eraEntry(p,date):null;
   const bw=e&&e.style?e:{style:p[1],rating:era&&p[1]!=='N'?era[1]:p[2],max:p[3]};
   const bat=e&&e.bat!==undefined?e.bat:(era?era[2]:(p[5]||''));
-  return{style:bw.style,rating:bw.rating,max:bw.max,src:e&&e.style?'e':p[4],bat,batSrc:e&&e.bat!==undefined?'e':(p[6]||'d'),era:!!era};
+  const out={style:bw.style,rating:bw.rating,max:bw.max,src:e&&e.style?'e':p[4],bat,batSrc:e&&e.bat!==undefined?'e':(p[6]||'d'),era:!!era};
+  return hasS&&S.gen&&date&&date>LAST_REAL&&!e?futureAttr(pid,date,out):out;   // real players age after the data ends
 }
 const STYLE_NAME={P:'Pace',S:'Spin',M:'Medium',N:'-'};
 const BAT_NAME={B:'BLUE',G:'GREEN',R:'RED',BG:'BLUE (GREEN v Test nations)',GR:'GREEN (RED v Test nations)',BR:'BLUE (RED v Test nations)'};
@@ -84,6 +87,7 @@ for(const f of FIX)for(const t of[f.a,f.b])if(WORLD.xi[f.cid]&&WORLD.xi[f.cid][t
 const DEBUT=new Map();
 for(const f of FIX)if(WORLD.xi[f.cid])for(const t in WORLD.xi[f.cid])for(const p of WORLD.xi[f.cid][t].slice(0,11))if(!DEBUT.has(p))DEBUT.set(p,f.date);
 function nearestXI(tid,date,opts={}){
+  if(typeof S!=='undefined'&&S&&S.gen&&isFuture(date)){const x=genXI(+tid,date);if(x)return x;}
   const games=TEAM_GAMES.get(+tid)||[];
   let best=null,bd=1e9;
   for(const f of games){
@@ -96,6 +100,7 @@ function nearestXI(tid,date,opts={}){
 }
 // Players who turned out for a team within `days` of a date, most appearances first.
 function squadAround(tid,date,days=400){
+  if(typeof S!=='undefined'&&S&&S.gen&&isFuture(date))return activePool(+tid,date).sort((a,b)=>capsOf(b)-capsOf(a));
   const cnt=new Map();
   for(const f of TEAM_GAMES.get(+tid)||[]){
     if(Math.abs(daysBetween(f.date,date))>days)continue;

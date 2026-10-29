@@ -61,7 +61,11 @@ function fixtureByKey(key){
   if(key[0]==='C'){const C=cupById(key.split('.')[0]),f=C&&C.fix.find(x=>x.key===key);if(f)return cupFx(C,f);}
   return null;
 }
-function nextFixture(){return allFixtures().find(x=>x.playable&&!S.done[x.key])||null;}
+function nextFixture(){
+  let n=allFixtures().find(x=>x.playable&&!S.done[x.key])||null;
+  for(let i=0;!n&&i<3&&ensureFuture();i++)n=allFixtures().find(x=>x.playable&&!S.done[x.key])||null;   // the future: next year's calendar
+  return n;
+}
 function careerDate(){const last=S.matches[S.matches.length-1];return last?last.date:CAREER_START;}
 
 // Build the match for a fixture (not tossed yet). ODI knockouts can be re-seeded from your tables.
@@ -140,16 +144,29 @@ try{SLOT=+(localStorage.getItem('fxi_slot')||0)||0;}catch(e){}
 function setSlot(i){SLOT=i;try{localStorage.setItem('fxi_slot',String(i));}catch(e){}}
 function parseSave(raw){try{const d=JSON.parse(saveText(raw));return d&&d.v===1&&Array.isArray(d.matches)?d:null;}catch(e){return null;}}
 function readSlot(i){try{return parseSave(localStorage.getItem(SLOT_KEYS[i]));}catch(e){return null;}}
+// Long careers: past SAVE_SOFT characters the oldest matches lose their bulkiest detail (batter-v-bowler
+// matchups and over-by-over chart data); scorecards, stats and records are kept. The newest ARCHIVE_FULL stay whole.
+const SAVE_SOFT=2400000,ARCHIVE_FULL=1500;
+function compactArchive(keep=ARCHIVE_FULL){
+  let n=0;
+  for(const E of S.matches.slice(0,Math.max(0,S.matches.length-keep)))for(const I of E.inns)if(I.mu||I.ov){delete I.mu;delete I.ov;n++;}
+  if(n)S.compacted=(S.compacted||0)+n;
+  return n;
+}
 function saveGame(){
   if(!S)return false;
   S.savedAt=Date.now();
-  const write=()=>localStorage.setItem(S.sandbox?SANDBOX_KEY:SLOT_KEYS[SLOT],lzPack(JSON.stringify(S)));   // challenges never touch your slot
+  const key=S.sandbox?SANDBOX_KEY:SLOT_KEYS[SLOT];   // challenges never touch your slot
+  let data=lzPack(JSON.stringify(S));
+  if(data.length>SAVE_SOFT&&compactArchive())data=lzPack(JSON.stringify(S));
+  if(data.length>SAVE_SOFT&&compactArchive(600))data=lzPack(JSON.stringify(S));
+  const write=()=>localStorage.setItem(key,data);
   if(typeof askPersist==='function')askPersist();
   if(typeof FILE_HANDLE!=='undefined'&&FILE_HANDLE&&!S.sandbox)writeSaveFile();
   try{write();return true;}
   catch(e){
-    try{S.logs={};write();toast('Storage nearly full: old ball-by-ball logs were cleared.','warn');return true;}
-    catch(e2){toast('Could not save - browser storage is full. Export your career from Settings.','bad');return false;}
+    try{S.logs={};compactArchive(300);data=lzPack(JSON.stringify(S));write();toast('Storage nearly full: older match detail was trimmed (scorecards and stats kept).','warn');return true;}
+    catch(e2){toast('Could not save - browser storage is full. Back up your career from Settings.','bad');return false;}
   }
 }
 function loadSlot(i){

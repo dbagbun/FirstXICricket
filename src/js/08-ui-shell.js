@@ -44,12 +44,13 @@ function matchLine(E){
 
 // ---------- player profile ----------
 function openPlayer(pid){
-  const a=pAttr(pid),rows=FORMATS.map(f=>[f,S.stats[f][pid]]).filter(x=>x[1]);
+  const a=pAttr(pid),rows=FORMATS.map(f=>[f,S.stats[f][pid]]).filter(x=>x[1]),gp=genP(pid);
   const era=(WORLD.players[pid]||[])[7]||[],bowls=a.style!=='N';
   const recent=S.matches.filter(E=>E.teams.some(t=>E.xi[t].slice(0,11).includes(pid))).slice(-8).reverse();
   const ms=S.ms.filter(m=>m.pid===pid).slice(-10).reverse();
   const line=(E)=>{const parts=[];for(const I of E.inns){const b=I.bt.find(r=>r[0]===pid);if(b)parts.push(b[1]+(b[5]?'':'*'));const w=I.bw.find(r=>r[0]===pid);if(w)parts.push(w[4]+'/'+w[3]);}return parts.join(', ')||'dnb';};
   openModal(`<h2>${esc(pName(pid))}</h2>
+  ${gp?`<div class="sub" style="margin:-6px 0 8px">Age ${ageOf(gp,careerDate())} · ${esc(teamName(gp.t))}${gp.real?'':` · potential ${'★'.repeat(6-gp.pot)}`}${gp.ret&&gp.ret<=careerDate()?` · <span class="red">retired ${gp.ret.slice(0,4)}</span>`:''}</div>`:''}
   <div class="row muted" style="margin-bottom:10px">${rows.length?rows[0][1].teams.map(badge).join(' '):''}
     <span>Batting: <b>${esc(a.bat?BAT_NAME[a.bat]:'by position')}</b> <span class="pill">${a.batSrc==='h'?'from your Excel BatGroup':a.batSrc==='e'?'edited':'derived'}</span></span>
     <span>Bowling: ${a.style==='N'?'does not bowl':`${STYLE_NAME[a.style]}, rating ${a.rating}${a.rating>=5?' (part-timer)':a.rating===1?' (elite)':''}`}
