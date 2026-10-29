@@ -28,7 +28,7 @@ RENDER.rank=(el)=>{
     const L=Object.entries(R.pos).sort((a,b)=>b[1].date.localeCompare(a[1].date)).slice(0,60);
     body=L.length?`<table>${L.map(([sid,x])=>`<tr><td class="muted num" style="white-space:nowrap">${fmtDate(x.date)}</td><td>${esc(x.title)}</td><td>${badge(x.team)} ${plink(x.pid)}</td></tr>`).join('')}</table>`:'<div class="empty">Finish a series to crown its player.</div>';
   }
-  el.innerHTML=`<div class="card"><div class="row">${['teams','bat','bowl','ar'].includes(RK_F.tab)?`<div class="seg">${['ODI','TEST'].map(x=>`<button data-rkf="${x}" class="${f===x?'on':''}">${x==='TEST'?'Tests':'ODIs'}</button>`).join('')}</div>`:''}
+  el.innerHTML=`<div class="card"><div class="row">${['teams','bat','bowl','ar'].includes(RK_F.tab)?`<div class="seg">${FORMATS.map(x=>`<button data-rkf="${x}" class="${f===x?'on':''}">${FMT_PLURAL[x]}</button>`).join('')}</div>`:''}
     <div class="seg">${tabs.map(([k,n])=>`<button data-rkt="${k}" class="${RK_F.tab===k?'on':''}">${n}</button>`).join('')}</div></div></div>
     <div class="${RK_F.tab==='honours'?'':'card'}" style="margin-top:14px">${body}</div>`;
   $$('[data-rkf]').forEach(b=>b.onclick=()=>{RK_F.fmt=b.dataset.rkf;rerender();});
@@ -37,7 +37,7 @@ RENDER.rank=(el)=>{
 // Rankings and honours for the player card
 function playerHonours(pid){
   const R=R_(),out=[];
-  for(const f of['ODI','TEST'])for(const k of['bat','bowl','ar']){const i=playerRanking(f,k,100).findIndex(x=>x.pid===pid);if(i>=0)out.push(`No.${i+1} ${f} ${k==='ar'?'all-rounder':k==='bat'?'batter':'bowler'}`);}
+  for(const f of FORMATS)for(const k of['bat','bowl','ar']){const i=playerRanking(f,k,100).findIndex(x=>x.pid===pid);if(i>=0)out.push(`No.${i+1} ${f} ${k==='ar'?'all-rounder':k==='bat'?'batter':'bowler'}`);}
   const aw=[];for(const[y,A]of Object.entries(R.awards))for(const[k,n]of AWARD_NAMES)if(A[k]&&A[k].pid===pid)aw.push(`${n} ${y}`);
   const pos=Object.values(R.pos).filter(x=>x.pid===pid).map(x=>`Player of the series: ${x.title}`);
   return{ranks:out,awards:aw.concat(pos)};

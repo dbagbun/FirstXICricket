@@ -9,8 +9,8 @@ function newCareer(opts={}){
     matches:[],       // archived scorecards (compact), oldest first
     logs:{},          // match id -> compact ball log, last LOG_KEEP matches only
     live:null,        // match in progress
-    stats:{ODI:{},TEST:{}},teams:{ODI:{},TEST:{}},
-    ms:[],msKeys:{},fast:{ODI:{f50:null,f100:null},TEST:{f50:null,f100:null}},
+    stats:perFmt(()=>({})),teams:perFmt(()=>({})),
+    ms:[],msKeys:{},fast:perFmt(()=>({f50:null,f100:null})),
     tests:[],testSeq:0,attrEdits:{},seen:{},reseed:{},rk:blankRankings(),
   };
 }
@@ -102,7 +102,7 @@ function applyStats(E){
   if(E.motm)g(E.motm).motm++;
 }
 function rebuildStats(){
-  S.stats={ODI:{},TEST:{}};S.teams={ODI:{},TEST:{}};
+  S.stats=perFmt(()=>({}));S.teams=perFmt(()=>({}));
   for(const E of S.matches)applyStats(E);
   rebuildRankings();
 }

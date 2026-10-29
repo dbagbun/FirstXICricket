@@ -8,10 +8,31 @@
 // at most one step by his position (a promoted all-rounder keeps the top-order BLUE; a No.11 sent in to open is
 // GREEN, not BLUE), except an associate's second letter against a Test nation ('BG', 'GR').
 const RR_CODES=['3','4A','4B','5','6','7'];
+// T20: the six cards top out at 6.7 an over, so T20 adds two PROVISIONAL cards - RR_8 from RR_6 (~8.0 an over,
+// its GREEN/RED wickets) and RR_9 from RR_7 (~10.3, its BLUE/RED wickets) - same wicket tokens, so the colours
+// work exactly as before, with a fixed pattern of dots/1s/2s/4s upgraded. Replace them with designed cards by
+// putting RR_8 / RR_9 sheets in the workbook (tools/extract.py reads any RR_* sheet).
+const T20_CODES=['4B','5','6','8','9','7'];
+function deriveCard(base,R){
+  return base.map((row,i)=>row.map((t,j)=>{
+    if(!/^\d+$/.test(t))return t;
+    const n=+t,h=((i+1)*31+(j+1)*17)%100,h2=((i+1)*7+(j+1)*53)%100;
+    if(n===0&&h<R.dot)return h2<R.dot4?'4':'1';
+    if(n===1&&h<R.one)return h2<R.one6?'4':'2';
+    if(n===2&&h<R.two)return'4';
+    if(n===4&&h<R.four)return'6';
+    return t;
+  }));
+}
+if(!WORLD.cards['8'])WORLD.cards['8']=deriveCard(WORLD.cards['6'],{dot:30,dot4:15,one:35,one6:20,two:30,four:30});
+if(!WORLD.cards['9'])WORLD.cards['9']=deriveCard(WORLD.cards['7'],{dot:40,dot4:25,one:45,one6:30,two:45,four:40});
+const cardCodes=M=>M.fmt==='T20'?T20_CODES:RR_CODES;
 const CARD_WEIGHTS={
   ODI:{1:[35,30,20,10,4,1],2:[15,30,30,15,8,2],3:[5,15,30,30,15,5],4:[2,8,15,30,30,15],5:[1,4,10,20,35,30]},
   // Tests: RR_3 carries most overs and RR_7 is the wicket card: ~3.4 an over, ~34 a wicket (tests/engine-stats.js).
   TEST:{1:[84,5,4,2,0,5],2:[80,7,6,3,0,4],3:[76,9,8,3,1,3],4:[70,12,10,4,2,2],5:[62,15,13,6,2,2]},
+  // T20 weights are over T20_CODES (RR_4B, 5, 6, 8, 9, 7), tuned with tests/engine-stats.js
+  T20:{1:[10,20,25,20,20,5],2:[5,15,25,25,25,5],3:[2,8,20,30,32,8],4:[1,4,15,30,38,12],5:[0,2,8,25,45,20]},
 };
 // Test pitches wear: from day 4, points move from RR_3 to RR_7 (double for spinners).
 const TEST_WEAR={4:2,5:4};
@@ -97,7 +118,7 @@ function soInnings(M,bat){
   const I0=M.inns.find(i=>i.bat===bat);
   const batters=Object.entries(I0.bt).sort((a,b)=>b[1].r-a[1].r).map(e=>+e[0]).slice(0,3);
   const Ib=M.inns.find(i=>i.bowl===bowl),bw=Ib.eng.B.slice().sort((a,b)=>a.rating-b.rating)[0];
-  const card=pickCard(applyShift(baseWeights(M.fmt,bw.rating),2));
+  const card=pickCard(applyShift(baseWeights(M.fmt,bw.rating),2),cardCodes(M));
   let roll=roll100(),col=1,legal=0,runs=0,wk=0,st=0,ns=1;const balls=[];
   while(legal<6&&wk<2){
     const r=col<=6?roll:roll100(),c=col<=6?col:1;col++;
@@ -130,10 +151,10 @@ function wearWeights(M,b,W){
   const m=w>=0?Math.min(w,W[0]):-Math.min(-w,W[5]);
   W[0]-=m;W[5]+=m;return W;
 }
-function pickCard(W){
+function pickCard(W,codes=RR_CODES){
   const r=roll100();let c=0;
-  for(let i=0;i<6;i++){c+=W[i];if(r<=c)return RR_CODES[i];}
-  return'3';
+  for(let i=0;i<6;i++){c+=W[i];if(r<=c)return codes[i];}
+  return codes[0];
 }
 function parseToken(tok){
   let t=String(tok||'0').toUpperCase().trim();
@@ -219,6 +240,7 @@ function testTotals(M,t){return sum(M.inns.filter(i=>i.bat===+t).map(i=>i.runs))
 // ---------- bowling engine (port of modBowlingEngine) ----------
 const SPELLS={
   ODI:{P:[3,5,3,4],S:[4,8,2,3],M:[2,4,3,4]},
+  T20:{P:[1,3,1,3],S:[2,4,1,2],M:[1,2,1,2]},
   TEST:{P:[4,7,5,9],S:[6,14,3,6],M:[3,6,5,8]},
 };
 function bowlEngInit(M,I){
@@ -387,7 +409,7 @@ function bowlBall(M,manualRoll){
   const I=curInn(M);
   if(!M.cur){
     const over=Math.floor(I.lb/6)+1,bi=captainBowler(M,I,over)??chooseBowler(M,I,over),b=I.eng.B[bi];
-    const card=pickCard(applyShift(wearWeights(M,b,baseWeights(M.fmt,b.rating)),situationShift(M,I,over)));
+    const card=pickCard(applyShift(wearWeights(M,b,baseWeights(M.fmt,b.rating)),situationShift(M,I,over)),cardCodes(M));
     M.cur={over,bi,bowler:b.pid,card,roll:0,col:1,comp:false,legal:0,n:0,runs:0};
     if(!I.bw[b.pid]){I.bw[b.pid]={b:0,r:0,w:0,md:0,wd:0,nb:0};I.bwOrder.push(b.pid);}
   }

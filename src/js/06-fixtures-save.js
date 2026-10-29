@@ -16,19 +16,25 @@ const VENUE_HOME=new Map(),HOME_VENUES=new Map();
 })();
 const TEST_TEAMS=WORLD.teams.filter(t=>t.full).map(t=>t.id);
 
+// Series you schedule (S.tests, any format - the name is historical): {id, fmt, a (hosts), b, title, fix:[{key,date,venue,city}]}
+const T20_START='2005-02-17',SERIES_GAP={TEST:10,ODI:3,T20:2},SERIES_SUFFIX={TEST:'Tests',ODI:'ODIs',T20:'T20Is'},MATCH_LABEL={TEST:'Test',ODI:'ODI',T20:'T20I'};
+const ALL_TEAMS=WORLD.teams.filter(t=>TEAM_GAMES.has(t.id)).map(t=>t.id);
 function testSeries(sid){
   const T=S&&S.tests.find(t=>t.id===sid);if(!T)return null;
-  return{sid:T.id,name:T.title,title:T.title,teams:new Set([T.a,T.b]),fix:T.fix.map(x=>x.key),start:T.fix[0].date,end:T.fix[T.fix.length-1].date,kind:'bilateral',fmt:'TEST'};
+  return{sid:T.id,name:T.title,title:T.title,teams:new Set([T.a,T.b]),fix:T.fix.map(x=>x.key),start:T.fix[0].date,end:T.fix[T.fix.length-1].date,kind:'bilateral',fmt:T.fmt||'TEST'};
 }
-function createTestSeries({a,b,n,start}){
-  a=+a;b=+b;n=clamp(+n||3,1,5);
+function createSeries({fmt='TEST',a,b,n,start}){
+  a=+a;b=+b;n=clamp(+n||3,1,fmt==='TEST'?5:7);
+  if(fmt==='T20'&&start<T20_START)start=T20_START;
   const id='T'+(++S.testSeq),venues=(HOME_VENUES.get(a)||[{venue:teamName(a)+' Oval',city:''}]).slice(0,8);
   const yr=start.slice(0,4);
-  const T={id,a,b,title:`${teamName(b)} tour of ${teamName(a)} ${yr} (Tests)`,fix:[]};
-  for(let k=0;k<n;k++){const v=venues[k%venues.length];T.fix.push({key:id+'.'+(k+1),date:addDays(start,k*10),venue:v.venue,city:v.city});}
+  const T={id,fmt,a,b,title:`${teamName(b)} tour of ${teamName(a)} ${yr} (${SERIES_SUFFIX[fmt]})`,fix:[]};
+  for(let k=0;k<n;k++){const v=venues[k%venues.length];T.fix.push({key:id+'.'+(k+1),date:addDays(start,k*SERIES_GAP[fmt]),venue:v.venue,city:v.city});}
   S.tests.push(T);fxDirty();
   return T;
 }
+const createTestSeries=o=>createSeries({...o,fmt:'TEST'});
+function customFx(T,x,k){const fmt=T.fmt||'TEST';return{key:x.key,fmt,date:x.date,a:T.a,b:T.b,venue:x.venue,city:x.city,sid:T.id,title:T.title,label:`${ordinal(k+1)} ${MATCH_LABEL[fmt]}`,playable:true,custom:true};}
 function deleteTestSeries(id){
   const T=S.tests.find(t=>t.id===id);if(!T||T.fix.some(x=>S.done[x.key]))return false;
   S.tests=S.tests.filter(t=>t.id!==id);fxDirty();return true;
@@ -43,15 +49,14 @@ const fxDirty=()=>{FX_CACHE=null;};
 function allFixtures(){
   if(FX_CACHE&&FX_CACHE.S===S)return FX_CACHE.list;
   const out=ODI_FX.concat(REAL_TEST_FX);
-  for(const T of S.tests)T.fix.forEach((x,k)=>out.push({key:x.key,fmt:'TEST',date:x.date,a:T.a,b:T.b,venue:x.venue,city:x.city,sid:T.id,
-    title:T.title,label:`${ordinal(k+1)} Test`,playable:true}));
+  for(const T of S.tests)T.fix.forEach((x,k)=>out.push(customFx(T,x,k)));
   out.sort((x,y)=>x.date<y.date?-1:x.date>y.date?1:(x.fmt==='TEST')-(y.fmt==='TEST'));
   FX_CACHE={S,list:out};
   return out;
 }
 function fixtureByKey(key){
   if(key[0]==='o'||key[0]==='r')return ODI_FX_BY_KEY.get(key)||null;
-  for(const T of S.tests){const k=T.fix.findIndex(x=>x.key===key);if(k>=0){const x=T.fix[k];return{key,fmt:'TEST',date:x.date,a:T.a,b:T.b,venue:x.venue,city:x.city,sid:T.id,title:T.title,label:`${ordinal(k+1)} Test`,playable:true};}}
+  for(const T of S.tests){const k=T.fix.findIndex(x=>x.key===key);if(k>=0)return customFx(T,T.fix[k],k);}
   return null;
 }
 function nextFixture(){return allFixtures().find(x=>x.playable&&!S.done[x.key])||null;}
@@ -59,11 +64,12 @@ function careerDate(){const last=S.matches[S.matches.length-1];return last?last.
 
 // Build the match for a fixture (not tossed yet). ODI knockouts can be re-seeded from your tables.
 function buildMatch(fx){
-  if(fx.fmt==='TEST'){
+  if(fx.fmt!=='ODI'||fx.custom){
     const xi=t=>(fx.real&&testXI(fx.f.cid,t,fx.date))||nearestXI(t,fx.date);
     const home=fx.real?(VENUE_HOME.get(fx.venue)||fx.a):fx.a;
-    const M=newMatch({fmt:'TEST',a:fx.a,b:fx.b,home,date:fx.date,venue:fx.venue,city:fx.city,sid:fx.sid,series:fx.title,stage:fx.label,
-      xiA:xi(fx.a),xiB:xi(fx.b)});
+    const M=newMatch({fmt:fx.fmt,a:fx.a,b:fx.b,home,date:fx.date,venue:fx.venue,city:fx.city,sid:fx.sid,series:fx.title,stage:fx.stage||fx.label,
+      xiA:fx.xiA||xi(fx.a),xiB:fx.xiB||xi(fx.b)});
+    if(fx.superOver)M.superOverOn=true;
     M.key=fx.key;M.batMode=S.settings.batColours;return M;
   }
   const f=fx.f,E=edition(f.sid);
@@ -129,6 +135,9 @@ function loadSlot(i){
   S.settings=Object.assign(newCareer().settings,S.settings||{});
   for(const k of['tests','ms','matches'])S[k]=S[k]||[];
   for(const k of['logs','msKeys','attrEdits','seen','reseed','done'])S[k]=S[k]||{};
+  for(const k of['stats','teams'])for(const f of FORMATS)S[k][f]=S[k][f]||{};
+  for(const f of FORMATS)S.fast[f]=S.fast[f]||{f50:null,f100:null};
+  if(S.rk)for(const k of['team','yr','bat','bowl'])for(const f of FORMATS)S.rk[k][f]=S.rk[k][f]||{};
   if(!S.rk)rebuildRankings();
   return true;
 }

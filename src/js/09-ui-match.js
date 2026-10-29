@@ -164,7 +164,7 @@ function openSwap(M,t,i){
 
 // ---------- live ----------
 function statusLine(M,I){
-  if(M.fmt==='ODI'){
+  if(M.fmt!=='TEST'){
     const cut=I.maxOv<M.maxOv?` · <span class="gold">reduced to ${I.maxOv} overs</span>`:'';
     if(I.no===2){const need=I.target-I.runs,left=I.maxOv*6-I.lb;
       return need>0?`<b>${teamName(I.bat)} need ${plural(need,'run')} from ${plural(left,'ball')}</b>${M.dl&&M.dl.target?' (D/L target '+I.target+')':''} · RRR ${f2(need/(left/6))}${cut}`:'';}
@@ -297,7 +297,7 @@ function drawMatchTab(M){
 function rrCardHTML(M){
   const C=M.cur,code=C?C.card:(curInn(M).overs.slice(-1)[0]||{}).card||'3';
   const grid=WORLD.cards[code];
-  return`<div class="row" style="margin-bottom:8px">${RR_CODES.map(c=>`<button class="btn sm ${c===code?'pri':''}" data-rr="${c}">RR_${c}</button>`).join('')}</div>
+  return`<div class="row" style="margin-bottom:8px">${[...new Set([...RR_CODES,...(M.fmt==='T20'?['8','9']:[])])].map(c=>`<button class="btn sm ${c===code?'pri':''}" data-rr="${c}">RR_${c}</button>`).join('')}</div>
   <div class="muted" style="font-size:12px;margin-bottom:6px">Rows are the 1-100 roll, columns balls 1-6. BLUE wickets get anyone out, GREEN only Nos.7-11, RED only Nos.10-11.</div>
   <div class="tbl-wrap" style="max-height:380px;overflow:auto"><table class="mono" style="font-size:11px" id="rr-tbl">${rrRows(code,C)}</table></div>`;
 }
@@ -313,7 +313,7 @@ function scorecardHTML(E,M){
     const dnb=E.xi[I.bat].slice(0,11).filter(p=>!I.bt.some(r=>r[0]===p));
     const live=M&&M.state!=='done'&&k===E.inns.length-1;
     const atCrease=live?[M.inns[k].st,M.inns[k].ns]:[];
-    return`<div style="margin-bottom:16px"><div class="spread"><h3 style="margin:0">${esc(teamName(I.bat))} - ${E.fmt==='ODI'?'innings':ordinal(E.inns.filter((x,j)=>j<=k&&x.bat===I.bat).length)+' innings'}</h3>
+    return`<div style="margin-bottom:16px"><div class="spread"><h3 style="margin:0">${esc(teamName(I.bat))} - ${E.fmt!=='TEST'?'innings':ordinal(E.inns.filter((x,j)=>j<=k&&x.bat===I.bat).length)+' innings'}</h3>
       <b class="num">${I.runs}${I.wkts<10?'/'+I.wkts:''}${I.why==='declared'?' dec':''} <span class="muted">(${oversTxt(I.lb)} ov${I.target?', target '+I.target:''})</span></b></div>
     <div class="tbl-wrap"><table class="num"><tr><th>Batter</th><th class="hide-sm"></th><th class="r">R</th><th class="r">B</th><th class="r">4s</th><th class="r">6s</th><th class="r">SR</th></tr>
     ${I.bt.map(r=>`<tr><td>${plink(r[0])}${r[0]===E.xi[I.bat][12]?' (c)':''}${r[0]===E.xi[I.bat][11]?' †':''}${atCrease.includes(r[0])&&!r[5]?' <span class="cyan">*</span>':''}</td>
@@ -348,7 +348,7 @@ function chartsHTML(E){
   if(!E.inns.length||!E.inns[0].ov.length)return'<div class="muted">Charts appear once an over has been bowled.</div>';
   const col=['#06b6d4','#ffd700','#34d394','#f97316'];
   const W=640,H=220,pad=30;
-  const maxOv=Math.max(...E.inns.map(I=>I.ov.length),E.fmt==='ODI'?50:10);
+  const maxOv=Math.max(...E.inns.map(I=>I.ov.length),E.fmt!=='TEST'?(E.maxOv||50):10);
   const worm=E.inns.map(I=>{let c=0;return I.ov.map(o=>c+=o[0]);});
   const maxR=Math.max(50,...worm.map(w=>w[w.length-1]||0));
   const x=i=>pad+(W-pad*2)*(i/maxOv),y=v=>H-pad-(H-pad*2)*(v/maxR);
@@ -357,7 +357,7 @@ function chartsHTML(E){
     ${worm.map((w,k)=>`<polyline fill="none" stroke="${col[k]}" stroke-width="2" points="${pad},${y(0)} ${w.map((v,i)=>`${x(i+1)},${y(v)}`).join(' ')}"/>`+E.inns[k].ov.map((o,i)=>o[1]?`<circle cx="${x(i+1)}" cy="${y(w[i])}" r="3.5" fill="#ef4444"/>`:'').join('')).join('')}
     <text x="${W/2}" y="${H-6}" text-anchor="middle">overs</text></svg>`;
   const man=E.inns.map((I,k)=>{
-    const mx=Math.max(8,...I.ov.map(o=>o[0])),bw=(W-pad*2)/Math.max(I.ov.length,E.fmt==='ODI'?50:20);
+    const mx=Math.max(8,...I.ov.map(o=>o[0])),bw=(W-pad*2)/Math.max(I.ov.length,E.fmt!=='TEST'?(E.maxOv||50):20);
     return`<div class="sub" style="margin-top:8px">${esc(teamName(I.bat))} - runs per over</div><svg viewBox="0 0 ${W} 120" role="img" aria-label="Manhattan">${I.ov.map((o,i)=>`<rect x="${pad+i*bw}" y="${100-90*o[0]/mx}" width="${Math.max(1,bw-1)}" height="${90*o[0]/mx}" fill="${col[k]}" opacity=".85"/>${o[1]?`<circle cx="${pad+i*bw+bw/2}" cy="${96-90*o[0]/mx}" r="3" fill="#ef4444"/>`:''}`).join('')}<text x="4" y="14">${mx}</text></svg>`;
   }).join('');
   return`<div class="chart"><div class="row" style="font-size:12px">${E.inns.map((I,k)=>`<span><span style="display:inline-block;width:10px;height:10px;background:${col[k]};border-radius:2px"></span> ${esc(teamShort(I.bat))} ${ordinal(k+1)} inns</span>`).join('')}<span class="muted">● wicket</span></div>${wormSvg}${man}</div>`;

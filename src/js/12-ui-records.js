@@ -10,11 +10,11 @@ RENDER.records=(el)=>{
   const block=k=>{
     if(k==='teamwl'){const L=D.teamwl;return`<div class="card"><h3>${REC_NAME[k]}</h3><table class="num"><tr><th>Team</th><th class="r">P</th><th class="r">W</th><th class="r">L</th><th class="r">D/T/NR</th><th class="r">Win %</th></tr>
       ${L.map(x=>`<tr><td>${tlabel(x.team)}</td><td class="r">${x.T.p}</td><td class="r">${x.T.w}</td><td class="r">${x.T.l}</td><td class="r">${x.T.d+x.T.t+x.T.nr}</td><td class="r">${f1(100*x.v)}</td></tr>`).join('')}</table></div>`;}
-    if(k==='bbm'&&REC_F.fmt==='ODI')return'';
+    if(k==='bbm'&&REC_F.fmt!=='TEST')return'';
     const rows=D[k]||[];
     return`<div class="card"><h3>${REC_NAME[k]}</h3>${rows.length?`<table>${rows.map((r,i)=>rowHTML(k,r,i)).join('')}</table>`:'<div class="muted">No record yet.</div>'}</div>`;
   };
-  el.innerHTML=`<div class="card"><div class="row"><div class="seg">${['ODI','TEST'].map(f=>`<button data-rf="${f}" class="${REC_F.fmt===f?'on':''}">${f==='TEST'?'Tests':'ODIs'}</button>`).join('')}</div>
+  el.innerHTML=`<div class="card"><div class="row"><div class="seg">${FORMATS.map(f=>`<button data-rf="${f}" class="${REC_F.fmt===f?'on':''}">${FMT_PLURAL[f]}</button>`).join('')}</div>
     <div class="seg">${REC_GROUPS.map(g=>`<button data-rg="${g[0]}" class="${REC_F.grp===g[0]?'on':''}">${g[0]}</button>`).join('')}</div></div>
     <div class="muted" style="font-size:12px;margin-top:6px">Qualification: averages ${min.inn}+ innings, strike rate ${min.balls}+ balls, bowling averages ${min.wkts}+ wickets, economy ${min.bb}+ balls, captaincy ${min.cap}+ matches.</div></div>
     <div class="grid g3" style="margin-top:14px">${keys.map(block).join('')}</div>`;
@@ -34,7 +34,7 @@ RENDER.players=(el)=>{
   const rows=L.slice(PL_F.page*50,PL_F.page*50+50);
   const cell=(k,s)=>({avg:f2(batAvg(s)),sr:f1(batSR(s)),bavg:f2(bowlAvg(s)),econ:f2(bowlEcon(s)),best:s.bw?s.best[0]+'/'+s.best[1]:'-',hs:s.hs+(s.hsNo?'*':'')}[k]??s[k]);
   const teams=[...TEAMS.values()].sort((a,b)=>a.name.localeCompare(b.name));
-  el.innerHTML=`<div class="card"><div class="row"><div class="seg">${['ODI','TEST'].map(f=>`<button data-pf="${f}" class="${PL_F.fmt===f?'on':''}">${f==='TEST'?'Tests':'ODIs'}</button>`).join('')}</div>
+  el.innerHTML=`<div class="card"><div class="row"><div class="seg">${FORMATS.map(f=>`<button data-pf="${f}" class="${PL_F.fmt===f?'on':''}">${FMT_PLURAL[f]}</button>`).join('')}</div>
     <input type="search" id="pl-q" placeholder="Search players" value="${esc(PL_F.q)}">
     <select id="pl-t"><option value="">All teams</option>${teams.map(t=>`<option value="${t.id}" ${+PL_F.team===t.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select>
     <span class="muted">${L.length} players</span></div></div>
@@ -55,7 +55,7 @@ RENDER.history=(el,arg)=>{
   const pages=Math.max(1,Math.ceil(L.length/25));HI_F.page=clamp(HI_F.page,0,pages-1);
   const teams=[...TEAMS.values()].sort((a,b)=>a.name.localeCompare(b.name));
   const h2h=HI_F.team?Object.entries(L.reduce((o,E)=>{const opp=otherOf(E,+HI_F.team),r=o[opp]=o[opp]||{p:0,w:0,l:0};r.p++;if(E.result.winner===+HI_F.team)r.w++;else if(E.result.winner)r.l++;return o;},{})).sort((a,b)=>b[1].p-a[1].p):[];
-  el.innerHTML=`<div class="card"><div class="row"><div class="seg">${[['','All'],['ODI','ODI'],['TEST','Test']].map(([k,n])=>`<button data-hf="${k}" class="${HI_F.fmt===k?'on':''}">${n}</button>`).join('')}</div>
+  el.innerHTML=`<div class="card"><div class="row"><div class="seg">${[['','All'],['ODI','ODI'],['TEST','Test'],['T20','T20']].map(([k,n])=>`<button data-hf="${k}" class="${HI_F.fmt===k?'on':''}">${n}</button>`).join('')}</div>
     ${HAS_REAL?`<label class="row" style="gap:6px"><input type="checkbox" id="hi-ch" ${HI_F.changed?'checked':''}> Changed history only</label>`:''}
     <select id="hi-t"><option value="">All teams</option>${teams.map(t=>`<option value="${t.id}" ${+HI_F.team===t.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select><span class="muted">${L.length} matches</span></div></div>
   ${h2h.length?`<div class="card" style="margin-top:14px"><h3>${esc(teamName(+HI_F.team))} head to head</h3><div class="grid g4">${h2h.map(([t,r])=>`<div class="spread"><span>${badge(+t)} ${esc(teamName(+t))}</span><span class="num">P${r.p} W${r.w} L${r.l}</span></div>`).join('')}</div></div>`:''}

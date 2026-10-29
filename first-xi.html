@@ -182,6 +182,9 @@ const WORLD={"source":"FirstXI_Excel_MVP_Template_version_4.xlsm","teams":[{"id"
 // ═══ UTILITIES ═══
 'use strict';
 const rnd=()=>Math.random();
+// Formats: ODI, Test, T20. perFmt(f) builds {ODI:f(),TEST:f(),T20:f()}.
+const FORMATS=['ODI','TEST','T20'],FMT_NAME={ODI:'ODI',TEST:'Test',T20:'T20'},FMT_PLURAL={ODI:'ODIs',TEST:'Tests',T20:'T20s'};
+const perFmt=f=>Object.fromEntries(FORMATS.map(k=>[k,f(k)]));
 const roll100=()=>Math.floor(rnd()*100)+1;
 const rndInt=(a,b)=>Math.floor(rnd()*(b-a+1))+a;
 const pick=a=>a[Math.floor(rnd()*a.length)];
@@ -363,10 +366,31 @@ function realFigures(cid,tid){const p=WORLD.plans[cid]&&WORLD.plans[cid][tid];re
 // at most one step by his position (a promoted all-rounder keeps the top-order BLUE; a No.11 sent in to open is
 // GREEN, not BLUE), except an associate's second letter against a Test nation ('BG', 'GR').
 const RR_CODES=['3','4A','4B','5','6','7'];
+// T20: the six cards top out at 6.7 an over, so T20 adds two PROVISIONAL cards - RR_8 from RR_6 (~8.0 an over,
+// its GREEN/RED wickets) and RR_9 from RR_7 (~10.3, its BLUE/RED wickets) - same wicket tokens, so the colours
+// work exactly as before, with a fixed pattern of dots/1s/2s/4s upgraded. Replace them with designed cards by
+// putting RR_8 / RR_9 sheets in the workbook (tools/extract.py reads any RR_* sheet).
+const T20_CODES=['4B','5','6','8','9','7'];
+function deriveCard(base,R){
+  return base.map((row,i)=>row.map((t,j)=>{
+    if(!/^\d+$/.test(t))return t;
+    const n=+t,h=((i+1)*31+(j+1)*17)%100,h2=((i+1)*7+(j+1)*53)%100;
+    if(n===0&&h<R.dot)return h2<R.dot4?'4':'1';
+    if(n===1&&h<R.one)return h2<R.one6?'4':'2';
+    if(n===2&&h<R.two)return'4';
+    if(n===4&&h<R.four)return'6';
+    return t;
+  }));
+}
+if(!WORLD.cards['8'])WORLD.cards['8']=deriveCard(WORLD.cards['6'],{dot:30,dot4:15,one:35,one6:20,two:30,four:30});
+if(!WORLD.cards['9'])WORLD.cards['9']=deriveCard(WORLD.cards['7'],{dot:40,dot4:25,one:45,one6:30,two:45,four:40});
+const cardCodes=M=>M.fmt==='T20'?T20_CODES:RR_CODES;
 const CARD_WEIGHTS={
   ODI:{1:[35,30,20,10,4,1],2:[15,30,30,15,8,2],3:[5,15,30,30,15,5],4:[2,8,15,30,30,15],5:[1,4,10,20,35,30]},
   // Tests: RR_3 carries most overs and RR_7 is the wicket card: ~3.4 an over, ~34 a wicket (tests/engine-stats.js).
   TEST:{1:[84,5,4,2,0,5],2:[80,7,6,3,0,4],3:[76,9,8,3,1,3],4:[70,12,10,4,2,2],5:[62,15,13,6,2,2]},
+  // T20 weights are over T20_CODES (RR_4B, 5, 6, 8, 9, 7), tuned with tests/engine-stats.js
+  T20:{1:[10,20,25,20,20,5],2:[5,15,25,25,25,5],3:[2,8,20,30,32,8],4:[1,4,15,30,38,12],5:[0,2,8,25,45,20]},
 };
 // Test pitches wear: from day 4, points move from RR_3 to RR_7 (double for spinners).
 const TEST_WEAR={4:2,5:4};
@@ -452,7 +476,7 @@ function soInnings(M,bat){
   const I0=M.inns.find(i=>i.bat===bat);
   const batters=Object.entries(I0.bt).sort((a,b)=>b[1].r-a[1].r).map(e=>+e[0]).slice(0,3);
   const Ib=M.inns.find(i=>i.bowl===bowl),bw=Ib.eng.B.slice().sort((a,b)=>a.rating-b.rating)[0];
-  const card=pickCard(applyShift(baseWeights(M.fmt,bw.rating),2));
+  const card=pickCard(applyShift(baseWeights(M.fmt,bw.rating),2),cardCodes(M));
   let roll=roll100(),col=1,legal=0,runs=0,wk=0,st=0,ns=1;const balls=[];
   while(legal<6&&wk<2){
     const r=col<=6?roll:roll100(),c=col<=6?col:1;col++;
@@ -485,10 +509,10 @@ function wearWeights(M,b,W){
   const m=w>=0?Math.min(w,W[0]):-Math.min(-w,W[5]);
   W[0]-=m;W[5]+=m;return W;
 }
-function pickCard(W){
+function pickCard(W,codes=RR_CODES){
   const r=roll100();let c=0;
-  for(let i=0;i<6;i++){c+=W[i];if(r<=c)return RR_CODES[i];}
-  return'3';
+  for(let i=0;i<6;i++){c+=W[i];if(r<=c)return codes[i];}
+  return codes[0];
 }
 function parseToken(tok){
   let t=String(tok||'0').toUpperCase().trim();
@@ -574,6 +598,7 @@ function testTotals(M,t){return sum(M.inns.filter(i=>i.bat===+t).map(i=>i.runs))
 // ---------- bowling engine (port of modBowlingEngine) ----------
 const SPELLS={
   ODI:{P:[3,5,3,4],S:[4,8,2,3],M:[2,4,3,4]},
+  T20:{P:[1,3,1,3],S:[2,4,1,2],M:[1,2,1,2]},
   TEST:{P:[4,7,5,9],S:[6,14,3,6],M:[3,6,5,8]},
 };
 function bowlEngInit(M,I){
@@ -742,7 +767,7 @@ function bowlBall(M,manualRoll){
   const I=curInn(M);
   if(!M.cur){
     const over=Math.floor(I.lb/6)+1,bi=captainBowler(M,I,over)??chooseBowler(M,I,over),b=I.eng.B[bi];
-    const card=pickCard(applyShift(wearWeights(M,b,baseWeights(M.fmt,b.rating)),situationShift(M,I,over)));
+    const card=pickCard(applyShift(wearWeights(M,b,baseWeights(M.fmt,b.rating)),situationShift(M,I,over)),cardCodes(M));
     M.cur={over,bi,bowler:b.pid,card,roll:0,col:1,comp:false,legal:0,n:0,runs:0};
     if(!I.bw[b.pid]){I.bw[b.pid]={b:0,r:0,w:0,md:0,wd:0,nb:0};I.bwOrder.push(b.pid);}
   }
@@ -962,8 +987,8 @@ function newCareer(opts={}){
     matches:[],       // archived scorecards (compact), oldest first
     logs:{},          // match id -> compact ball log, last LOG_KEEP matches only
     live:null,        // match in progress
-    stats:{ODI:{},TEST:{}},teams:{ODI:{},TEST:{}},
-    ms:[],msKeys:{},fast:{ODI:{f50:null,f100:null},TEST:{f50:null,f100:null}},
+    stats:perFmt(()=>({})),teams:perFmt(()=>({})),
+    ms:[],msKeys:{},fast:perFmt(()=>({f50:null,f100:null})),
     tests:[],testSeq:0,attrEdits:{},seen:{},reseed:{},rk:blankRankings(),
   };
 }
@@ -1055,7 +1080,7 @@ function applyStats(E){
   if(E.motm)g(E.motm).motm++;
 }
 function rebuildStats(){
-  S.stats={ODI:{},TEST:{}};S.teams={ODI:{},TEST:{}};
+  S.stats=perFmt(()=>({}));S.teams=perFmt(()=>({}));
   for(const E of S.matches)applyStats(E);
   rebuildRankings();
 }
@@ -1347,19 +1372,25 @@ const VENUE_HOME=new Map(),HOME_VENUES=new Map();
 })();
 const TEST_TEAMS=WORLD.teams.filter(t=>t.full).map(t=>t.id);
 
+// Series you schedule (S.tests, any format - the name is historical): {id, fmt, a (hosts), b, title, fix:[{key,date,venue,city}]}
+const T20_START='2005-02-17',SERIES_GAP={TEST:10,ODI:3,T20:2},SERIES_SUFFIX={TEST:'Tests',ODI:'ODIs',T20:'T20Is'},MATCH_LABEL={TEST:'Test',ODI:'ODI',T20:'T20I'};
+const ALL_TEAMS=WORLD.teams.filter(t=>TEAM_GAMES.has(t.id)).map(t=>t.id);
 function testSeries(sid){
   const T=S&&S.tests.find(t=>t.id===sid);if(!T)return null;
-  return{sid:T.id,name:T.title,title:T.title,teams:new Set([T.a,T.b]),fix:T.fix.map(x=>x.key),start:T.fix[0].date,end:T.fix[T.fix.length-1].date,kind:'bilateral',fmt:'TEST'};
+  return{sid:T.id,name:T.title,title:T.title,teams:new Set([T.a,T.b]),fix:T.fix.map(x=>x.key),start:T.fix[0].date,end:T.fix[T.fix.length-1].date,kind:'bilateral',fmt:T.fmt||'TEST'};
 }
-function createTestSeries({a,b,n,start}){
-  a=+a;b=+b;n=clamp(+n||3,1,5);
+function createSeries({fmt='TEST',a,b,n,start}){
+  a=+a;b=+b;n=clamp(+n||3,1,fmt==='TEST'?5:7);
+  if(fmt==='T20'&&start<T20_START)start=T20_START;
   const id='T'+(++S.testSeq),venues=(HOME_VENUES.get(a)||[{venue:teamName(a)+' Oval',city:''}]).slice(0,8);
   const yr=start.slice(0,4);
-  const T={id,a,b,title:`${teamName(b)} tour of ${teamName(a)} ${yr} (Tests)`,fix:[]};
-  for(let k=0;k<n;k++){const v=venues[k%venues.length];T.fix.push({key:id+'.'+(k+1),date:addDays(start,k*10),venue:v.venue,city:v.city});}
+  const T={id,fmt,a,b,title:`${teamName(b)} tour of ${teamName(a)} ${yr} (${SERIES_SUFFIX[fmt]})`,fix:[]};
+  for(let k=0;k<n;k++){const v=venues[k%venues.length];T.fix.push({key:id+'.'+(k+1),date:addDays(start,k*SERIES_GAP[fmt]),venue:v.venue,city:v.city});}
   S.tests.push(T);fxDirty();
   return T;
 }
+const createTestSeries=o=>createSeries({...o,fmt:'TEST'});
+function customFx(T,x,k){const fmt=T.fmt||'TEST';return{key:x.key,fmt,date:x.date,a:T.a,b:T.b,venue:x.venue,city:x.city,sid:T.id,title:T.title,label:`${ordinal(k+1)} ${MATCH_LABEL[fmt]}`,playable:true,custom:true};}
 function deleteTestSeries(id){
   const T=S.tests.find(t=>t.id===id);if(!T||T.fix.some(x=>S.done[x.key]))return false;
   S.tests=S.tests.filter(t=>t.id!==id);fxDirty();return true;
@@ -1374,15 +1405,14 @@ const fxDirty=()=>{FX_CACHE=null;};
 function allFixtures(){
   if(FX_CACHE&&FX_CACHE.S===S)return FX_CACHE.list;
   const out=ODI_FX.concat(REAL_TEST_FX);
-  for(const T of S.tests)T.fix.forEach((x,k)=>out.push({key:x.key,fmt:'TEST',date:x.date,a:T.a,b:T.b,venue:x.venue,city:x.city,sid:T.id,
-    title:T.title,label:`${ordinal(k+1)} Test`,playable:true}));
+  for(const T of S.tests)T.fix.forEach((x,k)=>out.push(customFx(T,x,k)));
   out.sort((x,y)=>x.date<y.date?-1:x.date>y.date?1:(x.fmt==='TEST')-(y.fmt==='TEST'));
   FX_CACHE={S,list:out};
   return out;
 }
 function fixtureByKey(key){
   if(key[0]==='o'||key[0]==='r')return ODI_FX_BY_KEY.get(key)||null;
-  for(const T of S.tests){const k=T.fix.findIndex(x=>x.key===key);if(k>=0){const x=T.fix[k];return{key,fmt:'TEST',date:x.date,a:T.a,b:T.b,venue:x.venue,city:x.city,sid:T.id,title:T.title,label:`${ordinal(k+1)} Test`,playable:true};}}
+  for(const T of S.tests){const k=T.fix.findIndex(x=>x.key===key);if(k>=0)return customFx(T,T.fix[k],k);}
   return null;
 }
 function nextFixture(){return allFixtures().find(x=>x.playable&&!S.done[x.key])||null;}
@@ -1390,11 +1420,12 @@ function careerDate(){const last=S.matches[S.matches.length-1];return last?last.
 
 // Build the match for a fixture (not tossed yet). ODI knockouts can be re-seeded from your tables.
 function buildMatch(fx){
-  if(fx.fmt==='TEST'){
+  if(fx.fmt!=='ODI'||fx.custom){
     const xi=t=>(fx.real&&testXI(fx.f.cid,t,fx.date))||nearestXI(t,fx.date);
     const home=fx.real?(VENUE_HOME.get(fx.venue)||fx.a):fx.a;
-    const M=newMatch({fmt:'TEST',a:fx.a,b:fx.b,home,date:fx.date,venue:fx.venue,city:fx.city,sid:fx.sid,series:fx.title,stage:fx.label,
-      xiA:xi(fx.a),xiB:xi(fx.b)});
+    const M=newMatch({fmt:fx.fmt,a:fx.a,b:fx.b,home,date:fx.date,venue:fx.venue,city:fx.city,sid:fx.sid,series:fx.title,stage:fx.stage||fx.label,
+      xiA:fx.xiA||xi(fx.a),xiB:fx.xiB||xi(fx.b)});
+    if(fx.superOver)M.superOverOn=true;
     M.key=fx.key;M.batMode=S.settings.batColours;return M;
   }
   const f=fx.f,E=edition(f.sid);
@@ -1460,6 +1491,9 @@ function loadSlot(i){
   S.settings=Object.assign(newCareer().settings,S.settings||{});
   for(const k of['tests','ms','matches'])S[k]=S[k]||[];
   for(const k of['logs','msKeys','attrEdits','seen','reseed','done'])S[k]=S[k]||{};
+  for(const k of['stats','teams'])for(const f of FORMATS)S[k][f]=S[k][f]||{};
+  for(const f of FORMATS)S.fast[f]=S.fast[f]||{f50:null,f100:null};
+  if(S.rk)for(const k of['team','yr','bat','bowl'])for(const f of FORMATS)S.rk[k][f]=S.rk[k][f]||{};
   if(!S.rk)rebuildRankings();
   return true;
 }
@@ -1467,7 +1501,7 @@ function exportCareer(){return JSON.stringify(S);}
 function importCareer(text){const d=parseSave(text);if(!d)return false;S=d;saveGame();return true;}
 
 // ═══ RECORDS — computed from career stats and the match archive (top 10 per record) ═══
-const REC_MIN={ODI:{inn:20,balls:500,wkts:30,bb:600,cap:10},TEST:{inn:15,balls:1000,wkts:30,bb:1500,cap:8}};
+const REC_MIN={ODI:{inn:20,balls:500,wkts:30,bb:600,cap:10},TEST:{inn:15,balls:1000,wkts:30,bb:1500,cap:8},T20:{inn:12,balls:250,wkts:20,bb:300,cap:8}};
 const REC_GROUPS=[
   ['Batting',['runs','hs','avg','sr','c100','c50','f6','f4','fast50','fast100','ducks']],
   ['Bowling',['wkts','bbi','bbm','bavg','econ','bsr','w5','md']],
@@ -1559,10 +1593,10 @@ const otherOf=(E,t)=>E.teams[0]===t?E.teams[1]:E.teams[0];
 // Team ratings are Elo underneath (full members start 1500, Zimbabwe/Bangladesh 1400, associates 1250) and are
 // shown ICC-style: points = (Elo - 1000) / 5. Player rankings are an exponential average of match performances,
 // scaled by the opposition's rating, so form counts more than history.
-const RANK_K={ODI:24,TEST:32},RANK_ALPHA=.12,RANK_ACTIVE_DAYS=420,AWARD_MIN_MATCHES=15;
+const RANK_K={ODI:24,TEST:32,T20:20},RANK_ALPHA=.12,RANK_ACTIVE_DAYS=420,AWARD_MIN_MATCHES=15;
 const eloStart=t=>{const T=TEAMS.get(+t);return T&&T.full?([10,11].includes(+t)?1400:1500):1250;};
 const rankPts=elo=>Math.round((elo-1000)/5);
-function blankRankings(){return{team:{ODI:{},TEST:{}},yr:{ODI:{},TEST:{}},bat:{ODI:{},TEST:{}},bowl:{ODI:{},TEST:{}},pos:{},awards:{},awardYear:0};}
+function blankRankings(){const e=()=>({});return{team:perFmt(e),yr:perFmt(e),bat:perFmt(e),bowl:perFmt(e),pos:{},awards:{},awardYear:0};}
 function R_(){if(!S.rk)S.rk=blankRankings();return S.rk;}
 
 // MOTM-style score for every player in a match (shared with pickMOTM's formula, without the winner bonus option)
@@ -1588,11 +1622,11 @@ function applyRankings(E){
   const k=RANK_K[E.fmt]*(E.stage&&/final|semi|quarter/i.test(E.stage)?1.25:1);
   const d=k*(sa-ea);T[a]+=d;T[b]-=d;
   // players
-  const base=E.fmt==='ODI'?4.8:3.2,L=playerMatchLines(E);
+  const base={ODI:4.8,TEST:3.2,T20:7.5}[E.fmt],L=playerMatchLines(E);
   for(const pid in L){
     const l=L[pid],opp=otherOf(E,l.team),f=(T[opp]||1500)/1500;
     if(l.bat){
-      const sr=E.fmt==='ODI'&&l.b?(l.r/l.b*100-80)/400:0;
+      const sr=E.fmt!=='TEST'&&l.b?(l.r/l.b*100-(E.fmt==='T20'?120:80))/400:0;
       const perf=(l.r+(l.r*sr))*f;
       upd(R.bat[E.fmt],pid,perf,E.date);
     }
@@ -1603,7 +1637,7 @@ function applyRankings(E){
   }
 }
 function upd(tab,pid,perf,date){const x=tab[pid]||(tab[pid]={p:0,n:0,d:date});x.p=x.p*(1-RANK_ALPHA)+perf*RANK_ALPHA;x.n++;x.d=date;}
-const PLAYER_SCALE={bat:{ODI:16,TEST:10},bowl:{ODI:14,TEST:12}};
+const PLAYER_SCALE={bat:{ODI:16,TEST:10,T20:24},bowl:{ODI:14,TEST:12,T20:16}};
 const COMPOSITE=new Set(WORLD.teams.filter(t=>/ XI$/.test(t.name)).map(t=>t.id));   // Africa XI, Asia XI, ICC World XI
 function playerRanking(fmt,kind,n=20){
   const R=R_(),now=careerDate(),tab=R[kind==='ar'?'bat':kind][fmt];
@@ -1636,7 +1670,7 @@ function playerOfSeries(sid){
 // ---------- the year's awards ----------
 function awardsFor(year){
   const M=S.matches.filter(E=>E.date.startsWith(year));if(M.length<AWARD_MIN_MATCHES)return null;
-  const score={},runs={ODI:{},TEST:{}},wk={ODI:{},TEST:{}};
+  const score={},runs=perFmt(()=>({})),wk=perFmt(()=>({}));
   const newcomer=p=>{const d=DEBUT.get(p)||'';return d>=(+year-1)+'-01-01'&&daysBetween(CAREER_START,d)>365;};
   for(const E of M){
     for(const[pid,x]of Object.entries(matchScores(E,false))){const o=score[pid]=score[pid]||{s:0,tm:{}};o.s+=x.s;o.tm[x.team]=(o.tm[x.team]||0)+1;}
@@ -1709,17 +1743,17 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
 function openModal(html,cls=''){$('#modal-box').className='modal-box '+cls;$('#modal-box').innerHTML='<button class="x" aria-label="Close">×</button>'+html;$('#modal').classList.remove('hidden');}
 function closeModal(){$('#modal').classList.add('hidden');$('#modal-box').innerHTML='';}
 const resultPill=(E,t)=>!E.result||!E.result.winner?`<span class="pill">${E.result?.type==='draw'?'D':E.result?.type==='tie'?'T':'NR'}</span>`:`<span class="pill ${E.result.winner===t?'win':'loss'}">${E.result.winner===t?'W':'L'}</span>`;
-function innsShort(I,fmt){return`${I.runs}${I.wkts<10?'/'+I.wkts:''}${I.why==='declared'?'d':''}${fmt==='ODI'||I.why!=='all out'?` <span class="muted">(${oversTxt(I.lb)})</span>`:''}`;}
+function innsShort(I,fmt){return`${I.runs}${I.wkts<10?'/'+I.wkts:''}${I.why==='declared'?'d':''}${fmt!=='TEST'||I.why!=='all out'?` <span class="muted">(${oversTxt(I.lb)})</span>`:''}`;}
 function matchLine(E){
   const sc=t=>E.inns.filter(I=>I.bat===t).map(I=>innsShort(I,E.fmt)).join(' &amp; ')||'-';
   return`<div class="spread" data-mid="${E.id}" style="cursor:pointer">
     <div>${E.teams.map(t=>`<div class="row">${badge(t)} <span>${sc(t)}</span></div>`).join('')}</div>
-    <div style="text-align:right"><div class="${E.result.winner?'green':'sub'}">${esc(E.result.text)}</div><div class="muted" style="font-size:12px">${fmtDate(E.date)} · ${E.fmt==='TEST'?'Test':'ODI'}${E.stage?' · '+esc(E.stage):''}</div></div></div>`;
+    <div style="text-align:right"><div class="${E.result.winner?'green':'sub'}">${esc(E.result.text)}</div><div class="muted" style="font-size:12px">${fmtDate(E.date)} · ${FMT_NAME[E.fmt]}${E.stage?' · '+esc(E.stage):''}</div></div></div>`;
 }
 
 // ---------- player profile ----------
 function openPlayer(pid){
-  const a=pAttr(pid),rows=['ODI','TEST'].map(f=>[f,S.stats[f][pid]]).filter(x=>x[1]);
+  const a=pAttr(pid),rows=FORMATS.map(f=>[f,S.stats[f][pid]]).filter(x=>x[1]);
   const era=(WORLD.players[pid]||[])[7]||[],bowls=a.style!=='N';
   const recent=S.matches.filter(E=>E.teams.some(t=>E.xi[t].slice(0,11).includes(pid))).slice(-8).reverse();
   const ms=S.ms.filter(m=>m.pid===pid).slice(-10).reverse();
@@ -1738,7 +1772,7 @@ function openPlayer(pid){
     <label>Batting colour <select id="pa-bat">${[['','By position'],['B','BLUE'],['G','GREEN'],['R','RED'],['BG','BLUE (GREEN v Test nations)']].map(([v,n])=>`<option value="${v}" ${a.bat===v?'selected':''}>${n}</option>`).join('')}</select></label>
     <button class="btn pri sm" id="pa-save">Save</button><button class="btn sm" id="pa-reset">Reset</button></div>
     <div class="muted" style="font-size:12px;margin-top:6px">Rating 1 is elite, 5 a part-timer: it sets the run-rate card weights for every over he bowls. Batting colour is the wicket colour that can get him out: BLUE batters fall only to BLUE, GREEN to BLUE or GREEN, RED to anything.</div></div>
-  ${rows.length?rows.map(([f,s])=>`<h3>${f==='TEST'?'Test':'ODI'} career</h3><div class="tbl-wrap"><table class="num"><tr><th>M</th><th>Inn</th><th>NO</th><th>Runs</th><th>HS</th><th>Avg</th><th>SR</th><th>100</th><th>50</th><th>Wkts</th><th>BB</th><th>Avg</th><th>Econ</th><th>5w</th><th>Ct</th><th>St</th><th>MoM</th></tr>
+  ${rows.length?rows.map(([f,s])=>`<h3>${FMT_NAME[f]} career</h3><div class="tbl-wrap"><table class="num"><tr><th>M</th><th>Inn</th><th>NO</th><th>Runs</th><th>HS</th><th>Avg</th><th>SR</th><th>100</th><th>50</th><th>Wkts</th><th>BB</th><th>Avg</th><th>Econ</th><th>5w</th><th>Ct</th><th>St</th><th>MoM</th></tr>
     <tr><td>${s.m}</td><td>${s.inn}</td><td>${s.no}</td><td>${s.r}</td><td>${s.hs}${s.hsNo?'*':''}</td><td>${f2(batAvg(s))}</td><td>${f1(batSR(s))}</td><td>${s.c100}</td><td>${s.c50}</td><td>${s.bw}</td><td>${s.best[0]}/${s.best[1]}</td><td>${f2(bowlAvg(s))}</td><td>${f2(bowlEcon(s))}</td><td>${s.w5}</td><td>${s.ct}</td><td>${s.st}</td><td>${s.motm}</td></tr></table></div>`).join(''):'<p class="muted">Hasn\'t played in this career yet.</p>'}
   ${recent.length?`<h3>Recent matches</h3><table>${recent.map(E=>`<tr data-mid="${E.id}" style="cursor:pointer"><td>${fmtDate(E.date)}</td><td>${E.fmt}</td><td>v ${badge(otherOf(E,E.teams.find(t=>E.xi[t].slice(0,11).includes(pid))))}</td><td class="r num">${line(E)}</td></tr>`).join('')}</table>`:''}
   ${(()=>{const h=playerHonours(pid);return h.ranks.length||h.awards.length?`<h3>Rankings &amp; honours</h3>${h.ranks.map(x=>`<span class="pill" style="margin:0 4px 4px 0">${esc(x)}</span>`).join('')}${h.awards.map(x=>`<div>🏆 ${esc(x)}</div>`).join('')}`:'';})()}
@@ -1914,7 +1948,7 @@ function openSwap(M,t,i){
 
 // ---------- live ----------
 function statusLine(M,I){
-  if(M.fmt==='ODI'){
+  if(M.fmt!=='TEST'){
     const cut=I.maxOv<M.maxOv?` · <span class="gold">reduced to ${I.maxOv} overs</span>`:'';
     if(I.no===2){const need=I.target-I.runs,left=I.maxOv*6-I.lb;
       return need>0?`<b>${teamName(I.bat)} need ${plural(need,'run')} from ${plural(left,'ball')}</b>${M.dl&&M.dl.target?' (D/L target '+I.target+')':''} · RRR ${f2(need/(left/6))}${cut}`:'';}
@@ -2047,7 +2081,7 @@ function drawMatchTab(M){
 function rrCardHTML(M){
   const C=M.cur,code=C?C.card:(curInn(M).overs.slice(-1)[0]||{}).card||'3';
   const grid=WORLD.cards[code];
-  return`<div class="row" style="margin-bottom:8px">${RR_CODES.map(c=>`<button class="btn sm ${c===code?'pri':''}" data-rr="${c}">RR_${c}</button>`).join('')}</div>
+  return`<div class="row" style="margin-bottom:8px">${[...new Set([...RR_CODES,...(M.fmt==='T20'?['8','9']:[])])].map(c=>`<button class="btn sm ${c===code?'pri':''}" data-rr="${c}">RR_${c}</button>`).join('')}</div>
   <div class="muted" style="font-size:12px;margin-bottom:6px">Rows are the 1-100 roll, columns balls 1-6. BLUE wickets get anyone out, GREEN only Nos.7-11, RED only Nos.10-11.</div>
   <div class="tbl-wrap" style="max-height:380px;overflow:auto"><table class="mono" style="font-size:11px" id="rr-tbl">${rrRows(code,C)}</table></div>`;
 }
@@ -2063,7 +2097,7 @@ function scorecardHTML(E,M){
     const dnb=E.xi[I.bat].slice(0,11).filter(p=>!I.bt.some(r=>r[0]===p));
     const live=M&&M.state!=='done'&&k===E.inns.length-1;
     const atCrease=live?[M.inns[k].st,M.inns[k].ns]:[];
-    return`<div style="margin-bottom:16px"><div class="spread"><h3 style="margin:0">${esc(teamName(I.bat))} - ${E.fmt==='ODI'?'innings':ordinal(E.inns.filter((x,j)=>j<=k&&x.bat===I.bat).length)+' innings'}</h3>
+    return`<div style="margin-bottom:16px"><div class="spread"><h3 style="margin:0">${esc(teamName(I.bat))} - ${E.fmt!=='TEST'?'innings':ordinal(E.inns.filter((x,j)=>j<=k&&x.bat===I.bat).length)+' innings'}</h3>
       <b class="num">${I.runs}${I.wkts<10?'/'+I.wkts:''}${I.why==='declared'?' dec':''} <span class="muted">(${oversTxt(I.lb)} ov${I.target?', target '+I.target:''})</span></b></div>
     <div class="tbl-wrap"><table class="num"><tr><th>Batter</th><th class="hide-sm"></th><th class="r">R</th><th class="r">B</th><th class="r">4s</th><th class="r">6s</th><th class="r">SR</th></tr>
     ${I.bt.map(r=>`<tr><td>${plink(r[0])}${r[0]===E.xi[I.bat][12]?' (c)':''}${r[0]===E.xi[I.bat][11]?' †':''}${atCrease.includes(r[0])&&!r[5]?' <span class="cyan">*</span>':''}</td>
@@ -2098,7 +2132,7 @@ function chartsHTML(E){
   if(!E.inns.length||!E.inns[0].ov.length)return'<div class="muted">Charts appear once an over has been bowled.</div>';
   const col=['#06b6d4','#ffd700','#34d394','#f97316'];
   const W=640,H=220,pad=30;
-  const maxOv=Math.max(...E.inns.map(I=>I.ov.length),E.fmt==='ODI'?50:10);
+  const maxOv=Math.max(...E.inns.map(I=>I.ov.length),E.fmt!=='TEST'?(E.maxOv||50):10);
   const worm=E.inns.map(I=>{let c=0;return I.ov.map(o=>c+=o[0]);});
   const maxR=Math.max(50,...worm.map(w=>w[w.length-1]||0));
   const x=i=>pad+(W-pad*2)*(i/maxOv),y=v=>H-pad-(H-pad*2)*(v/maxR);
@@ -2107,7 +2141,7 @@ function chartsHTML(E){
     ${worm.map((w,k)=>`<polyline fill="none" stroke="${col[k]}" stroke-width="2" points="${pad},${y(0)} ${w.map((v,i)=>`${x(i+1)},${y(v)}`).join(' ')}"/>`+E.inns[k].ov.map((o,i)=>o[1]?`<circle cx="${x(i+1)}" cy="${y(w[i])}" r="3.5" fill="#ef4444"/>`:'').join('')).join('')}
     <text x="${W/2}" y="${H-6}" text-anchor="middle">overs</text></svg>`;
   const man=E.inns.map((I,k)=>{
-    const mx=Math.max(8,...I.ov.map(o=>o[0])),bw=(W-pad*2)/Math.max(I.ov.length,E.fmt==='ODI'?50:20);
+    const mx=Math.max(8,...I.ov.map(o=>o[0])),bw=(W-pad*2)/Math.max(I.ov.length,E.fmt!=='TEST'?(E.maxOv||50):20);
     return`<div class="sub" style="margin-top:8px">${esc(teamName(I.bat))} - runs per over</div><svg viewBox="0 0 ${W} 120" role="img" aria-label="Manhattan">${I.ov.map((o,i)=>`<rect x="${pad+i*bw}" y="${100-90*o[0]/mx}" width="${Math.max(1,bw-1)}" height="${90*o[0]/mx}" fill="${col[k]}" opacity=".85"/>${o[1]?`<circle cx="${pad+i*bw+bw/2}" cy="${96-90*o[0]/mx}" r="3" fill="#ef4444"/>`:''}`).join('')}<text x="4" y="14">${mx}</text></svg>`;
   }).join('');
   return`<div class="chart"><div class="row" style="font-size:12px">${E.inns.map((I,k)=>`<span><span style="display:inline-block;width:10px;height:10px;background:${col[k]};border-radius:2px"></span> ${esc(teamShort(I.bat))} ${ordinal(k+1)} inns</span>`).join('')}<span class="muted">● wicket</span></div>${wormSvg}${man}</div>`;
@@ -2123,20 +2157,20 @@ function openScorecard(mid){
 // ═══ DASHBOARD, FIXTURES & BULK SIM ═══
 function fixtureTeams(fx){
   // what the fixture will be in your timeline (knockouts may be re-seeded)
-  if(fx.fmt==='ODI'){const k=resolveFixture(fx.f);if(k)return[k.a,k.b];}
+  if(fx.fmt==='ODI'&&fx.f){const k=resolveFixture(fx.f);if(k)return[k.a,k.b];}
   return[fx.a,fx.b];
 }
 RENDER.home=(el)=>{
   const n=nextFixture(),live=S.live&&S.live.state!=='done'?S.live:null;
-  const playedO=S.matches.filter(m=>m.fmt==='ODI').length,playedT=S.matches.length-playedO,total=ODI_FX.filter(x=>x.playable).length;
+  const playedO=S.matches.filter(m=>m.fmt==='ODI'&&m.fid).length,playedT=S.matches.filter(m=>m.fmt==='TEST').length,playedT20=S.matches.filter(m=>m.fmt==='T20').length,total=ODI_FX.filter(x=>x.playable).length;
   const recent=S.matches.slice(-5).reverse();
   const top=(fmt,f,lab)=>{const L=Object.entries(S.stats[fmt]).sort((a,b)=>f(b[1])-f(a[1]))[0];return L&&f(L[1])>0?`<div class="spread"><span class="sub">${lab}</span><span>${plink(+L[0])} <b class="num">${f(L[1])}</b></span></div>`:'';};
   let nextCard='<div class="card empty">Every fixture has been played. What a career.</div>';
   if(n){
-    const [a,b]=fixtureTeams(n),E=n.fmt==='ODI'?edition(n.sid):null,st=E?E.stageOf.get(n.f.no):'';
+    const [a,b]=fixtureTeams(n),E=n.fmt==='ODI'&&n.f?edition(n.sid):null,st=E?E.stageOf.get(n.f.no):'';
     const re=n.fmt==='ODI'&&(a!==n.a||b!==n.b)&&!(a===n.b&&b===n.a);
     const ss=seriesStatus(n.sid);
-    nextCard=`<div class="card hi stack"><div class="spread"><h3 style="margin:0">Next fixture</h3><span class="pill ${n.fmt==='TEST'?'test':st&&st!=='group'&&st!=='super'?'ko':''}">${n.fmt==='TEST'?'TEST':st&&st!=='group'?stageName(st,E):'ODI'}</span></div>
+    nextCard=`<div class="card hi stack"><div class="spread"><h3 style="margin:0">Next fixture</h3><span class="pill ${n.fmt==='TEST'?'test':st&&st!=='group'&&st!=='super'?'ko':''}">${n.fmt!=='ODI'?FMT_NAME[n.fmt].toUpperCase():st&&st!=='group'?stageName(st,E):'ODI'}</span></div>
       <div class="sub">${esc(n.title)} · ${esc(n.label)}</div>
       <h2 style="margin:2px 0">${tlabel(a)} <span class="muted">v</span> ${tlabel(b)}</h2>
       ${re?`<div class="banner">Re-seeded from your tables (in history: ${esc(teamName(n.a))} v ${esc(teamName(n.b))})</div>`:''}
@@ -2144,7 +2178,7 @@ RENDER.home=(el)=>{
       <div class="row"><button class="btn pri" id="h-play">${live&&live.key===n.key?'Resume match':'Play match'}</button><button class="btn" id="h-sim">Quick sim</button>
         <button class="btn" id="h-sims">Sim rest of series</button><button class="btn" id="h-simn">Sim more…</button></div></div>`;
   }
-  const tourn=n&&n.fmt==='ODI'&&SERIES.get(n.sid).kind==='tournament'?miniTable(n.sid):'';
+  const tourn=n&&n.f&&n.fmt==='ODI'&&SERIES.get(n.sid)?.kind==='tournament'?miniTable(n.sid):'';
   const my=S.settings.myTeam,myT=my&&(S.teams.ODI[my]||S.teams.TEST[my]);
   el.innerHTML=`<div class="grid g3" style="grid-template-columns:2fr 1fr">
     <div class="stack">
@@ -2156,12 +2190,12 @@ RENDER.home=(el)=>{
     <div class="stack">
       <div class="card"><h3>Career</h3><div class="spread"><span class="sub">ODIs played</span><b class="num">${playedO} / ${total}</b></div>
         <div class="bar" style="margin:6px 0 10px"><i style="width:${(100*playedO/total).toFixed(1)}%"></i></div>
-        ${playedT?`<div class="spread"><span class="sub">Tests played</span><b class="num">${playedT}</b></div>`:''}
+        ${playedT?`<div class="spread"><span class="sub">Tests played</span><b class="num">${playedT}</b></div>`:''}${playedT20?`<div class="spread"><span class="sub">T20s played</span><b class="num">${playedT20}</b></div>`:''}
         ${top('ODI',s=>s.r,'Most ODI runs')}${top('ODI',s=>s.bw,'Most ODI wickets')}${top('TEST',s=>s.r,'Most Test runs')}${top('TEST',s=>s.bw,'Most Test wickets')}</div>
-      ${myT?`<div class="card"><h3>${badge(my)} ${esc(teamName(my))}</h3>${['ODI','TEST'].filter(f=>S.teams[f][my]).map(f=>{const T=S.teams[f][my];return`<div class="spread"><span class="sub">${f}</span><span class="num">P${T.p} W${T.w} L${T.l}${T.d?' D'+T.d:''}${T.t?' T'+T.t:''}</span></div>`;}).join('')}</div>`:''}
+      ${myT?`<div class="card"><h3>${badge(my)} ${esc(teamName(my))}</h3>${FORMATS.filter(f=>S.teams[f][my]).map(f=>{const T=S.teams[f][my];return`<div class="spread"><span class="sub">${f}</span><span class="num">P${T.p} W${T.w} L${T.l}${T.d?' D'+T.d:''}${T.t?' T'+T.t:''}</span></div>`;}).join('')}</div>`:''}
       <div class="card"><h3>Latest milestones</h3>${S.ms.slice(-6).reverse().map(m=>`<div style="margin-bottom:6px">🏅 ${plink(m.pid)} <span class="sub">${esc(m.text)}</span></div>`).join('')||'<p class="muted">None yet.</p>'}
         <button class="btn sm" data-go="miles">All milestones</button></div>
-      <div class="card"><h3>Test cricket</h3><p class="sub" style="margin-top:0">The fixture list is the real ODI calendar. Schedule Test series between any two Test nations and they slot into your career by date.</p><button class="btn" id="h-test">Schedule a Test series</button></div>
+      <div class="card"><h3>Tests &amp; T20s</h3><p class="sub" style="margin-top:0">The fixture list is the real ODI calendar. Schedule Test, ODI or T20 series between any two sides and they slot into your career by date.</p><button class="btn" id="h-test">Schedule a series</button></div>
     </div></div>`;
   if(n){
     $('#h-play').onclick=()=>startFixture(n.key);
@@ -2169,7 +2203,7 @@ RENDER.home=(el)=>{
     $('#h-sims').onclick=()=>simMany(allFixtures().filter(x=>x.sid===n.sid&&x.playable&&!S.done[x.key]),'the rest of the series');
     $('#h-simn').onclick=openSimMore;
   }
-  $('#h-test').onclick=openTestCreator;
+  $('#h-test').onclick=()=>openTestCreator();
 };
 function driftCard(){
   if(!HAS_REAL||S.settings.history==='off')return'';
@@ -2226,19 +2260,23 @@ function openSimMore(){
   $('#sm-go-d').onclick=()=>{const d=$('#sm-d').value;simMany(up.filter(x=>x.date<=d),'to '+fmtDate(d));};
   $('#sm-yr').onclick=()=>{const y=n.date.slice(0,4);simMany(up.filter(x=>x.date.slice(0,4)===y),'the rest of '+y);};
 }
-function openTestCreator(){
+function openTestCreator(fmt='TEST'){
   const d=(nextFixture()||{date:careerDate()}).date;
-  const opts=sel=>TEST_TEAMS.map(t=>`<option value="${t}" ${t===sel?'selected':''}>${esc(teamName(t))}</option>`).join('');
-  openModal(`<h2>Schedule a Test series</h2><div class="stack">
-    <div class="row"><label>Hosts <select id="ts-a">${opts(S.settings.myTeam&&TEST_TEAMS.includes(S.settings.myTeam)?S.settings.myTeam:4)}</select></label>
-      <label>Tourists <select id="ts-b">${opts(1)}</select></label></div>
-    <div class="row"><label>Tests <select id="ts-n">${[1,2,3,4,5].map(k=>`<option ${k===3?'selected':''}>${k}</option>`).join('')}</select></label>
-      <label>First Test starts <input type="date" id="ts-d" value="${d}"></label></div>
-    <p class="muted">Squads come from each side's real XI nearest the date (you can swap players before each Test). Grounds are the hosts' home venues.</p>
+  const pool=fmt==='TEST'?TEST_TEAMS:ALL_TEAMS;
+  const opts=sel=>pool.map(t=>`<option value="${t}" ${t===sel?'selected':''}>${esc(teamName(t))}</option>`).join('');
+  const my=S.settings.myTeam&&pool.includes(S.settings.myTeam)?S.settings.myTeam:4;
+  openModal(`<h2>Schedule a series</h2><div class="stack">
+    <div class="seg">${FORMATS.map(f=>`<button data-tsf="${f}" class="${f===fmt?'on':''}">${SERIES_SUFFIX[f]}</button>`).join('')}</div>
+    <div class="row"><label>Hosts <select id="ts-a">${opts(my)}</select></label>
+      <label>Tourists <select id="ts-b">${opts(my===1?4:1)}</select></label></div>
+    <div class="row"><label>${SERIES_SUFFIX[fmt]} <select id="ts-n">${(fmt==='TEST'?[1,2,3,4,5]:[1,2,3,4,5,6,7]).map(k=>`<option ${k===3?'selected':''}>${k}</option>`).join('')}</select></label>
+      <label>First match <input type="date" id="ts-d" value="${fmt==='T20'&&d<T20_START?T20_START:d}"></label></div>
+    <p class="muted">Squads come from each side's real XI nearest the date (you can swap players before each match). Grounds are the hosts' home venues.${fmt==='T20'?' T20 uses two provisional fast cards, RR_8 and RR_9 (see How to play).':''}</p>
     <button class="btn pri" id="ts-go">Create series</button></div>`);
+  $$('[data-tsf]').forEach(b=>b.onclick=()=>openTestCreator(b.dataset.tsf));
   $('#ts-go').onclick=()=>{
     const a=+$('#ts-a').value,b=+$('#ts-b').value;if(a===b){toast('Pick two different teams.','warn');return;}
-    const T=createTestSeries({a,b,n:+$('#ts-n').value,start:$('#ts-d').value||d});
+    const T=createSeries({fmt,a,b,n:+$('#ts-n').value,start:$('#ts-d').value||d});
     saveGame();closeModal();toast(esc(T.title)+' scheduled.');rerender();
   };
 }
@@ -2257,9 +2295,9 @@ RENDER.fixtures=(el)=>{
   el.innerHTML=`<div class="card"><div class="row">
     <select id="fx-y"><option value="">All years</option>${years.map(y=>`<option ${y===FX_F.year?'selected':''}>${y}</option>`).join('')}</select>
     <select id="fx-t"><option value="">All teams</option>${teams.map(t=>`<option value="${t.id}" ${+FX_F.team===t.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select>
-    <div class="seg">${[['','All'],['ODI','ODI'],['TEST','Test']].map(([k,n])=>`<button data-ff="${k}" class="${FX_F.fmt===k?'on':''}">${n}</button>`).join('')}</div>
+    <div class="seg">${[['','All'],['ODI','ODI'],['TEST','Test'],['T20','T20']].map(([k,n])=>`<button data-ff="${k}" class="${FX_F.fmt===k?'on':''}">${n}</button>`).join('')}</div>
     <div class="seg">${[['up','Upcoming'],['done','Played'],['all','All']].map(([k,n])=>`<button data-fs="${k}" class="${FX_F.status===k?'on':''}">${n}</button>`).join('')}</div>
-    <button class="btn" id="fx-test">+ Test series</button></div></div>
+    <button class="btn" id="fx-test">+ Series</button></div></div>
   <div class="stack" style="margin-top:14px">${groups.slice(0,80).map(g=>{
     const ss=seriesStatus(g.sid),tour=(SERIES.get(g.sid)||{}).kind==='tournament';
     const T=S.tests.find(t=>t.id===g.sid);
@@ -2267,7 +2305,7 @@ RENDER.fixtures=(el)=>{
       <div class="row">${tour?`<button class="btn sm" data-go="tour" data-arg="${esc(g.sid)}">Tournament Centre</button>`:''}${T&&!T.fix.some(x=>S.done[x.key])?`<button class="btn sm" data-deltest="${T.id}">Remove</button>`:''}</div></div>
       <div class="tbl-wrap"><table>${g.items.map(x=>{const E=S.done[x.key]&&byId.get(S.done[x.key]);const[a,b]=E?E.teams:fixtureTeams(x);
         return`<tr ${E?`data-mid="${E.id}" style="cursor:pointer"`:''}><td class="muted num" style="white-space:nowrap">${fmtDate(x.date)}</td><td>${badge(a)} v ${badge(b)}</td>
-        <td class="hide-sm sub" style="font-size:12px">${esc(x.fmt==='TEST'?x.label:(x.f.mno?'Match '+x.f.mno:stageName(edition(x.sid)?.stageOf.get(x.f.no),edition(x.sid))||''))} · ${esc(x.venue)}</td>
+        <td class="hide-sm sub" style="font-size:12px">${esc(!x.f||x.fmt==='TEST'?x.label:(x.f.mno?'Match '+x.f.mno:stageName(edition(x.sid)?.stageOf.get(x.f.no),edition(x.sid))||''))} · ${esc(x.venue)}</td>
         <td class="r">${E?`<span class="${E.result.winner?'green':'sub'}">${esc(E.result.text)}</span>`:x.playable?`<button class="btn sm pri" data-play="${x.key}">Play</button> <button class="btn sm" data-sim="${x.key}">Sim</button>`:'<span class="muted">no XI data</span>'}</td></tr>`;}).join('')}</table></div></div>`;}).join('')||'<div class="card empty">No fixtures match.</div>'}
   ${groups.length>80?`<div class="muted">Showing the first 80 series - narrow the filters to see more.</div>`:''}</div>`;
   $('#fx-y').onchange=e=>{FX_F.year=e.target.value;rerender();};
@@ -2277,14 +2315,14 @@ RENDER.fixtures=(el)=>{
   $$('[data-play]').forEach(b=>b.onclick=()=>startFixture(b.dataset.play));
   $$('[data-sim]').forEach(b=>b.onclick=()=>{const M=quickSim(b.dataset.sim);toast(esc(M.result.text));rerender();});
   $$('[data-deltest]').forEach(b=>b.onclick=()=>{if(deleteTestSeries(b.dataset.deltest)){saveGame();rerender();}});
-  $('#fx-test').onclick=openTestCreator;
+  $('#fx-test').onclick=()=>openTestCreator();
 };
 
 // ═══ TOURNAMENT CENTRE ═══
 const TOURNEYS=[...SERIES.values()].filter(s=>s.kind==='tournament');
 function currentTourney(){
   const n=nextFixture();
-  if(n&&n.fmt==='ODI'&&SERIES.get(n.sid).kind==='tournament')return n.sid;
+  if(n&&n.f&&n.fmt==='ODI'&&SERIES.get(n.sid)?.kind==='tournament')return n.sid;
   const last=[...S.matches].reverse().find(E=>E.sid&&SERIES.get(E.sid)?.kind==='tournament');
   return last?last.sid:TOURNEYS[0].sid;
 }
@@ -2357,11 +2395,11 @@ RENDER.records=(el)=>{
   const block=k=>{
     if(k==='teamwl'){const L=D.teamwl;return`<div class="card"><h3>${REC_NAME[k]}</h3><table class="num"><tr><th>Team</th><th class="r">P</th><th class="r">W</th><th class="r">L</th><th class="r">D/T/NR</th><th class="r">Win %</th></tr>
       ${L.map(x=>`<tr><td>${tlabel(x.team)}</td><td class="r">${x.T.p}</td><td class="r">${x.T.w}</td><td class="r">${x.T.l}</td><td class="r">${x.T.d+x.T.t+x.T.nr}</td><td class="r">${f1(100*x.v)}</td></tr>`).join('')}</table></div>`;}
-    if(k==='bbm'&&REC_F.fmt==='ODI')return'';
+    if(k==='bbm'&&REC_F.fmt!=='TEST')return'';
     const rows=D[k]||[];
     return`<div class="card"><h3>${REC_NAME[k]}</h3>${rows.length?`<table>${rows.map((r,i)=>rowHTML(k,r,i)).join('')}</table>`:'<div class="muted">No record yet.</div>'}</div>`;
   };
-  el.innerHTML=`<div class="card"><div class="row"><div class="seg">${['ODI','TEST'].map(f=>`<button data-rf="${f}" class="${REC_F.fmt===f?'on':''}">${f==='TEST'?'Tests':'ODIs'}</button>`).join('')}</div>
+  el.innerHTML=`<div class="card"><div class="row"><div class="seg">${FORMATS.map(f=>`<button data-rf="${f}" class="${REC_F.fmt===f?'on':''}">${FMT_PLURAL[f]}</button>`).join('')}</div>
     <div class="seg">${REC_GROUPS.map(g=>`<button data-rg="${g[0]}" class="${REC_F.grp===g[0]?'on':''}">${g[0]}</button>`).join('')}</div></div>
     <div class="muted" style="font-size:12px;margin-top:6px">Qualification: averages ${min.inn}+ innings, strike rate ${min.balls}+ balls, bowling averages ${min.wkts}+ wickets, economy ${min.bb}+ balls, captaincy ${min.cap}+ matches.</div></div>
     <div class="grid g3" style="margin-top:14px">${keys.map(block).join('')}</div>`;
@@ -2381,7 +2419,7 @@ RENDER.players=(el)=>{
   const rows=L.slice(PL_F.page*50,PL_F.page*50+50);
   const cell=(k,s)=>({avg:f2(batAvg(s)),sr:f1(batSR(s)),bavg:f2(bowlAvg(s)),econ:f2(bowlEcon(s)),best:s.bw?s.best[0]+'/'+s.best[1]:'-',hs:s.hs+(s.hsNo?'*':'')}[k]??s[k]);
   const teams=[...TEAMS.values()].sort((a,b)=>a.name.localeCompare(b.name));
-  el.innerHTML=`<div class="card"><div class="row"><div class="seg">${['ODI','TEST'].map(f=>`<button data-pf="${f}" class="${PL_F.fmt===f?'on':''}">${f==='TEST'?'Tests':'ODIs'}</button>`).join('')}</div>
+  el.innerHTML=`<div class="card"><div class="row"><div class="seg">${FORMATS.map(f=>`<button data-pf="${f}" class="${PL_F.fmt===f?'on':''}">${FMT_PLURAL[f]}</button>`).join('')}</div>
     <input type="search" id="pl-q" placeholder="Search players" value="${esc(PL_F.q)}">
     <select id="pl-t"><option value="">All teams</option>${teams.map(t=>`<option value="${t.id}" ${+PL_F.team===t.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select>
     <span class="muted">${L.length} players</span></div></div>
@@ -2402,7 +2440,7 @@ RENDER.history=(el,arg)=>{
   const pages=Math.max(1,Math.ceil(L.length/25));HI_F.page=clamp(HI_F.page,0,pages-1);
   const teams=[...TEAMS.values()].sort((a,b)=>a.name.localeCompare(b.name));
   const h2h=HI_F.team?Object.entries(L.reduce((o,E)=>{const opp=otherOf(E,+HI_F.team),r=o[opp]=o[opp]||{p:0,w:0,l:0};r.p++;if(E.result.winner===+HI_F.team)r.w++;else if(E.result.winner)r.l++;return o;},{})).sort((a,b)=>b[1].p-a[1].p):[];
-  el.innerHTML=`<div class="card"><div class="row"><div class="seg">${[['','All'],['ODI','ODI'],['TEST','Test']].map(([k,n])=>`<button data-hf="${k}" class="${HI_F.fmt===k?'on':''}">${n}</button>`).join('')}</div>
+  el.innerHTML=`<div class="card"><div class="row"><div class="seg">${[['','All'],['ODI','ODI'],['TEST','Test'],['T20','T20']].map(([k,n])=>`<button data-hf="${k}" class="${HI_F.fmt===k?'on':''}">${n}</button>`).join('')}</div>
     ${HAS_REAL?`<label class="row" style="gap:6px"><input type="checkbox" id="hi-ch" ${HI_F.changed?'checked':''}> Changed history only</label>`:''}
     <select id="hi-t"><option value="">All teams</option>${teams.map(t=>`<option value="${t.id}" ${+HI_F.team===t.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select><span class="muted">${L.length} matches</span></div></div>
   ${h2h.length?`<div class="card" style="margin-top:14px"><h3>${esc(teamName(+HI_F.team))} head to head</h3><div class="grid g4">${h2h.map(([t,r])=>`<div class="spread"><span>${badge(+t)} ${esc(teamName(+t))}</span><span class="num">P${r.p} W${r.w} L${r.l}</span></div>`).join('')}</div></div>`:''}
@@ -2455,7 +2493,7 @@ RENDER.rank=(el)=>{
     const L=Object.entries(R.pos).sort((a,b)=>b[1].date.localeCompare(a[1].date)).slice(0,60);
     body=L.length?`<table>${L.map(([sid,x])=>`<tr><td class="muted num" style="white-space:nowrap">${fmtDate(x.date)}</td><td>${esc(x.title)}</td><td>${badge(x.team)} ${plink(x.pid)}</td></tr>`).join('')}</table>`:'<div class="empty">Finish a series to crown its player.</div>';
   }
-  el.innerHTML=`<div class="card"><div class="row">${['teams','bat','bowl','ar'].includes(RK_F.tab)?`<div class="seg">${['ODI','TEST'].map(x=>`<button data-rkf="${x}" class="${f===x?'on':''}">${x==='TEST'?'Tests':'ODIs'}</button>`).join('')}</div>`:''}
+  el.innerHTML=`<div class="card"><div class="row">${['teams','bat','bowl','ar'].includes(RK_F.tab)?`<div class="seg">${FORMATS.map(x=>`<button data-rkf="${x}" class="${f===x?'on':''}">${FMT_PLURAL[x]}</button>`).join('')}</div>`:''}
     <div class="seg">${tabs.map(([k,n])=>`<button data-rkt="${k}" class="${RK_F.tab===k?'on':''}">${n}</button>`).join('')}</div></div></div>
     <div class="${RK_F.tab==='honours'?'':'card'}" style="margin-top:14px">${body}</div>`;
   $$('[data-rkf]').forEach(b=>b.onclick=()=>{RK_F.fmt=b.dataset.rkf;rerender();});
@@ -2464,7 +2502,7 @@ RENDER.rank=(el)=>{
 // Rankings and honours for the player card
 function playerHonours(pid){
   const R=R_(),out=[];
-  for(const f of['ODI','TEST'])for(const k of['bat','bowl','ar']){const i=playerRanking(f,k,100).findIndex(x=>x.pid===pid);if(i>=0)out.push(`No.${i+1} ${f} ${k==='ar'?'all-rounder':k==='bat'?'batter':'bowler'}`);}
+  for(const f of FORMATS)for(const k of['bat','bowl','ar']){const i=playerRanking(f,k,100).findIndex(x=>x.pid===pid);if(i>=0)out.push(`No.${i+1} ${f} ${k==='ar'?'all-rounder':k==='bat'?'batter':'bowler'}`);}
   const aw=[];for(const[y,A]of Object.entries(R.awards))for(const[k,n]of AWARD_NAMES)if(A[k]&&A[k].pid===pid)aw.push(`${n} ${y}`);
   const pos=Object.values(R.pos).filter(x=>x.pid===pid).map(x=>`Player of the series: ${x.title}`);
   return{ranks:out,awards:aw.concat(pos)};
@@ -2568,6 +2606,9 @@ except that associate batters not yet proven against Test nations are GREEN agai
 <p><b>Bowlers</b> follow the real bowling plan of the match where Cricsheet has it, then a spell engine (pace with the new ball and at the death, spin through the middle).
 Ratings 1 (elite) to 5 (part-timer) come from your Excel ratings where you set them, otherwise from each bowler's real spells. Edit any of them on a player's card.</p>
 <p><b>Rain in ODIs:</b> some matches lose overs. Targets are revised with a Duckworth-Lewis-style resource model (overs left and wickets down; an approximation of the published table), and if fewer than 20 overs are possible for the chasing side it's a no result. A tied knockout goes to a <b>super over</b>.</p>
+<p><b>T20s</b> need faster cards than the six in the workbook (RR_7 tops out at 6.7 an over), so they add two <b>provisional</b> cards:
+RR_8, built from RR_6 (~8 an over, its GREEN and RED wickets), and RR_9, built from RR_7 (~10 an over, its BLUE and RED wickets) - the wicket colours work exactly as before.
+They're a stand-in until you design real ones. Bowlers get 4 overs; innings average ~155.</p>
 <p><b>Tests</b> use their own card weights (RR_3 most overs, RR_7 as the wicket card), five days of 90 overs, weather, pitches that wear, follow-ons at 200 and declarations.</p>
 <p><b>Your dice:</b> switch Settings → Dice to "I roll" and enter each roll yourself.</p>
 <p><b>Captain:</b> Settings → Captaincy → Me, and you captain the team you follow (or both sides): choose who bowls each over (the real bowler of that over is marked),

@@ -32,17 +32,17 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
 function openModal(html,cls=''){$('#modal-box').className='modal-box '+cls;$('#modal-box').innerHTML='<button class="x" aria-label="Close">×</button>'+html;$('#modal').classList.remove('hidden');}
 function closeModal(){$('#modal').classList.add('hidden');$('#modal-box').innerHTML='';}
 const resultPill=(E,t)=>!E.result||!E.result.winner?`<span class="pill">${E.result?.type==='draw'?'D':E.result?.type==='tie'?'T':'NR'}</span>`:`<span class="pill ${E.result.winner===t?'win':'loss'}">${E.result.winner===t?'W':'L'}</span>`;
-function innsShort(I,fmt){return`${I.runs}${I.wkts<10?'/'+I.wkts:''}${I.why==='declared'?'d':''}${fmt==='ODI'||I.why!=='all out'?` <span class="muted">(${oversTxt(I.lb)})</span>`:''}`;}
+function innsShort(I,fmt){return`${I.runs}${I.wkts<10?'/'+I.wkts:''}${I.why==='declared'?'d':''}${fmt!=='TEST'||I.why!=='all out'?` <span class="muted">(${oversTxt(I.lb)})</span>`:''}`;}
 function matchLine(E){
   const sc=t=>E.inns.filter(I=>I.bat===t).map(I=>innsShort(I,E.fmt)).join(' &amp; ')||'-';
   return`<div class="spread" data-mid="${E.id}" style="cursor:pointer">
     <div>${E.teams.map(t=>`<div class="row">${badge(t)} <span>${sc(t)}</span></div>`).join('')}</div>
-    <div style="text-align:right"><div class="${E.result.winner?'green':'sub'}">${esc(E.result.text)}</div><div class="muted" style="font-size:12px">${fmtDate(E.date)} · ${E.fmt==='TEST'?'Test':'ODI'}${E.stage?' · '+esc(E.stage):''}</div></div></div>`;
+    <div style="text-align:right"><div class="${E.result.winner?'green':'sub'}">${esc(E.result.text)}</div><div class="muted" style="font-size:12px">${fmtDate(E.date)} · ${FMT_NAME[E.fmt]}${E.stage?' · '+esc(E.stage):''}</div></div></div>`;
 }
 
 // ---------- player profile ----------
 function openPlayer(pid){
-  const a=pAttr(pid),rows=['ODI','TEST'].map(f=>[f,S.stats[f][pid]]).filter(x=>x[1]);
+  const a=pAttr(pid),rows=FORMATS.map(f=>[f,S.stats[f][pid]]).filter(x=>x[1]);
   const era=(WORLD.players[pid]||[])[7]||[],bowls=a.style!=='N';
   const recent=S.matches.filter(E=>E.teams.some(t=>E.xi[t].slice(0,11).includes(pid))).slice(-8).reverse();
   const ms=S.ms.filter(m=>m.pid===pid).slice(-10).reverse();
@@ -61,7 +61,7 @@ function openPlayer(pid){
     <label>Batting colour <select id="pa-bat">${[['','By position'],['B','BLUE'],['G','GREEN'],['R','RED'],['BG','BLUE (GREEN v Test nations)']].map(([v,n])=>`<option value="${v}" ${a.bat===v?'selected':''}>${n}</option>`).join('')}</select></label>
     <button class="btn pri sm" id="pa-save">Save</button><button class="btn sm" id="pa-reset">Reset</button></div>
     <div class="muted" style="font-size:12px;margin-top:6px">Rating 1 is elite, 5 a part-timer: it sets the run-rate card weights for every over he bowls. Batting colour is the wicket colour that can get him out: BLUE batters fall only to BLUE, GREEN to BLUE or GREEN, RED to anything.</div></div>
-  ${rows.length?rows.map(([f,s])=>`<h3>${f==='TEST'?'Test':'ODI'} career</h3><div class="tbl-wrap"><table class="num"><tr><th>M</th><th>Inn</th><th>NO</th><th>Runs</th><th>HS</th><th>Avg</th><th>SR</th><th>100</th><th>50</th><th>Wkts</th><th>BB</th><th>Avg</th><th>Econ</th><th>5w</th><th>Ct</th><th>St</th><th>MoM</th></tr>
+  ${rows.length?rows.map(([f,s])=>`<h3>${FMT_NAME[f]} career</h3><div class="tbl-wrap"><table class="num"><tr><th>M</th><th>Inn</th><th>NO</th><th>Runs</th><th>HS</th><th>Avg</th><th>SR</th><th>100</th><th>50</th><th>Wkts</th><th>BB</th><th>Avg</th><th>Econ</th><th>5w</th><th>Ct</th><th>St</th><th>MoM</th></tr>
     <tr><td>${s.m}</td><td>${s.inn}</td><td>${s.no}</td><td>${s.r}</td><td>${s.hs}${s.hsNo?'*':''}</td><td>${f2(batAvg(s))}</td><td>${f1(batSR(s))}</td><td>${s.c100}</td><td>${s.c50}</td><td>${s.bw}</td><td>${s.best[0]}/${s.best[1]}</td><td>${f2(bowlAvg(s))}</td><td>${f2(bowlEcon(s))}</td><td>${s.w5}</td><td>${s.ct}</td><td>${s.st}</td><td>${s.motm}</td></tr></table></div>`).join(''):'<p class="muted">Hasn\'t played in this career yet.</p>'}
   ${recent.length?`<h3>Recent matches</h3><table>${recent.map(E=>`<tr data-mid="${E.id}" style="cursor:pointer"><td>${fmtDate(E.date)}</td><td>${E.fmt}</td><td>v ${badge(otherOf(E,E.teams.find(t=>E.xi[t].slice(0,11).includes(pid))))}</td><td class="r num">${line(E)}</td></tr>`).join('')}</table>`:''}
   ${(()=>{const h=playerHonours(pid);return h.ranks.length||h.awards.length?`<h3>Rankings &amp; honours</h3>${h.ranks.map(x=>`<span class="pill" style="margin:0 4px 4px 0">${esc(x)}</span>`).join('')}${h.awards.map(x=>`<div>🏆 ${esc(x)}</div>`).join('')}`:'';})()}

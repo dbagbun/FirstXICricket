@@ -1,5 +1,5 @@
 // ═══ RECORDS — computed from career stats and the match archive (top 10 per record) ═══
-const REC_MIN={ODI:{inn:20,balls:500,wkts:30,bb:600,cap:10},TEST:{inn:15,balls:1000,wkts:30,bb:1500,cap:8}};
+const REC_MIN={ODI:{inn:20,balls:500,wkts:30,bb:600,cap:10},TEST:{inn:15,balls:1000,wkts:30,bb:1500,cap:8},T20:{inn:12,balls:250,wkts:20,bb:300,cap:8}};
 const REC_GROUPS=[
   ['Batting',['runs','hs','avg','sr','c100','c50','f6','f4','fast50','fast100','ducks']],
   ['Bowling',['wkts','bbi','bbm','bavg','econ','bsr','w5','md']],

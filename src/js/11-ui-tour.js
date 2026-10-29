@@ -2,7 +2,7 @@
 const TOURNEYS=[...SERIES.values()].filter(s=>s.kind==='tournament');
 function currentTourney(){
   const n=nextFixture();
-  if(n&&n.fmt==='ODI'&&SERIES.get(n.sid).kind==='tournament')return n.sid;
+  if(n&&n.f&&n.fmt==='ODI'&&SERIES.get(n.sid)?.kind==='tournament')return n.sid;
   const last=[...S.matches].reverse().find(E=>E.sid&&SERIES.get(E.sid)?.kind==='tournament');
   return last?last.sid:TOURNEYS[0].sid;
 }

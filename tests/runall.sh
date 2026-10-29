@@ -12,6 +12,6 @@ for t in tests/e2e*.js; do
     fi
   fi
 done
-node tests/engine-stats.js 200 60
+node tests/engine-stats.js 200 60 200
 echo "REGRESSION DONE: $fails failing"
 exit $fails

@@ -1,6 +1,9 @@
 // ═══ UTILITIES ═══
 'use strict';
 const rnd=()=>Math.random();
+// Formats: ODI, Test, T20. perFmt(f) builds {ODI:f(),TEST:f(),T20:f()}.
+const FORMATS=['ODI','TEST','T20'],FMT_NAME={ODI:'ODI',TEST:'Test',T20:'T20'},FMT_PLURAL={ODI:'ODIs',TEST:'Tests',T20:'T20s'};
+const perFmt=f=>Object.fromEntries(FORMATS.map(k=>[k,f(k)]));
 const roll100=()=>Math.floor(rnd()*100)+1;
 const rndInt=(a,b)=>Math.floor(rnd()*(b-a+1))+a;
 const pick=a=>a[Math.floor(rnd()*a.length)];

@@ -35,3 +35,10 @@ console.log(`ODI x${o.n}: inn1 avg ${avg(o.inn1)} (p10 ${q(o.inn1,.1)}, p90 ${q(
 console.log(`     per match: 50s ${(o.fifties/o.n).toFixed(2)}, 100s ${(o.hundreds/o.n).toFixed(2)}, extras ${(o.ext/o.n).toFixed(1)}, opener avg ${avg(o.top)}`);
 const t=out.test;
 console.log(`TEST x${t.n}: innings avg ${avg(t.inns)} (p10 ${q(t.inns,.1)}, p90 ${q(t.inns,.9)}), overs/match ${avg(t.overs)}, results ${JSON.stringify(t.res)}, follow-ons ${t.fo}, declarations ${t.decl}, 100s/match ${(t.hundreds/t.n).toFixed(2)}`);
+// T20 (node tests/engine-stats.js 0 0 300): the provisional RR_8/RR_9 ladder
+const nT20=+process.argv[4]||0;
+if(nT20){const t=vm.runInContext(`(function(n){const R=[],W=[],ov=[],six=[];const L=FIX.filter(f=>WORLD.xi[f.cid]&&Object.keys(WORLD.xi[f.cid]).length===2&&f.date>'2008');
+  for(let i=0;i<n;i++){const f=L[Math.floor(Math.random()*L.length)];const M=newMatch({fmt:'T20',a:f.a,b:f.b,date:f.date,xiA:fixtureXI(f.cid,f.a),xiB:fixtureXI(f.cid,f.b),noPlans:true});M.noWeather=true;doToss(M);simMatch(M);
+    const I=M.inns[0];R.push(I.runs);W.push(I.wkts);ov.push(I.lb/6);six.push(Object.values(I.bt).reduce((a,b)=>a+b.f6,0));}
+  return{R,W,ov,six};})(${nT20})`,ctx);
+  console.log(`T20 x${nT20}: inn1 avg ${avg(t.R)} (p10 ${q(t.R,.1)}, p90 ${q(t.R,.9)}), wkts ${avg(t.W)}, overs ${avg(t.ov)}, sixes ${avg(t.six)}`);}

@@ -2,10 +2,10 @@
 // Team ratings are Elo underneath (full members start 1500, Zimbabwe/Bangladesh 1400, associates 1250) and are
 // shown ICC-style: points = (Elo - 1000) / 5. Player rankings are an exponential average of match performances,
 // scaled by the opposition's rating, so form counts more than history.
-const RANK_K={ODI:24,TEST:32},RANK_ALPHA=.12,RANK_ACTIVE_DAYS=420,AWARD_MIN_MATCHES=15;
+const RANK_K={ODI:24,TEST:32,T20:20},RANK_ALPHA=.12,RANK_ACTIVE_DAYS=420,AWARD_MIN_MATCHES=15;
 const eloStart=t=>{const T=TEAMS.get(+t);return T&&T.full?([10,11].includes(+t)?1400:1500):1250;};
 const rankPts=elo=>Math.round((elo-1000)/5);
-function blankRankings(){return{team:{ODI:{},TEST:{}},yr:{ODI:{},TEST:{}},bat:{ODI:{},TEST:{}},bowl:{ODI:{},TEST:{}},pos:{},awards:{},awardYear:0};}
+function blankRankings(){const e=()=>({});return{team:perFmt(e),yr:perFmt(e),bat:perFmt(e),bowl:perFmt(e),pos:{},awards:{},awardYear:0};}
 function R_(){if(!S.rk)S.rk=blankRankings();return S.rk;}
 
 // MOTM-style score for every player in a match (shared with pickMOTM's formula, without the winner bonus option)
@@ -31,11 +31,11 @@ function applyRankings(E){
   const k=RANK_K[E.fmt]*(E.stage&&/final|semi|quarter/i.test(E.stage)?1.25:1);
   const d=k*(sa-ea);T[a]+=d;T[b]-=d;
   // players
-  const base=E.fmt==='ODI'?4.8:3.2,L=playerMatchLines(E);
+  const base={ODI:4.8,TEST:3.2,T20:7.5}[E.fmt],L=playerMatchLines(E);
   for(const pid in L){
     const l=L[pid],opp=otherOf(E,l.team),f=(T[opp]||1500)/1500;
     if(l.bat){
-      const sr=E.fmt==='ODI'&&l.b?(l.r/l.b*100-80)/400:0;
+      const sr=E.fmt!=='TEST'&&l.b?(l.r/l.b*100-(E.fmt==='T20'?120:80))/400:0;
       const perf=(l.r+(l.r*sr))*f;
       upd(R.bat[E.fmt],pid,perf,E.date);
     }
@@ -46,7 +46,7 @@ function applyRankings(E){
   }
 }
 function upd(tab,pid,perf,date){const x=tab[pid]||(tab[pid]={p:0,n:0,d:date});x.p=x.p*(1-RANK_ALPHA)+perf*RANK_ALPHA;x.n++;x.d=date;}
-const PLAYER_SCALE={bat:{ODI:16,TEST:10},bowl:{ODI:14,TEST:12}};
+const PLAYER_SCALE={bat:{ODI:16,TEST:10,T20:24},bowl:{ODI:14,TEST:12,T20:16}};
 const COMPOSITE=new Set(WORLD.teams.filter(t=>/ XI$/.test(t.name)).map(t=>t.id));   // Africa XI, Asia XI, ICC World XI
 function playerRanking(fmt,kind,n=20){
   const R=R_(),now=careerDate(),tab=R[kind==='ar'?'bat':kind][fmt];
@@ -79,7 +79,7 @@ function playerOfSeries(sid){
 // ---------- the year's awards ----------
 function awardsFor(year){
   const M=S.matches.filter(E=>E.date.startsWith(year));if(M.length<AWARD_MIN_MATCHES)return null;
-  const score={},runs={ODI:{},TEST:{}},wk={ODI:{},TEST:{}};
+  const score={},runs=perFmt(()=>({})),wk=perFmt(()=>({}));
   const newcomer=p=>{const d=DEBUT.get(p)||'';return d>=(+year-1)+'-01-01'&&daysBetween(CAREER_START,d)>365;};
   for(const E of M){
     for(const[pid,x]of Object.entries(matchScores(E,false))){const o=score[pid]=score[pid]||{s:0,tm:{}};o.s+=x.s;o.tm[x.team]=(o.tm[x.team]||0)+1;}

@@ -10,6 +10,9 @@ except that associate batters not yet proven against Test nations are GREEN agai
 <p><b>Bowlers</b> follow the real bowling plan of the match where Cricsheet has it, then a spell engine (pace with the new ball and at the death, spin through the middle).
 Ratings 1 (elite) to 5 (part-timer) come from your Excel ratings where you set them, otherwise from each bowler's real spells. Edit any of them on a player's card.</p>
 <p><b>Rain in ODIs:</b> some matches lose overs. Targets are revised with a Duckworth-Lewis-style resource model (overs left and wickets down; an approximation of the published table), and if fewer than 20 overs are possible for the chasing side it's a no result. A tied knockout goes to a <b>super over</b>.</p>
+<p><b>T20s</b> need faster cards than the six in the workbook (RR_7 tops out at 6.7 an over), so they add two <b>provisional</b> cards:
+RR_8, built from RR_6 (~8 an over, its GREEN and RED wickets), and RR_9, built from RR_7 (~10 an over, its BLUE and RED wickets) - the wicket colours work exactly as before.
+They're a stand-in until you design real ones. Bowlers get 4 overs; innings average ~155.</p>
 <p><b>Tests</b> use their own card weights (RR_3 most overs, RR_7 as the wicket card), five days of 90 overs, weather, pitches that wear, follow-ons at 200 and declarations.</p>
 <p><b>Your dice:</b> switch Settings → Dice to "I roll" and enter each roll yourself.</p>
 <p><b>Captain:</b> Settings → Captaincy → Me, and you captain the team you follow (or both sides): choose who bowls each over (the real bowler of that over is marked),

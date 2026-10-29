@@ -25,6 +25,8 @@ The repo root holds a prebuilt `first-xi.html` (double-click to open). **After a
 
 - Rain & D/L (limited overs, `03-engine.js`): `rollRain` at the toss (`RAIN_P` by region) sets `M.rainAt {inn, over, lost}`; `applyRain` at the end of that over cuts `I.maxOv` (per-innings overs; everything limited-overs reads `I.maxOv`, not `M.maxOv`), keeps `M.dl {r1, r2, max2, target}` with resources from `dlRes(u,w)` (a fitted approximation of the D/L table, `DL_B`/`DL_F`), and `dlTarget` revises the target (G50 when the chasing side has more). Under 20 overs possible (5 in a T20) → `M.abandoned`, no result. Knockout ties (`stage` final/semi/quarter/play-off, or `M.superOverOn`) → `superOver` (one over each, two wickets, three rounds, then boundary count), result type `'so'` with a winner. Archive: `E.maxOv`, `inns[].mo`, `E.dl`, `E.so`, `E.abandoned`.
 
+- Formats: `FORMATS` = ODI, TEST, T20 (`perFmt` builds per-format tables; old saves gain missing ones in `loadSlot`). `LIMITED(M)` = not a Test; `perBowler(M)` = 10 / 4 overs. T20 cards: `T20_CODES` ladder RR_4B/5/6/8/9/7 with two PROVISIONAL derived cards (`deriveCard`: RR_8 from RR_6, RR_9 from RR_7, same wicket tokens, a fixed pattern of upgrades), `CARD_WEIGHTS.T20` tuned to ~155 / 6.2 wkts (`node tests/engine-stats.js 0 0 400`). Workbook RR_8/RR_9 sheets would replace them. Series you schedule (`S.tests`, any format, `createSeries`, keys `T<n>.<k>`, `customFx`): T20Is from `T20_START`.
+
 ## Layout
 - `src/template.html` - page shell with `/*@@CSS@@*/`, `/*@@DATA@@*/`, `/*@@JS@@*/`
 - `src/styles.css` - all CSS (Excel dark palette: navy `#0a0e1a`, panels `#0f172a`/`#1e293b`, cyan `#06b6d4`, gold `#ffd700`)
