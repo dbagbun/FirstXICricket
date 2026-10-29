@@ -1976,6 +1976,7 @@ function yearEnd(E){
   const upto=done?y:y-1;
   for(let yy=Math.max(R.awardYear+1,+CAREER_START.slice(0,4));yy<=upto;yy++){
     const A=awardsFor(String(yy));if(A){R.awards[yy]=A;out.push(A);}
+    if(!S.sandbox){const hf=hofVote(yy);if(A&&hf.length)A.hof=hf;}
     R.awardYear=yy;
   }
   return out;
@@ -2630,6 +2631,83 @@ function ensureFuture(){
   generateYear(y);return true;
 }
 
+// ═══ LEGENDS — retirements, the Hall of Fame, teams of the decade, all-time XIs ═══
+// S.hof = {retired:{pid:date}, inducted:{pid:{year,pct}}, ballots:{year:[[pid,pct]]}, onBallot:{pid:firstYear}, notes:[]}
+// Retired: a generated retirement, or 50+ caps and no match for two years. Eligible two years after retiring;
+// 75% needed, at most HOF_MAX a year, five years on the ballot. The vote follows a career score.
+const HOF_CAPS=50,HOF_PCT=75,HOF_MAX=3,HOF_YEARS=5;
+function hof(){if(!S.hof)S.hof={retired:{},inducted:{},ballots:{},onBallot:{},notes:[]};return S.hof;}
+function careerOf(pid){
+  const out={m:0,r:0,w:0,c100:0,w5:0,ct:0,st:0,motm:0,last:'',first:'',teams:new Set()};
+  for(const f of FORMATS){const s=S.stats[f][pid];if(!s)continue;
+    out.m+=s.m;out.r+=s.r;out.w+=s.bw;out.c100+=s.c100;out.w5+=s.w5;out.ct+=s.ct;out.st+=s.st;out.motm+=s.motm;
+    if(!out.last||s.last>out.last)out.last=s.last;if(!out.first||s.first<out.first)out.first=s.first;s.teams.forEach(t=>out.teams.add(t));}
+  return out;
+}
+function legacyScore(pid){
+  const c=careerOf(pid),R=R_();let aw=0;
+  for(const A of Object.values(R.awards))for(const[k]of AWARD_NAMES)if(A[k]&&A[k].pid===pid)aw++;
+  return c.r/45+c.w*1.1+c.c100*5+c.w5*6+c.m*.25+c.motm*2+aw*12+(c.st+c.ct)*.3;
+}
+function findRetirements(date){
+  const H=hof(),out=[];
+  const done=pid=>{if(H.retired[pid])return;H.retired[pid]=date;const c=careerOf(pid);
+    const line=`${pName(pid)} retires: ${c.m} internationals, ${c.r.toLocaleString()} runs${c.w?`, ${c.w} wickets`:''}.`;H.notes.push({date,text:line,pid});out.push(line);};
+  if(S.gen)for(const[p,g]of Object.entries(S.gen.players))if(g.ret&&g.ret<=date&&capsOf(+p)>=10)done(+p);
+  const seen=new Set();
+  for(const f of FORMATS)for(const pid in S.stats[f]){if(seen.has(pid))continue;seen.add(pid);
+    const c=careerOf(+pid);if(c.m>=HOF_CAPS&&c.last&&daysBetween(c.last,date)>730&&!(S.gen&&S.gen.players[pid]&&!S.gen.players[pid].ret))done(+pid);}
+  return out;
+}
+// The vote at the end of `year`: the career score, ranked against everyone eligible, becomes a percentage.
+function hofVote(year){
+  const H=hof();if(H.ballots[year])return[];
+  const date=year+'-12-31';findRetirements(date);
+  const elig=Object.entries(H.retired).filter(([p,d])=>!H.inducted[p]&&daysBetween(d,date)>=730&&(H.onBallot[p]??year)>year-HOF_YEARS).map(([p])=>+p);
+  for(const p of elig)if(H.onBallot[p]==null)H.onBallot[p]=year;
+  const sc=elig.map(p=>[p,legacyScore(p)]).sort((a,b)=>b[1]-a[1]);
+  const top=sc.length?sc[0][1]:1;
+  const ballot=sc.map(([p,s])=>[p,clamp(Math.round(30+60*s/Math.max(top,180)+rndInt(-6,6)),1,99)]).sort((a,b)=>b[1]-a[1]);
+  H.ballots[year]=ballot;
+  const ins=ballot.filter(b=>b[1]>=HOF_PCT).slice(0,HOF_MAX);
+  for(const[p,pct]of ins){H.inducted[p]={year,pct};H.notes.push({date,text:`${pName(p)} is inducted into the Hall of Fame with ${pct}% of the vote.`,pid:p});}
+  return ins.map(([p,pct])=>({pid:p,pct}));
+}
+// Team of the decade / all-time XI: six batters, a keeper and four bowlers from a set of matches or players.
+function bestXI(players,fmt){
+  const st=p=>S.stats[fmt][p]||null,ok=players.filter(p=>st(p)&&st(p).m>=5);
+  const bat=p=>{const s=st(p);return s.r*(1+Math.min(1,batAvg(s)/50||0));};
+  const bowl=p=>{const s=st(p);return s.bw*(1+Math.min(1,25/(bowlAvg(s)||99)));};
+  const kc=new Map();for(const E of S.matches)if(E.fmt===fmt)for(const t of E.teams){const k=E.xi[t][11];kc.set(k,(kc.get(k)||0)+1);}
+  const keeperScore=p=>kc.get(p)||0;
+  const used=new Set(),pickN=(arr,n,f)=>arr.filter(p=>!used.has(p)).sort((a,b)=>f(b)-f(a)).slice(0,n).map(p=>{used.add(p);return p;});
+  const keeper=pickN(ok.filter(p=>keeperScore(p)>=5),1,p=>keeperScore(p)*10+bat(p))[0];
+  const bowlers=pickN(ok.filter(p=>st(p).bw>=10),4,bowl);
+  const batters=pickN(ok,6,bat);
+  return{batters,keeper,bowlers};
+}
+function decadeTeams(dec){
+  const from=dec+'-01-01',to=(dec+9)+'-12-31',out={};
+  for(const f of FORMATS){
+    const ps=new Set();for(const E of S.matches)if(E.fmt===f&&E.date>=from&&E.date<=to)for(const t of E.teams)E.xi[t].slice(0,11).forEach(p=>ps.add(p));
+    if(ps.size>=30)out[f]=bestXI([...ps],f);
+  }
+  return out;
+}
+function allTimeXI(team,fmt){
+  const ps=Object.keys(S.stats[fmt]).map(Number).filter(p=>S.stats[fmt][p].teams.includes(team));
+  return ps.length>=15?bestXI(ps,fmt):null;
+}
+function storyOf(pid){
+  const out=[],c=careerOf(pid),H=hof();
+  if(c.first)out.push([c.first,'First international in your career']);
+  for(const m of S.ms.filter(m=>m.pid===pid))out.push([m.date,m.text+' ('+m.fmt+')']);
+  for(const[y,A]of Object.entries(R_().awards))for(const[k,n]of AWARD_NAMES)if(A[k]&&A[k].pid===pid)out.push([y+'-12-31',n+' '+y]);
+  if(H.retired[pid])out.push([H.retired[pid],'Retired']);
+  if(H.inducted[pid])out.push([H.inducted[pid].year+'-12-31',`Inducted into the Hall of Fame (${H.inducted[pid].pct}%)`]);
+  return out.sort((a,b)=>a[0]<b[0]?-1:1);
+}
+
 // ═══ UI SHELL — navigation, views, modal, shared widgets ═══
 const TEAM_COL={AUS:'#c9a400',IND:'#1f4fbf',ENG:'#1d3a8a',RSA:'#0f7a3e',PAK:'#0b6e2e',SL:'#173f8f',WI:'#7a1f2b',NZ:'#222',ZIM:'#b8341b',
   BAN:'#05683f',KEN:'#9c1b1b',IRE:'#169b62',NED:'#e8601c',SCO:'#1b3f94',CAN:'#c8102e',UAE:'#00732f',NAM:'#003580',USA:'#3c3b6e',NEP:'#dc143c',
@@ -2701,6 +2779,7 @@ function openPlayer(pid){
   ${recent.length?`<h3>Recent matches</h3><table>${recent.map(E=>`<tr data-mid="${E.id}" style="cursor:pointer"><td>${fmtDate(E.date)}</td><td>${E.fmt}</td><td>v ${badge(otherOf(E,E.teams.find(t=>E.xi[t].slice(0,11).includes(pid))))}</td><td class="r num">${line(E)}</td></tr>`).join('')}</table>`:''}
   ${(()=>{const h=playerHonours(pid);return h.ranks.length||h.awards.length?`<h3>Rankings &amp; honours</h3>${h.ranks.map(x=>`<span class="pill" style="margin:0 4px 4px 0">${esc(x)}</span>`).join('')}${h.awards.map(x=>`<div>🏆 ${esc(x)}</div>`).join('')}`:'';})()}
   ${nemesisHTML(pid)}
+  ${(()=>{const st=storyOf(pid);return st.length>1?`<details style="margin-top:10px"><summary class="muted" style="cursor:pointer">Career story</summary>${st.map(([d,t])=>`<div><span class="muted">${fmtDate(d)}</span> ${esc(t)}</div>`).join('')}</details>`:'';})()}
   ${ms.length?`<h3>Milestones</h3>${ms.map(m=>`<div>🏅 ${esc(m.text)} <span class="muted">${fmtDate(m.date)} · ${m.fmt}</span></div>`).join('')}`:''}`);
   $('#pa-edit').onclick=()=>$('#pa-form').classList.toggle('hidden');
   $('#pa-save').onclick=()=>{S.attrEdits[pid]={style:$('#pa-style').value,rating:+$('#pa-rating').value,max:clamp(+$('#pa-max').value,0,10),bat:$('#pa-bat').value};if(S.attrEdits[pid].style==='N')Object.assign(S.attrEdits[pid],{rating:7,max:0});saveGame();openPlayer(pid);};
@@ -3511,7 +3590,7 @@ function honoursHTML(years){
 }
 RENDER.rank=(el)=>{
   const R=R_(),f=RK_F.fmt;
-  const tabs=[['teams','Teams'],['bat','Batting'],['bowl','Bowling'],['ar','All-rounders'],['honours','Honours'],['pos','Players of the series']];
+  const tabs=[['teams','Teams'],['bat','Batting'],['bowl','Bowling'],['ar','All-rounders'],['honours','Honours'],['legends','Legends'],['pos','Players of the series']];
   let body='';
   if(RK_F.tab==='teams'){
     const L=teamRanking(f);
@@ -3525,7 +3604,8 @@ RENDER.rank=(el)=>{
   }else if(RK_F.tab==='honours'){
     const ys=Object.keys(R.awards).sort().reverse();
     body=ys.length?`<div class="grid g2">${honoursHTML(ys)}</div>`:'<div class="empty">Awards are given when each year is over.</div>';
-  }else{
+  }else if(RK_F.tab==='legends')body=legendsHTML();
+  else{
     const L=Object.entries(R.pos).sort((a,b)=>b[1].date.localeCompare(a[1].date)).slice(0,60);
     body=L.length?`<table>${L.map(([sid,x])=>`<tr><td class="muted num" style="white-space:nowrap">${fmtDate(x.date)}</td><td>${esc(x.title)}</td><td>${badge(x.team)} ${plink(x.pid)}</td></tr>`).join('')}</table>`:'<div class="empty">Finish a series to crown its player.</div>';
   }
@@ -3534,7 +3614,30 @@ RENDER.rank=(el)=>{
     <div class="${RK_F.tab==='honours'?'':'card'}" style="margin-top:14px">${body}</div>`;
   $$('[data-rkf]').forEach(b=>b.onclick=()=>{RK_F.fmt=b.dataset.rkf;rerender();});
   $$('[data-rkt]').forEach(b=>b.onclick=()=>{RK_F.tab=b.dataset.rkt;rerender();});
+  $('#lg-team')&&($('#lg-team').onchange=e=>{RK_F.xiTeam=+e.target.value;rerender();});
+  $$('[data-lgf]').forEach(b=>b.onclick=()=>{RK_F.xiFmt=b.dataset.lgf;rerender();});
 };
+function xiHTML(x,title){
+  if(!x)return'';
+  const row=(p,tag)=>`<div class="spread"><span>${plink(p)} ${tag?`<span class="muted" style="font-size:11px">${tag}</span>`:''}</span></div>`;
+  return`<div class="card"><h3>${esc(title)}</h3>${x.batters.map(p=>row(p)).join('')}${x.keeper?row(x.keeper,'wk'):''}${x.bowlers.map(p=>row(p,'bowler')).join('')}</div>`;
+}
+function legendsHTML(){
+  const H=hof(),ind=Object.entries(H.inducted).sort((a,b)=>b[1].year-a[1].year||b[1].pct-a[1].pct);
+  const lastY=Object.keys(H.ballots).sort().pop(),ballot=lastY?H.ballots[lastY].slice(0,10):[];
+  const decs=[...new Set(S.matches.map(E=>Math.floor(+E.date.slice(0,4)/10)*10))];
+  const team=RK_F.xiTeam||S.settings.myTeam||4,fmt=RK_F.xiFmt||'ODI';
+  return`<div class="grid g2" style="align-items:start">
+    <div class="stack"><div class="card"><h3>Hall of Fame</h3>${ind.length?ind.map(([p,x])=>`<div class="spread"><span>🏛️ ${plink(+p)} <span class="muted" style="font-size:12px">${(careerOf(+p).teams.size?[...careerOf(+p).teams].map(teamShort).join('/'):'')}</span></span><span class="muted">${x.year} · ${x.pct}%</span></div>`).join(''):'<p class="muted">Nobody yet. Players are eligible two years after retiring; the vote is at the end of each year.</p>'}</div>
+      ${ballot.length?`<div class="card"><h3>${lastY} ballot</h3>${ballot.map(([p,pct])=>`<div class="spread"><span>${plink(p)}</span><span class="${pct>=HOF_PCT?'green':'muted'} num">${pct}%</span></div>`).join('')}<div class="muted" style="font-size:12px;margin-top:6px">${HOF_PCT}% to get in · at most ${HOF_MAX} a year · ${HOF_YEARS} years on the ballot</div></div>`:''}
+      <div class="card"><h3>Retirements</h3>${H.notes.slice(-12).reverse().map(n=>`<div style="margin-bottom:4px"><span class="muted">${fmtDate(n.date)}</span> ${esc(n.text)}</div>`).join('')||'<p class="muted">None yet.</p>'}</div></div>
+    <div class="stack">
+      <div class="card"><div class="row"><h3 style="margin:0">All-time XI</h3><select id="lg-team">${[...TEAMS.values()].filter(t=>TEAM_GAMES.has(t.id)).map(t=>`<option value="${t.id}" ${t.id===team?'selected':''}>${esc(t.name)}</option>`).join('')}</select>
+        <div class="seg">${FORMATS.map(f=>`<button data-lgf="${f}" class="${f===fmt?'on':''}">${FMT_NAME[f]}</button>`).join('')}</div></div></div>
+      ${xiHTML(allTimeXI(team,fmt),`${teamName(team)} - all-time ${FMT_NAME[fmt]} XI`)||'<div class="card muted">Not enough matches yet.</div>'}
+      ${decs.reverse().map(d=>{const T=decadeTeams(d);return T[fmt]?xiHTML(T[fmt],`${FMT_NAME[fmt]} team of the ${d}s${+careerDate().slice(0,4)<d+10?' (so far)':''}`):'';}).join('')}
+    </div></div>`;
+}
 // Rankings and honours for the player card
 function playerHonours(pid){
   const R=R_(),out=[];

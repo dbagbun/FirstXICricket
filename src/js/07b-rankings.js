@@ -106,6 +106,7 @@ function yearEnd(E){
   const upto=done?y:y-1;
   for(let yy=Math.max(R.awardYear+1,+CAREER_START.slice(0,4));yy<=upto;yy++){
     const A=awardsFor(String(yy));if(A){R.awards[yy]=A;out.push(A);}
+    if(!S.sandbox){const hf=hofVote(yy);if(A&&hf.length)A.hof=hf;}
     R.awardYear=yy;
   }
   return out;

@@ -69,6 +69,7 @@ function openPlayer(pid){
   ${recent.length?`<h3>Recent matches</h3><table>${recent.map(E=>`<tr data-mid="${E.id}" style="cursor:pointer"><td>${fmtDate(E.date)}</td><td>${E.fmt}</td><td>v ${badge(otherOf(E,E.teams.find(t=>E.xi[t].slice(0,11).includes(pid))))}</td><td class="r num">${line(E)}</td></tr>`).join('')}</table>`:''}
   ${(()=>{const h=playerHonours(pid);return h.ranks.length||h.awards.length?`<h3>Rankings &amp; honours</h3>${h.ranks.map(x=>`<span class="pill" style="margin:0 4px 4px 0">${esc(x)}</span>`).join('')}${h.awards.map(x=>`<div>🏆 ${esc(x)}</div>`).join('')}`:'';})()}
   ${nemesisHTML(pid)}
+  ${(()=>{const st=storyOf(pid);return st.length>1?`<details style="margin-top:10px"><summary class="muted" style="cursor:pointer">Career story</summary>${st.map(([d,t])=>`<div><span class="muted">${fmtDate(d)}</span> ${esc(t)}</div>`).join('')}</details>`:'';})()}
   ${ms.length?`<h3>Milestones</h3>${ms.map(m=>`<div>🏅 ${esc(m.text)} <span class="muted">${fmtDate(m.date)} · ${m.fmt}</span></div>`).join('')}`:''}`);
   $('#pa-edit').onclick=()=>$('#pa-form').classList.toggle('hidden');
   $('#pa-save').onclick=()=>{S.attrEdits[pid]={style:$('#pa-style').value,rating:+$('#pa-rating').value,max:clamp(+$('#pa-max').value,0,10),bat:$('#pa-bat').value};if(S.attrEdits[pid].style==='N')Object.assign(S.attrEdits[pid],{rating:7,max:0});saveGame();openPlayer(pid);};

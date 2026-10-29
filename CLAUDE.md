@@ -49,6 +49,8 @@ The repo root holds a prebuilt `first-xi.html` (double-click to open). **After a
 
 - The future (`07g-future.js`, `S.gen`): after `LAST_REAL` the pool (`initFuture`: real players active in the last two years, birth years estimated from `DEBUT`) ages; `yearTurnover` retires (mostly 34+) and brings 2+ youngsters a team a year (`newYoungster`: role, style, potential, a name in the team's style that never copies a real one); `futureAttr` (from `pAttr`) gives generated players rating by age/potential and colour by caps, and ages real players from 34. `nearestXI`/`squadAround` use `genXI`/`activePool` in the future. `generateYear` books ICC events (T20 WC even years, ODI WC Y%4===3, Champions Trophy Y%4===1, an Associates Cup) as cups and rotates tours between Test nations (Tests/ODIs/T20s via `createSeries`); `nextFixture` calls `ensureFuture` when the calendar runs dry. Settings → After the real calendar. Big saves: `compactArchive` drops `mu`/`ov` from the oldest matches past `SAVE_SOFT`.
 
+- Legends (`07h-legends.js`, state `S.hof`, UI: Rankings → Legends in `12b-ui-rankings.js`): `findRetirements` (generated retirements, or `HOF_CAPS`+ caps and two years without a match), `hofVote(year)` from `yearEnd` (career `legacyScore` → percentage; `HOF_PCT` 75, `HOF_MAX` 3 a year, `HOF_YEARS` on the ballot, eligible two years after retiring), `bestXI` (6 batters, keeper by keeping appearances, 4 bowlers) for `decadeTeams` and `allTimeXI`, `storyOf(pid)` for the player card.
+
 ## Layout
 - `src/template.html` - page shell with `/*@@CSS@@*/`, `/*@@DATA@@*/`, `/*@@JS@@*/`
 - `src/styles.css` - all CSS (Excel dark palette: navy `#0a0e1a`, panels `#0f172a`/`#1e293b`, cyan `#06b6d4`, gold `#ffd700`)
