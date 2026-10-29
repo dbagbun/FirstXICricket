@@ -991,7 +991,7 @@ function newCareer(opts={}){
     live:null,        // match in progress
     stats:perFmt(()=>({})),teams:perFmt(()=>({})),
     ms:[],msKeys:{},fast:perFmt(()=>({f50:null,f100:null})),
-    tests:[],testSeq:0,attrEdits:{},seen:{},reseed:{},rk:blankRankings(),
+    tests:[],testSeq:0,cups:[],cupSeq:0,attrEdits:{},seen:{},reseed:{},rk:blankRankings(),
   };
 }
 const LOG_KEEP=25;
@@ -1357,6 +1357,115 @@ function realHTML(E){
     <div class="sub" style="margin-top:6px">${R.top[0]?`Top score: ${plink(R.top[0])} ${R.top[1]} (${R.top[2]})`:''}${R.bb[0]?` · Best bowling: ${plink(R.bb[0])} ${R.bb[1]}/${R.bb[2]}`:''}${R.pom?` · Player of the match: ${plink(R.pom)}`:''}</div></div>`;
 }
 
+// ═══ YOUR OWN TOURNAMENTS — S.cups: build a World Cup of your own ═══
+// cup = {id:'C<n>', name, fmt, format, host, start, teams (seeded), groups {A:[...]}, fix:[{key, n, date, stage,
+//   label, group, sa, sb, venue, city}]}. Knockout slots: 'S3' seed 3, 'P2' 2nd in the league, 'A1' winner of
+//   group A, 'W:<key>' winner of that fixture. Slots resolve when what they need has been played.
+const CUP_FORMATS={
+  rr:{name:'Round robin, then semi-finals & final',min:3,max:10},
+  groups2:{name:'Two groups, then semi-finals & final',min:6,max:16},
+  groups4:{name:'Four groups, then quarter-finals',min:8,max:16},
+  ko:{name:'Straight knockout',sizes:[4,8,16]},
+};
+const KO_ORDER={4:[1,4,2,3],8:[1,8,4,5,2,7,3,6],16:[1,16,8,9,4,13,5,12,2,15,7,10,3,14,6,11]};
+function rrPairs(list){const out=[];for(let i=0;i<list.length;i++)for(let j=i+1;j<list.length;j++)out.push([list[i],list[j]]);
+  // spread each team's games: order by the later of the two indices, then the earlier
+  return out.sort((x,y)=>(Math.max(list.indexOf(x[0]),list.indexOf(x[1]))-Math.max(list.indexOf(y[0]),list.indexOf(y[1])))||list.indexOf(x[0])-list.indexOf(y[0]));}
+function createCup({name,fmt='ODI',format='rr',host,start,teams}){
+  const fk=fmt==='TEST'?'TEST':fmt;
+  teams=[...new Set(teams.map(Number))].sort((a,b)=>rankPtsOf(b,fk)-rankPtsOf(a,fk));
+  if(fmt==='TEST')format='rr';
+  if(fmt==='T20'&&start<T20_START)start=T20_START;
+  const id='C'+(S.cupSeq=(S.cupSeq||0)+1);
+  const cup={id,name:name||`${teamName(host)} ${start.slice(0,4)} ${FMT_NAME[fmt]} Cup`,fmt,format,host:+host,start,teams,groups:{},fix:[]};
+  const gap=fmt==='TEST'?6:1;let day=0;
+  const venues=(HOME_VENUES.get(+host)||[{venue:teamName(host)+' Oval',city:''}]).slice(0,10);
+  const add=(stage,label,sa,sb,group)=>{const n=cup.fix.length+1,v=venues[(n-1)%venues.length];
+    cup.fix.push({key:id+'.'+n,n,date:addDays(start,day),stage,label,group:group||'',sa,sb,venue:v.venue,city:v.city});day+=gap;};
+  const ng=format==='groups2'?2:format==='groups4'?4:format==='rr'?1:0;
+  if(ng){
+    const G=[...Array(ng)].map(()=>[]);
+    teams.forEach((t,i)=>{const r=Math.floor(i/ng),k=r%2?ng-1-i%ng:i%ng;G[k].push(t);});   // snake seeding
+    G.forEach((g,k)=>cup.groups[String.fromCharCode(65+k)]=g);
+    const lists=G.map((g,k)=>rrPairs(g).map(p=>[...p,String.fromCharCode(65+k)]));
+    for(let r=0;lists.some(l=>l.length);r++)for(const l of lists)if(l.length){const[a,b,g]=l.shift();add('group',ng>1?'Group '+g:'League',a,b,ng>1?g:'');}
+    day+=1;
+  }
+  const W=k=>'W:'+id+'.'+k;
+  if(fmt==='TEST'){}
+  else if(format==='rr'){
+    if(teams.length>=4){add('semi','Semi-final 1','P1','P4');const s1=cup.fix.length;add('semi','Semi-final 2','P2','P3');day+=1;add('final','Final',W(s1),W(s1+1));}
+    else add('final','Final','P1','P2');
+  }else if(format==='groups2'){
+    add('semi','Semi-final 1','A1','B2');const s1=cup.fix.length;add('semi','Semi-final 2','B1','A2');day+=1;add('final','Final',W(s1),W(s1+1));
+  }else if(format==='groups4'){
+    const q=cup.fix.length+1;
+    add('quarter','Quarter-final 1','A1','B2');add('quarter','Quarter-final 2','B1','A2');add('quarter','Quarter-final 3','C1','D2');add('quarter','Quarter-final 4','D1','C2');day+=1;
+    add('semi','Semi-final 1',W(q),W(q+2));add('semi','Semi-final 2',W(q+1),W(q+3));day+=1;add('final','Final',W(q+4),W(q+5));
+  }else{
+    const size=teams.length,order=KO_ORDER[size];let round=[];
+    const rname=n=>n===2?'Final':n===4?'Semi-final':n===8?'Quarter-final':'Round of '+n;
+    for(let i=0;i<size;i+=2){add(size===2?'final':size===4?'semi':size===8?'quarter':'r16',`${rname(size)} ${i/2+1}`,'S'+order[i],'S'+order[i+1]);round.push(cup.fix.length);}
+    for(let n=size/2;n>=2;n/=2){day+=1;const next=[];
+      for(let i=0;i<round.length;i+=2){add(n===2?'final':n===4?'semi':'quarter',n===2?'Final':`${rname(n)} ${i/2+1}`,W(round[i]),W(round[i+1]));next.push(cup.fix.length);}
+      round=next;}
+  }
+  (S.cups=S.cups||[]).push(cup);fxDirty();
+  return cup;
+}
+const cupById=id=>(S.cups||[]).find(c=>c.id===id);
+function cupMatches(cup){return S.matches.filter(E=>E.sid===cup.id);}
+// Points table from archived matches (W4, T/NR 2; NRR with an all-out innings counted as the full quota).
+function tableFrom(matches,teams){
+  const rows=new Map(teams.map(t=>[t,{team:t,p:0,w:0,l:0,t:0,nr:0,pts:0,rf:0,bf:0,ra:0,ba:0}]));
+  for(const E of matches){
+    if(!E.teams.every(t=>rows.has(t)))continue;
+    for(const t of E.teams){const r=rows.get(t),res=E.result;r.p++;
+      if(res.type==='tie'){r.t++;r.pts+=PTS_TIE;}else if(res.type==='nr'||res.type==='draw'){r.nr++;r.pts+=PTS_TIE;}
+      else if(res.winner===t){r.w++;r.pts+=PTS_WIN;}else r.l++;}
+    for(const I of E.inns){const q=E.fmt==='TEST'?0:(I.mo||E.maxOv||50)*6,balls=I.wkts>=10&&q?q:I.lb;
+      rows.get(I.bat).rf+=I.runs;rows.get(I.bat).bf+=balls;rows.get(I.bowl).ra+=I.runs;rows.get(I.bowl).ba+=balls;}
+  }
+  const list=[...rows.values()];
+  list.forEach(r=>r.nrr=(r.bf?r.rf/(r.bf/6):0)-(r.ba?r.ra/(r.ba/6):0));
+  return list.sort((a,b)=>b.pts-a.pts||b.nrr-a.nrr||b.w-a.w||a.team-b.team);
+}
+function cupGroupDone(cup){return cup.fix.filter(f=>f.stage==='group').every(f=>S.done[f.key]);}
+function cupTables(cup){
+  const M=cupMatches(cup).filter(E=>/^Group|^League/.test(E.stage));
+  return Object.entries(cup.groups).map(([g,teams])=>({g,rows:tableFrom(M,teams)}));
+}
+function resolveSlot(cup,spec){
+  if(!spec)return 0;
+  if(typeof spec==='number')return spec;   // a group fixture names its teams directly
+  if(spec[0]==='S')return cup.teams[+spec.slice(1)-1]||0;
+  if(spec.startsWith('W:')){
+    const key=spec.slice(2),mid=S.done[key];if(!mid)return 0;
+    const E=S.matches.find(m=>m.id===mid);if(!E)return 0;
+    if(E.result.winner)return E.result.winner;
+    return E.teams.slice().sort((a,b)=>cup.teams.indexOf(a)-cup.teams.indexOf(b))[0];   // no result: the higher seed goes through
+  }
+  if(!cupGroupDone(cup))return 0;
+  const T=cupTables(cup);
+  if(spec[0]==='P'){const all=tableFrom(cupMatches(cup).filter(E=>/^League/.test(E.stage)),cup.teams);return(all[+spec.slice(1)-1]||{}).team||0;}
+  const t=T.find(x=>x.g===spec[0]);return t&&t.rows[+spec.slice(1)-1]?t.rows[+spec.slice(1)-1].team:0;
+}
+function cupFx(cup,f){
+  const a=resolveSlot(cup,f.sa)||(+f.sa||0),b=resolveSlot(cup,f.sb)||(+f.sb||0);
+  return{key:f.key,fmt:cup.fmt,date:f.date,a,b,venue:f.venue,city:f.city,sid:cup.id,title:cup.name,label:f.label,stage:f.stage==='group'?f.label:f.label.replace(/ \d+$/,''),
+    playable:!!(a&&b),custom:true,cup:true,superOver:f.stage!=='group',slots:[f.sa,f.sb]};
+}
+function cupChampion(cup){
+  const fin=cup.fix.find(f=>f.stage==='final');
+  if(fin)return resolveSlot(cup,'W:'+fin.key);
+  if(!cupGroupDone(cup))return 0;
+  return tableFrom(cupMatches(cup),cup.teams)[0].team;
+}
+function slotName(s){
+  if(!s)return'TBD';if(s[0]==='S')return'Seed '+s.slice(1);if(s[0]==='P')return ordinal(+s.slice(1))+' in the league';
+  if(s.startsWith('W:'))return'Winner of match '+s.split('.').pop();return ordinal(+s.slice(1))+' in group '+s[0];
+}
+
 // ═══ FIXTURES, TEST SERIES, MATCH PIPELINE & SAVES ═══
 // Fixture keys: 'o<no>' for the real ODI calendar, 'T<n>.<k>' for Test series you schedule.
 const CAREER_START=FIX[0].date;
@@ -1409,6 +1518,7 @@ function allFixtures(){
   if(FX_CACHE&&FX_CACHE.S===S)return FX_CACHE.list;
   const out=ODI_FX.concat(REAL_TEST_FX);
   for(const T of S.tests)T.fix.forEach((x,k)=>out.push(customFx(T,x,k)));
+  for(const C of S.cups||[])for(const f of C.fix)out.push(cupFx(C,f));
   out.sort((x,y)=>x.date<y.date?-1:x.date>y.date?1:(x.fmt==='TEST')-(y.fmt==='TEST'));
   FX_CACHE={S,list:out};
   return out;
@@ -1416,6 +1526,7 @@ function allFixtures(){
 function fixtureByKey(key){
   if(key[0]==='o'||key[0]==='r')return ODI_FX_BY_KEY.get(key)||null;
   for(const T of S.tests){const k=T.fix.findIndex(x=>x.key===key);if(k>=0)return customFx(T,T.fix[k],k);}
+  if(key[0]==='C'){const C=cupById(key.split('.')[0]),f=C&&C.fix.find(x=>x.key===key);if(f)return cupFx(C,f);}
   return null;
 }
 function nextFixture(){return allFixtures().find(x=>x.playable&&!S.done[x.key])||null;}
@@ -1468,6 +1579,7 @@ function onMatchDone(M){
   if(M.key)S.done[M.key]=E.id;
   if(M.reseeded)S.reseed[M.key]={a:M.teams[0],b:M.teams[1]};
   S.matches.push(E);
+  if(S.cups&&S.cups.length)fxDirty();   // knockout slots in your tournaments may now resolve
   S.logs[E.id]=packBalls(M);
   const ids=Object.keys(S.logs);if(ids.length>LOG_KEEP)for(const id of ids.slice(0,ids.length-LOG_KEEP))delete S.logs[id];
   applyStats(E);
@@ -1507,7 +1619,7 @@ function loadSlot(i){
   const d=readSlot(i);if(!d)return false;
   setSlot(i);S=d;
   S.settings=Object.assign(newCareer().settings,S.settings||{});
-  for(const k of['tests','ms','matches'])S[k]=S[k]||[];
+  for(const k of['tests','ms','matches','cups'])S[k]=S[k]||[];
   for(const k of['logs','msKeys','attrEdits','seen','reseed','done'])S[k]=S[k]||{};
   for(const k of['stats','teams'])for(const f of FORMATS)S[k][f]=S[k][f]||{};
   for(const f of FORMATS)S.fast[f]=S.fast[f]||{f50:null,f100:null};
@@ -2576,14 +2688,15 @@ RENDER.fixtures=(el)=>{
     <div class="seg">${[['up','Upcoming'],['done','Played'],['all','All']].map(([k,n])=>`<button data-fs="${k}" class="${FX_F.status===k?'on':''}">${n}</button>`).join('')}</div>
     <button class="btn" id="fx-test">+ Series</button></div></div>
   <div class="stack" style="margin-top:14px">${groups.slice(0,80).map(g=>{
-    const ss=seriesStatus(g.sid),tour=(SERIES.get(g.sid)||{}).kind==='tournament';
+    const ss=seriesStatus(g.sid),tour=(SERIES.get(g.sid)||{}).kind==='tournament'||!!cupById(g.sid);
     const T=S.tests.find(t=>t.id===g.sid);
     return`<div class="card"><div class="spread"><div><b>${esc(g.title)}</b> <span class="muted">${ss&&!tour?esc(ss.text):''}</span></div>
       <div class="row">${tour?`<button class="btn sm" data-go="tour" data-arg="${esc(g.sid)}">Tournament Centre</button>`:''}${T&&!T.fix.some(x=>S.done[x.key])?`<button class="btn sm" data-deltest="${T.id}">Remove</button>`:''}</div></div>
       <div class="tbl-wrap"><table>${g.items.map(x=>{const E=S.done[x.key]&&byId.get(S.done[x.key]);const[a,b]=E?E.teams:fixtureTeams(x);
-        return`<tr ${E?`data-mid="${E.id}" style="cursor:pointer"`:''}><td class="muted num" style="white-space:nowrap">${fmtDate(x.date)}</td><td>${badge(a)} v ${badge(b)}</td>
+        const side=(t,k)=>t?badge(t):`<span class="pill">${esc(slotName(x.slots&&x.slots[k]))}</span>`;
+        return`<tr ${E?`data-mid="${E.id}" style="cursor:pointer"`:''}><td class="muted num" style="white-space:nowrap">${fmtDate(x.date)}</td><td>${side(a,0)} v ${side(b,1)}</td>
         <td class="hide-sm sub" style="font-size:12px">${esc(!x.f||x.fmt==='TEST'?x.label:(x.f.mno?'Match '+x.f.mno:stageName(edition(x.sid)?.stageOf.get(x.f.no),edition(x.sid))||''))} · ${esc(x.venue)}</td>
-        <td class="r">${E?`<span class="${E.result.winner?'green':'sub'}">${esc(E.result.text)}</span>`:x.playable?`<button class="btn sm pri" data-play="${x.key}">Play</button> <button class="btn sm" data-sim="${x.key}">Sim</button>`:'<span class="muted">no XI data</span>'}</td></tr>`;}).join('')}</table></div></div>`;}).join('')||'<div class="card empty">No fixtures match.</div>'}
+        <td class="r">${E?`<span class="${E.result.winner?'green':'sub'}">${esc(E.result.text)}</span>`:x.cup&&!x.playable?'<span class="muted">to be decided</span>':x.playable?`<button class="btn sm pri" data-play="${x.key}">Play</button> <button class="btn sm" data-sim="${x.key}">Sim</button>`:'<span class="muted">no XI data</span>'}</td></tr>`;}).join('')}</table></div></div>`;}).join('')||'<div class="card empty">No fixtures match.</div>'}
   ${groups.length>80?`<div class="muted">Showing the first 80 series - narrow the filters to see more.</div>`:''}</div>`;
   $('#fx-y').onchange=e=>{FX_F.year=e.target.value;rerender();};
   $('#fx-t').onchange=e=>{FX_F.team=e.target.value;rerender();};
@@ -2618,7 +2731,9 @@ function tableHTML(rows,qual,label){
   ${rows.map((r,i)=>`<tr class="${qual(r.team,i)?'q':''} ${r.team===S.settings.myTeam?'me':''}"><td class="muted">${i+1}</td><td>${tlabel(r.team)}</td><td class="r">${r.p}</td><td class="r">${r.w}</td><td class="r">${r.l}</td><td class="r">${r.t+r.nr}</td><td class="r"><b>${r.pts}</b></td><td class="r">${r.nrr>=0?'+':''}${r.nrr.toFixed(3)}</td></tr>`).join('')}
   </table></div></div>`;
 }
+function cupOptions(sel){return(S.cups||[]).length?`<optgroup label="Your tournaments">${S.cups.map(c=>`<option value="${c.id}" ${c.id===sel?'selected':''}>${esc(c.name)}</option>`).join('')}</optgroup>`:'';}
 RENDER.tour=(el,arg)=>{
+  if(arg&&cupById(arg))return renderCup(el,cupById(arg));
   const sid=arg&&SERIES.has(arg)&&SERIES.get(arg).kind==='tournament'?arg:currentTourney();
   const E=edition(sid),R=editionResults(sid);
   const years=[...new Set(TOURNEYS.map(s=>s.start.slice(0,4)))];
@@ -2645,8 +2760,8 @@ RENDER.tour=(el,arg)=>{
   const bat={},bowl={};
   for(const M of R.values())for(const I of M.inns){for(const r of I.bt)bat[r[0]]=(bat[r[0]]||0)+r[1];for(const w of I.bw){const x=bowl[w[0]]=bowl[w[0]]||[0,0];x[0]+=w[4];x[1]+=w[3];}}
   const lb=Object.entries(bat).sort((a,b)=>b[1]-a[1]).slice(0,5),lw=Object.entries(bowl).sort((a,b)=>b[1][0]-a[1][0]||a[1][1]-b[1][1]).slice(0,5);
-  el.innerHTML=`<div class="card"><div class="row"><select id="tc-sel">${years.map(y=>`<optgroup label="${y}">${TOURNEYS.filter(s=>s.start.startsWith(y)).map(s=>`<option value="${esc(s.sid)}" ${s.sid===sid?'selected':''}>${esc(s.title)}</option>`).join('')}</optgroup>`).join('')}</select>
-    <span class="pill">${esc(stageNow)}</span><span class="muted">${fmtDate(E.s.start)} - ${fmtDate(E.s.end)} · ${E.s.teams.size} teams · ${E.fix.length} fixtures · ${R.size} played</span></div>
+  el.innerHTML=`<div class="card"><div class="row"><select id="tc-sel">${cupOptions('')}${years.map(y=>`<optgroup label="${y}">${TOURNEYS.filter(s=>s.start.startsWith(y)).map(s=>`<option value="${esc(s.sid)}" ${s.sid===sid?'selected':''}>${esc(s.title)}</option>`).join('')}</optgroup>`).join('')}</select>
+    <button class="btn sm" id="tc-new">+ Build a tournament</button><span class="pill">${esc(stageNow)}</span><span class="muted">${fmtDate(E.s.start)} - ${fmtDate(E.s.end)} · ${E.s.teams.size} teams · ${E.fix.length} fixtures · ${R.size} played</span></div>
     ${(()=>{const rc=S.settings.history!=='off'&&realChampion(sid),fin=E.ko.length&&S.matches.find(m=>m.fid===E.ko[E.ko.length-1].no);
       return rc&&fin?`<div class="banner" style="margin-top:8px">Champions in your timeline: <b>${esc(teamName(fin.result.winner))}</b> · in history: <b>${esc(teamName(rc))}</b></div>`:'';})()}
     <div class="muted" style="font-size:12px;margin-top:6px">Knockouts: ${S.settings.knockouts==='timeline'?'re-seeded from your tables once the league stage is complete':'follow history'} (Settings).</div></div>
@@ -2658,7 +2773,67 @@ RENDER.tour=(el,arg)=>{
     <div class="card"><h3>Leading wicket-takers</h3>${lw.map(([p,x])=>`<div class="spread"><span>${plink(+p)}</span><b class="num">${x[0]} <span class="muted">(${x[1]} r)</span></b></div>`).join('')||'<span class="muted">-</span>'}</div></div>
   <div class="card" style="margin-top:14px"><h3>Results</h3>${[...R.values()].reverse().map(matchLine).join('<hr style="border:0;border-top:1px solid var(--line)">')||'<span class="muted">No matches played yet.</span>'}</div>`;
   $('#tc-sel').onchange=e=>go('tour',e.target.value);
+  $('#tc-new')&&($('#tc-new').onclick=openCupCreator);
 };
+
+// ---------- your own tournaments ----------
+function renderCup(el,cup){
+  const champ=cupChampion(cup),M=cupMatches(cup),T=cupTables(cup);
+  const q=cup.format==='groups2'||cup.format==='groups4'?2:cup.teams.length>=4?4:2;
+  const groups=T.length?`<div class="grid ${T.length>1?'g2':''}" style="margin-top:14px">${T.map(t=>tableHTML(t.rows,(team,i)=>cup.fmt!=='TEST'&&i<q&&t.rows[i].p>0,T.length>1?'Group '+t.g:'Table')).join('')}</div>`:'';
+  const cols=[];
+  for(const f of cup.fix.filter(f=>f.stage!=='group')){
+    const fx=cupFx(cup,f),E=S.done[f.key]&&S.matches.find(m=>m.id===S.done[f.key]),lab=f.label.replace(/ \d+$/,'');
+    let c=cols.find(x=>x.lab===lab);if(!c)cols.push(c={lab,ms:[]});c.ms.push({f,fx,E});
+  }
+  const br=cols.length?`<div class="card" style="margin-top:14px"><h3>Knockouts</h3><div class="bracket">${cols.map(c=>`<div class="col"><div class="sub">${esc(c.lab)}</div>${c.ms.map(m=>{
+    const w=m.E&&m.E.result.winner,sc=t=>m.E?m.E.inns.filter(I=>I.bat===t).map(I=>I.runs+(I.wkts<10?'/'+I.wkts:'')).join(''):'';
+    return`<div class="m" ${m.E?`data-mid="${m.E.id}" style="cursor:pointer"`:''}>${[0,1].map(k=>{const t=k?m.fx.b:m.fx.a;return`<div class="${w&&w===t?'wn':''}"><span>${t?badge(t)+' '+esc(teamShort(t)):'<span class="muted">'+esc(slotName(m.f[k?'sb':'sa']))+'</span>'}</span><span class="num">${t?sc(t):''}</span></div>`;}).join('')}
+      <div class="muted" style="font-size:11px">${fmtDate(m.f.date)}</div></div>`;}).join('')}</div>`).join('')}</div></div>`:'';
+  const nextKey=allFixtures().find(x=>x.sid===cup.id&&x.playable&&!S.done[x.key]);
+  el.innerHTML=`<div class="card"><div class="row"><select id="tc-sel">${cupOptions(cup.id)}${[...new Set(TOURNEYS.map(s=>s.start.slice(0,4)))].map(y=>`<optgroup label="${y}">${TOURNEYS.filter(s=>s.start.startsWith(y)).map(s=>`<option value="${esc(s.sid)}">${esc(s.title)}</option>`).join('')}</optgroup>`).join('')}</select>
+    <button class="btn sm" id="tc-new">+ Build a tournament</button>
+    <span class="muted">${FMT_NAME[cup.fmt]} · hosted by ${esc(teamName(cup.host))} · ${cup.teams.length} teams · ${esc(CUP_FORMATS[cup.format].name)} · ${M.length}/${cup.fix.length} played</span></div>
+    ${champ&&cup.fix.every(f=>S.done[f.key])?`<div class="banner" style="margin-top:10px">🏆 Champions: <b>${tlabel(champ)}</b></div>`:''}
+    ${nextKey?`<div class="row" style="margin-top:10px"><button class="btn pri" data-playkey="${nextKey.key}">Play next: ${esc(teamShort(nextKey.a))} v ${esc(teamShort(nextKey.b))}</button><button class="btn" id="cup-sim">Sim the rest</button></div>`:''}</div>
+    ${groups}${br}
+    <div class="card" style="margin-top:14px"><h3>Results</h3>${M.slice().reverse().map(matchLine).join('<hr style="border:0;border-top:1px solid var(--line)">')||'<span class="muted">No matches played yet.</span>'}</div>`;
+  $('#tc-sel').onchange=e=>go('tour',e.target.value);
+  $('#tc-new').onclick=openCupCreator;
+  $$('[data-playkey]').forEach(b=>b.onclick=()=>startFixture(b.dataset.playkey));
+  $('#cup-sim')&&($('#cup-sim').onclick=()=>simCup(cup));
+}
+// knockouts only resolve as results come in, so sim a fixture at a time
+function simCup(cup){
+  let g=0;
+  for(;;){const nx=allFixtures().find(x=>x.sid===cup.id&&x.playable&&!S.done[x.key]);if(!nx||g++>200)break;simFixture(nx);}
+  saveGame();rerender();
+}
+function openCupCreator(){
+  const d=careerDate();
+  const opts=sel=>ALL_TEAMS.filter(t=>!COMPOSITE.has(t)).map(t=>`<option value="${t}" ${t===sel?'selected':''}>${esc(teamName(t))}</option>`).join('');
+  const list=ALL_TEAMS.filter(t=>!COMPOSITE.has(t)).sort((a,b)=>rankPtsOf(b)-rankPtsOf(a));
+  openModal(`<h2>Build a tournament</h2><div class="stack">
+    <div class="row"><input type="text" id="cu-name" placeholder="Name (optional)" style="flex:1">
+      <div class="seg">${FORMATS.map(f=>`<button data-cuf="${f}" class="${f==='ODI'?'on':''}">${FMT_NAME[f]}</button>`).join('')}</div></div>
+    <div class="row"><select id="cu-format">${Object.entries(CUP_FORMATS).map(([k,v])=>`<option value="${k}">${esc(v.name)}</option>`).join('')}</select>
+      <label>Hosts <select id="cu-host">${opts(S.settings.myTeam||4)}</select></label><label>Starts <input type="date" id="cu-d" value="${d}"></label></div>
+    <div class="row"><button class="btn sm" data-pick="8">Top 8</button><button class="btn sm" data-pick="10">Top 10</button><button class="btn sm" data-pick="16">Top 16</button><button class="btn sm" data-pick="0">Clear</button><span class="muted" id="cu-n"></span></div>
+    <div class="grid g3" style="max-height:260px;overflow:auto">${list.map(t=>`<label class="row" style="gap:6px"><input type="checkbox" data-cut="${t}"> ${badge(t)} ${esc(teamName(t))}</label>`).join('')}</div>
+    <div class="muted" style="font-size:12px">Seeded by your rankings. Round robin: 3-10 teams · two groups: 6-16 · four groups: 8-16 · knockout: 4, 8 or 16. Tests play a league only. Knockout ties go to a super over.</div>
+    <button class="btn pri" id="cu-go">Create</button></div>`);
+  let fmt='ODI';
+  const count=()=>{$('#cu-n').textContent=$$('[data-cut]:checked').length+' teams';};
+  $$('[data-cuf]').forEach(b=>b.onclick=()=>{fmt=b.dataset.cuf;$$('[data-cuf]').forEach(x=>x.classList.toggle('on',x===b));});
+  $$('[data-pick]').forEach(b=>b.onclick=()=>{const n=+b.dataset.pick;$$('[data-cut]').forEach((c,i)=>c.checked=i<n);count();});
+  $$('[data-cut]').forEach(c=>c.onchange=count);count();
+  $('#cu-go').onclick=()=>{
+    const teams=$$('[data-cut]:checked').map(c=>+c.dataset.cut),format=fmt==='TEST'?'rr':$('#cu-format').value,F=CUP_FORMATS[format];
+    if(F.sizes?!F.sizes.includes(teams.length):teams.length<F.min||teams.length>F.max){toast(`That format needs ${F.sizes?F.sizes.join(', '):F.min+'-'+F.max} teams.`,'warn');return;}
+    const cup=createCup({name:$('#cu-name').value.trim(),fmt,format,host:+$('#cu-host').value,start:$('#cu-d').value||d,teams});
+    saveGame();closeModal();toast(esc(cup.name)+' created.');go('tour',cup.id);
+  };
+}
 
 // ═══ RECORDS, PLAYERS, RESULTS, MILESTONES ═══
 let REC_F={fmt:'ODI',grp:'Batting'};

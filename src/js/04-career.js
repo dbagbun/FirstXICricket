@@ -11,7 +11,7 @@ function newCareer(opts={}){
     live:null,        // match in progress
     stats:perFmt(()=>({})),teams:perFmt(()=>({})),
     ms:[],msKeys:{},fast:perFmt(()=>({f50:null,f100:null})),
-    tests:[],testSeq:0,attrEdits:{},seen:{},reseed:{},rk:blankRankings(),
+    tests:[],testSeq:0,cups:[],cupSeq:0,attrEdits:{},seen:{},reseed:{},rk:blankRankings(),
   };
 }
 const LOG_KEEP=25;

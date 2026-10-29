@@ -50,6 +50,7 @@ function allFixtures(){
   if(FX_CACHE&&FX_CACHE.S===S)return FX_CACHE.list;
   const out=ODI_FX.concat(REAL_TEST_FX);
   for(const T of S.tests)T.fix.forEach((x,k)=>out.push(customFx(T,x,k)));
+  for(const C of S.cups||[])for(const f of C.fix)out.push(cupFx(C,f));
   out.sort((x,y)=>x.date<y.date?-1:x.date>y.date?1:(x.fmt==='TEST')-(y.fmt==='TEST'));
   FX_CACHE={S,list:out};
   return out;
@@ -57,6 +58,7 @@ function allFixtures(){
 function fixtureByKey(key){
   if(key[0]==='o'||key[0]==='r')return ODI_FX_BY_KEY.get(key)||null;
   for(const T of S.tests){const k=T.fix.findIndex(x=>x.key===key);if(k>=0)return customFx(T,T.fix[k],k);}
+  if(key[0]==='C'){const C=cupById(key.split('.')[0]),f=C&&C.fix.find(x=>x.key===key);if(f)return cupFx(C,f);}
   return null;
 }
 function nextFixture(){return allFixtures().find(x=>x.playable&&!S.done[x.key])||null;}
@@ -109,6 +111,7 @@ function onMatchDone(M){
   if(M.key)S.done[M.key]=E.id;
   if(M.reseeded)S.reseed[M.key]={a:M.teams[0],b:M.teams[1]};
   S.matches.push(E);
+  if(S.cups&&S.cups.length)fxDirty();   // knockout slots in your tournaments may now resolve
   S.logs[E.id]=packBalls(M);
   const ids=Object.keys(S.logs);if(ids.length>LOG_KEEP)for(const id of ids.slice(0,ids.length-LOG_KEEP))delete S.logs[id];
   applyStats(E);
@@ -148,7 +151,7 @@ function loadSlot(i){
   const d=readSlot(i);if(!d)return false;
   setSlot(i);S=d;
   S.settings=Object.assign(newCareer().settings,S.settings||{});
-  for(const k of['tests','ms','matches'])S[k]=S[k]||[];
+  for(const k of['tests','ms','matches','cups'])S[k]=S[k]||[];
   for(const k of['logs','msKeys','attrEdits','seen','reseed','done'])S[k]=S[k]||{};
   for(const k of['stats','teams'])for(const f of FORMATS)S[k][f]=S[k][f]||{};
   for(const f of FORMATS)S.fast[f]=S.fast[f]||{f50:null,f100:null};

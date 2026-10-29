@@ -31,6 +31,8 @@ The repo root holds a prebuilt `first-xi.html` (double-click to open). **After a
 
 - Head-to-head & friendlies: the pre-match "Two players" box sets `M.h2h {team: name}`, captains both sides and (optionally) real dice; prompts name the bowling side's player. `openFriendly` builds a one-off fixture (`fx.friendly`, key `F…`, any teams/format/date) started via `startFixture(key, fxObj)`; `onMatchDone`/`onMatchEvent` skip archive, stats, rankings, milestones and coach effects for `M.friendly`.
 
+- Your own tournaments (`05c-cups.js`, `S.cups`, keys `C<n>.<k>`): `createCup` builds groups (snake seeding by rankings) and fixtures; knockout slots `S<n>`/`P<n>`/`A1`/`W:<key>` resolve in `resolveSlot` once the group stage or the feeding match is done (no result: the higher seed goes through); `cupFx` makes the fixture (unresolved = not playable; `fxDirty()` after every match so slots refresh); `tableFrom` is the shared points/NRR table; knockouts set `superOver`. Tests: league only. UI in `11-ui-tour.js` (`renderCup`, `openCupCreator`, `simCup` - one fixture at a time because slots resolve as you go).
+
 ## Layout
 - `src/template.html` - page shell with `/*@@CSS@@*/`, `/*@@DATA@@*/`, `/*@@JS@@*/`
 - `src/styles.css` - all CSS (Excel dark palette: navy `#0a0e1a`, panels `#0f172a`/`#1e293b`, cyan `#06b6d4`, gold `#ffd700`)
