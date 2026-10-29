@@ -3,7 +3,7 @@
 A single self-contained HTML cricket career sim, ported from the Excel/VBA "First XI" workbook. Every ODI from Jun 2002 to Jan 2026 (Cricsheet fixtures, real XIs and real bowling plans) played ball by ball with the First XI run-rate cards, plus Test cricket. No framework, no runtime dependencies. `npm run build` bundles `src/` + `data/world.json` into **`dist/first-xi.html`** - that one file is the product.
 
 ## No Node on your machine?
-The repo root holds a prebuilt `first-xi.html` (double-click to open). **After any source or data change, rebuild and copy `dist/first-xi.html` to the repo root before committing** (`npm run check` fails if it's stale).
+The repo root holds a prebuilt `first-xi.html` (double-click to open). **After any source or data change, rebuild and copy everything in `dist/` (the page plus `manifest.webmanifest`, `sw.js`, `icon.svg`) to the repo root before committing** (`npm run check` fails if the page is stale). The extra three files only matter when the page is hosted (GitHub Pages): it then installs as an app and plays offline.
 
 ## The rules (sacred - this is the board game)
 - Each over: a run-rate card RR_3 / 4A / 4B / 5 / 6 / 7 is picked by weighted random from the bowler's rating (`CARD_WEIGHTS[fmt][rating]`), shifted by the situation (`situationShift`, port of `CalcSituationShift`; `applyShift` ports `ApplyShift` including its lossy overflow).
@@ -36,6 +36,8 @@ The repo root holds a prebuilt `first-xi.html` (double-click to open). **After a
 - Stats lab (`07d-query.js`, UI `12e-ui-query.js`): `queryStats(q)` filters the archive by format, years, team, opponent, host (`VENUE_HOME`), batting position (index in `bt`), stage; `headToHead(batter, bowler, fmt)` reads per-innings matchups `inns[].mu` = `[batter, bowler, balls, runs, dismissals]` (added by `matchups(I)` in `archiveMatch`; older matches have none); `groundStats`. Player card: `nemesisHTML`.
 
 - Commentary & sharing (`12f-commentary.js`): `phrase(b, style)` picks from `COMM` by `hashBall` (never `Math.random`), `commentaryHTML(M)` with `overSummary` lines; `highlightsOf(E, M)` from a live match or `S.logs` (last `LOG_KEEP` matches), `playHighlights` via `tvBanner`; `scorecardImage`/`seasonImage` draw a PNG with canvas (`canvasCard`, `downloadCanvas` returns false without canvas).
+
+- App (`12g-app.js`): `appInit` adds the manifest link and registers `sw.js` only on http(s); `askPersist` (storage.persist) on save; backups `backupNow` (`S.backupAt`), `backupBanner` every `BACKUP_EVERY` matches; `chooseSaveFile`/`writeSaveFile` auto-save to a file via the File System Access API (handle per session); `storageLine` for Settings. `tools/build.js` writes the manifest, icon and a versioned cache-first service worker next to the page.
 
 ## Layout
 - `src/template.html` - page shell with `/*@@CSS@@*/`, `/*@@DATA@@*/`, `/*@@JS@@*/`

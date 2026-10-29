@@ -141,6 +141,8 @@ function saveGame(){
   if(!S)return false;
   S.savedAt=Date.now();
   const write=()=>localStorage.setItem(SLOT_KEYS[SLOT],lzPack(JSON.stringify(S)));
+  if(typeof askPersist==='function')askPersist();
+  if(typeof FILE_HANDLE!=='undefined'&&FILE_HANDLE)writeSaveFile();
   try{write();return true;}
   catch(e){
     try{S.logs={};write();toast('Storage nearly full: old ball-by-ball logs were cleared.','warn');return true;}

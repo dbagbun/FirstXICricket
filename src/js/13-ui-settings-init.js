@@ -17,6 +17,7 @@ They're a stand-in until you design real ones. Bowlers get 4 overs; innings aver
 <p><b>Your dice:</b> switch Settings → Dice to "I roll" and enter each roll yourself.</p>
 <p><b>Captain:</b> Settings → Captaincy → Me, and you captain the team you follow (or both sides): choose who bowls each over (the real bowler of that over is marked),
 who goes in next, and whether to attack or defend - attack moves the over one card faster, defend one slower. A batter sent up the order gains at most one colour.</p>
+<p><b>Saving:</b> your career lives in this browser (three slots). Back it up from Settings - a reminder appears every ${BACKUP_EVERY} matches - or, in Chrome/Edge on a computer, auto-save to a file. Hosted on a website (e.g. GitHub Pages), the game installs like an app and plays offline.</p>
 <p><b>Knockouts</b> are re-seeded from your own tables once a tournament's league stage is finished (Settings to follow history instead).</p>`;
 function openGuide(){openModal(GUIDE);}
 
@@ -42,7 +43,9 @@ RENDER.settings=(el)=>{
   <div class="card stack"><h3>Save slots</h3>
     ${slots.map((d,i)=>`<div class="spread"><div><b>Slot ${i+1}</b>${i===SLOT?' <span class="pill win">active</span>':''}<br><span class="muted">${d?`${esc(d.name)} · ${d.matches.length} matches · ${fmtDate(d.matches.length?d.matches[d.matches.length-1].date:CAREER_START)}`:'empty'}</span></div>
       <div class="row">${d&&i!==SLOT?`<button class="btn sm" data-load="${i}">Load</button>`:''}${!d?`<button class="btn sm" data-new="${i}">New career</button>`:''}${d&&i!==SLOT?`<button class="btn sm warn" data-del="${i}">Delete</button>`:''}</div></div>`).join('')}
-    <div class="row"><button class="btn" id="st-exp">Export career (JSON)</button><label class="btn">Import<input type="file" id="st-imp" accept=".json,application/json" hidden></label></div>
+    <div class="row"><button class="btn" id="st-exp">Back up now (JSON)</button><label class="btn">Import<input type="file" id="st-imp" accept=".json,application/json" hidden></label>
+      ${canSaveToFile()?`<button class="btn" id="st-file">${FILE_HANDLE?'Saving to '+esc(FILE_HANDLE.name):'Auto-save to a file…'}</button>`:''}</div>
+    <div class="muted" style="font-size:12px" id="st-storage">${S.backupAt?`Last backup at match ${S.backupAt}.`:'Not backed up yet.'}</div>
     <div class="row"><button class="btn" id="st-rebuild">Rebuild stats from scorecards</button><button class="btn warn" id="st-reset">Start this slot again</button></div></div>
   </div>
   <div class="card" style="margin-top:14px"><h3>Data</h3><p class="sub">${FIX.length.toLocaleString()} ODI fixtures from Cricsheet (${fmtDate(FIX[0].date)} - ${fmtDate(FIX[FIX.length-1].date)}), ${Object.keys(WORLD.xi).length.toLocaleString()} real XIs and bowling plans, ${Object.keys(WORLD.players).length.toLocaleString()} players. Built from ${esc(WORLD.source||'the First XI workbook')}.</p></div>`;
@@ -54,7 +57,9 @@ RENDER.settings=(el)=>{
   $$('[data-load]').forEach(b=>b.onclick=()=>{saveGame();if(loadSlot(+b.dataset.load)){LM=null;toast('Loaded.');go('home');}});
   $$('[data-new]').forEach(b=>b.onclick=()=>{saveGame();setSlot(+b.dataset.new);S=null;LM=null;showSplash();});
   $$('[data-del]').forEach(b=>b.onclick=()=>{if(confirm('Delete this save for good?')){try{localStorage.removeItem(SLOT_KEYS[+b.dataset.del]);}catch(e){}rerender();}});
-  $('#st-exp').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([exportCareer()],{type:'application/json'}));a.download='first-xi-career.json';a.click();};
+  $('#st-exp').onclick=()=>{backupNow();rerender();};
+  $('#st-file')&&($('#st-file').onclick=async()=>{if(await chooseSaveFile())rerender();});
+  storageLine().then(t=>{const e=$('#st-storage');if(e&&t)e.textContent+=' '+t;});
   $('#st-imp').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{if(importCareer(t)){LM=null;toast('Career imported.');go('home');}else toast('That file is not a First XI career.','bad');});};
   $('#st-rebuild').onclick=()=>{rebuildStats();REC_CACHE=null;saveGame();toast('Stats rebuilt from '+S.matches.length+' scorecards.');};
   $('#st-reset').onclick=()=>{if(confirm('Wipe this career and start again from 2002?')){S=null;LM=null;try{localStorage.removeItem(SLOT_KEYS[SLOT]);}catch(e){}showSplash();}};
@@ -112,6 +117,7 @@ uiDoneHook=(M,E,ms,pos,aw,cn)=>{
 };
 
 function init(){
+  appInit();
   if(loadSlot(SLOT)){LM=S.live||null;go('home');}
   else showSplash();
 }

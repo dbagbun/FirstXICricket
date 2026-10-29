@@ -1620,6 +1620,8 @@ function saveGame(){
   if(!S)return false;
   S.savedAt=Date.now();
   const write=()=>localStorage.setItem(SLOT_KEYS[SLOT],lzPack(JSON.stringify(S)));
+  if(typeof askPersist==='function')askPersist();
+  if(typeof FILE_HANDLE!=='undefined'&&FILE_HANDLE)writeSaveFile();
   try{write();return true;}
   catch(e){
     try{S.logs={};write();toast('Storage nearly full: old ball-by-ball logs were cleared.','warn');return true;}
@@ -2621,7 +2623,7 @@ RENDER.home=(el)=>{
   const coachCard=C?`<div class="card hi"><div class="spread"><div>${C.team?`<span class="sub">Coach of</span> <b>${tlabel(C.team)}</b>`:'<b>Out of work</b>'}
       ${C.team?`<div style="width:220px;margin-top:6px">${confBar(C.conf)}</div><span class="muted" style="font-size:12px">Board confidence ${Math.round(C.conf)}</span>`:`<div class="muted">${plural(C.offers.length,'offer')} waiting</div>`}</div>
       <div class="row">${cnx?(nextFixture()&&nextFixture().key===cnx.key?`<button class="btn pri" data-playkey="${cnx.key}">Play ${esc(teamShort(cnx.a))} v ${esc(teamShort(cnx.b))}</button>`:`<button class="btn pri" id="h-simto">Sim to my next match (${fmtDate(cnx.date)})</button>`):''}<button class="btn" data-go="coach">Coach</button></div></div></div>`:'';
-  el.innerHTML=coachCard+`<div class="grid g3" style="grid-template-columns:2fr 1fr${C?';margin-top:14px':''}">
+  el.innerHTML=backupBanner()+coachCard+`<div class="grid g3" style="grid-template-columns:2fr 1fr${C?';margin-top:14px':''}">
     <div class="stack">
       ${live&&(!n||live.key!==n.key)?`<div class="card"><div class="spread"><div><span class="pill live">LIVE</span> <b>${esc(teamName(live.teams[0]))} v ${esc(teamName(live.teams[1]))}</b></div><button class="btn pri" data-go="match">Resume</button></div></div>`:''}
       ${nextCard}${tourn}
@@ -3378,6 +3380,52 @@ function seasonImage(year){
   return canvasCard(`${year} season review`,`${A.matches} matches in your timeline`,[{head:'Awards',rows}],'First XI Cricket');
 }
 
+// ═══ APP: install when hosted, backups, auto-save to a file, storage ═══
+// Opened from disk (file://) the page can't be installed or use a service worker - browsers only allow that on
+// a website. Served over http(s) (e.g. GitHub Pages with manifest.webmanifest, sw.js and icon.svg next to the
+// page - tools/build.js writes them) it links the manifest and registers the service worker for offline play.
+const BACKUP_EVERY=100;
+function appInit(){
+  if(typeof location==='undefined'||!/^https?:/.test(location.protocol))return;
+  try{
+    const l=document.createElement('link');l.rel='manifest';l.href='manifest.webmanifest';document.head.appendChild(l);
+    const i=document.createElement('link');i.rel='apple-touch-icon';i.href='icon.svg';document.head.appendChild(i);
+    if(navigator.serviceWorker)navigator.serviceWorker.register('sw.js').catch(()=>{});
+  }catch(e){}
+}
+// Ask the browser not to clear our storage when space runs low (best effort, no prompt in most browsers).
+function askPersist(){try{if(navigator.storage&&navigator.storage.persist&&!askPersist.done){askPersist.done=true;navigator.storage.persist();}}catch(e){}}
+function backupNow(){
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([exportCareer()],{type:'application/json'}));
+  a.download=`first-xi-${(S.name||'career').replace(/[^\w-]+/g,'-').toLowerCase()}-${careerDate()}.json`;a.click();
+  S.backupAt=S.matches.length;saveGame();
+}
+const backupDue=()=>S&&S.matches.length-(S.backupAt||0)>=BACKUP_EVERY;
+function backupBanner(){
+  if(!backupDue())return'';
+  return`<div class="banner" style="margin-bottom:14px"><div class="spread"><span>💾 ${S.matches.length-(S.backupAt||0)} matches since your last backup. Browser storage can be cleared - keep a copy.</span><button class="btn sm gold" id="bk-now">Back up now</button></div></div>`;
+}
+// Auto-save to a file you choose (Chrome/Edge desktop: File System Access API). The handle lives for this session.
+let FILE_HANDLE=null,FILE_BUSY=false;
+const canSaveToFile=()=>typeof window!=='undefined'&&!!window.showSaveFilePicker;
+async function chooseSaveFile(){
+  if(!canSaveToFile()){toast('This browser can\'t save to a file automatically - use Back up now.','warn');return false;}
+  try{FILE_HANDLE=await window.showSaveFilePicker({suggestedName:'first-xi-career.json',types:[{description:'First XI career',accept:{'application/json':['.json']}}]});
+    await writeSaveFile();toast('Saving to '+FILE_HANDLE.name+' after every match.');return true;}catch(e){return false;}
+}
+async function writeSaveFile(){
+  if(!FILE_HANDLE||FILE_BUSY)return;FILE_BUSY=true;
+  try{const w=await FILE_HANDLE.createWritable();await w.write(exportCareer());await w.close();S.backupAt=S.matches.length;}
+  catch(e){FILE_HANDLE=null;toast('Lost access to the save file - choose it again in Settings.','warn');}
+  FILE_BUSY=false;
+}
+async function storageLine(){
+  try{if(!navigator.storage||!navigator.storage.estimate)return'';
+    const e=await navigator.storage.estimate(),p=navigator.storage.persisted?await navigator.storage.persisted():false;
+    return`Browser storage: ${(e.usage/1048576).toFixed(1)} MB used of ${(e.quota/1048576).toFixed(0)} MB${p?' · protected from clean-up':''}`;}catch(e){return'';}
+}
+document.addEventListener('click',e=>{if(e.target.closest('#bk-now'))backupNow();});
+
 // ═══ SETTINGS, SPLASH, LIVE HOOKS & INIT ═══
 const GUIDE=`<h2>How First XI works</h2>
 <p><b>Every over</b> the bowler's rating picks one of six run-rate cards - RR_3 (tight) up to RR_7 (carnage) - shifted by the match situation:
@@ -3397,6 +3445,7 @@ They're a stand-in until you design real ones. Bowlers get 4 overs; innings aver
 <p><b>Your dice:</b> switch Settings → Dice to "I roll" and enter each roll yourself.</p>
 <p><b>Captain:</b> Settings → Captaincy → Me, and you captain the team you follow (or both sides): choose who bowls each over (the real bowler of that over is marked),
 who goes in next, and whether to attack or defend - attack moves the over one card faster, defend one slower. A batter sent up the order gains at most one colour.</p>
+<p><b>Saving:</b> your career lives in this browser (three slots). Back it up from Settings - a reminder appears every ${BACKUP_EVERY} matches - or, in Chrome/Edge on a computer, auto-save to a file. Hosted on a website (e.g. GitHub Pages), the game installs like an app and plays offline.</p>
 <p><b>Knockouts</b> are re-seeded from your own tables once a tournament's league stage is finished (Settings to follow history instead).</p>`;
 function openGuide(){openModal(GUIDE);}
 
@@ -3422,7 +3471,9 @@ RENDER.settings=(el)=>{
   <div class="card stack"><h3>Save slots</h3>
     ${slots.map((d,i)=>`<div class="spread"><div><b>Slot ${i+1}</b>${i===SLOT?' <span class="pill win">active</span>':''}<br><span class="muted">${d?`${esc(d.name)} · ${d.matches.length} matches · ${fmtDate(d.matches.length?d.matches[d.matches.length-1].date:CAREER_START)}`:'empty'}</span></div>
       <div class="row">${d&&i!==SLOT?`<button class="btn sm" data-load="${i}">Load</button>`:''}${!d?`<button class="btn sm" data-new="${i}">New career</button>`:''}${d&&i!==SLOT?`<button class="btn sm warn" data-del="${i}">Delete</button>`:''}</div></div>`).join('')}
-    <div class="row"><button class="btn" id="st-exp">Export career (JSON)</button><label class="btn">Import<input type="file" id="st-imp" accept=".json,application/json" hidden></label></div>
+    <div class="row"><button class="btn" id="st-exp">Back up now (JSON)</button><label class="btn">Import<input type="file" id="st-imp" accept=".json,application/json" hidden></label>
+      ${canSaveToFile()?`<button class="btn" id="st-file">${FILE_HANDLE?'Saving to '+esc(FILE_HANDLE.name):'Auto-save to a file…'}</button>`:''}</div>
+    <div class="muted" style="font-size:12px" id="st-storage">${S.backupAt?`Last backup at match ${S.backupAt}.`:'Not backed up yet.'}</div>
     <div class="row"><button class="btn" id="st-rebuild">Rebuild stats from scorecards</button><button class="btn warn" id="st-reset">Start this slot again</button></div></div>
   </div>
   <div class="card" style="margin-top:14px"><h3>Data</h3><p class="sub">${FIX.length.toLocaleString()} ODI fixtures from Cricsheet (${fmtDate(FIX[0].date)} - ${fmtDate(FIX[FIX.length-1].date)}), ${Object.keys(WORLD.xi).length.toLocaleString()} real XIs and bowling plans, ${Object.keys(WORLD.players).length.toLocaleString()} players. Built from ${esc(WORLD.source||'the First XI workbook')}.</p></div>`;
@@ -3434,7 +3485,9 @@ RENDER.settings=(el)=>{
   $$('[data-load]').forEach(b=>b.onclick=()=>{saveGame();if(loadSlot(+b.dataset.load)){LM=null;toast('Loaded.');go('home');}});
   $$('[data-new]').forEach(b=>b.onclick=()=>{saveGame();setSlot(+b.dataset.new);S=null;LM=null;showSplash();});
   $$('[data-del]').forEach(b=>b.onclick=()=>{if(confirm('Delete this save for good?')){try{localStorage.removeItem(SLOT_KEYS[+b.dataset.del]);}catch(e){}rerender();}});
-  $('#st-exp').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([exportCareer()],{type:'application/json'}));a.download='first-xi-career.json';a.click();};
+  $('#st-exp').onclick=()=>{backupNow();rerender();};
+  $('#st-file')&&($('#st-file').onclick=async()=>{if(await chooseSaveFile())rerender();});
+  storageLine().then(t=>{const e=$('#st-storage');if(e&&t)e.textContent+=' '+t;});
   $('#st-imp').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{if(importCareer(t)){LM=null;toast('Career imported.');go('home');}else toast('That file is not a First XI career.','bad');});};
   $('#st-rebuild').onclick=()=>{rebuildStats();REC_CACHE=null;saveGame();toast('Stats rebuilt from '+S.matches.length+' scorecards.');};
   $('#st-reset').onclick=()=>{if(confirm('Wipe this career and start again from 2002?')){S=null;LM=null;try{localStorage.removeItem(SLOT_KEYS[SLOT]);}catch(e){}showSplash();}};
@@ -3492,6 +3545,7 @@ uiDoneHook=(M,E,ms,pos,aw,cn)=>{
 };
 
 function init(){
+  appInit();
   if(loadSlot(SLOT)){LM=S.live||null;go('home');}
   else showSplash();
 }

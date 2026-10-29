@@ -2,7 +2,9 @@
 
 Every ODI from June 2002 to January 2026 - the real fixtures, the real XIs and the real bowling plans from Cricsheet - played ball by ball with the First XI run-rate cards. Add Test series whenever you like. One HTML file, no install.
 
-**Play:** download `first-xi.html` and double-click it. Your career saves in the browser (three slots, plus export/import in Settings).
+**Play:** download `first-xi.html` and double-click it. Your career saves in the browser (three slots); back it up from Settings, or in Chrome/Edge auto-save to a file.
+
+**Install it like an app:** turn on GitHub Pages for this repo (Settings → Pages → deploy from the main branch, root folder) and open `https://<you>.github.io/first-xi/first-xi.html` - "Install" / "Add to Home Screen" then gives you an app that plays offline.
 
 ## How it plays
 - Each over the bowler's rating picks a run-rate card (RR_3 tight … RR_7 carnage), the match situation shifts it, and **one roll of 1-100** reads all six balls off the card. Roll the dice yourself if you like (Settings → Dice → I roll).
@@ -10,6 +12,10 @@ Every ODI from June 2002 to January 2026 - the real fixtures, the real XIs and t
 - Real bowling plans where Cricsheet has them; a spell engine otherwise. Bowler ratings from the workbook, or derived from real spells - edit any player's rating on his card.
 - Tests: five days, weather, pitch reports, wear, follow-ons and declarations (you can captain them).
 - Tournament Centre with pools, NRR, Super Six/Eight tables and brackets. Knockouts are re-seeded from **your** tables - in your timeline Kenya might make the final.
+- Coach career: board targets for every series, confidence, contracts, the sack and job offers; 15-man squads, fatigue, injuries and form.
+- Rain and D/L in ODIs, super overs in knockouts; T20 internationals (with two provisional fast cards); schedule Test, ODI or T20 series between any sides.
+- Build your own tournaments; two-player head-to-head and friendlies on any date.
+- Stats lab (filter by year, opponent, country, position, stage; batter v bowler; grounds); varied commentary, highlights, scorecards and season reviews as images.
 - Your timeline v history: with Cricsheet's real results imported, every match you play shows what really happened, and the dashboard tracks how far your timeline has drifted.
 - Rankings (teams and players), players of the series, and the year's awards with a season review.
 - Captain your team: bowling changes, who goes in next, attack or defend.
