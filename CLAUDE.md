@@ -17,6 +17,8 @@ The repo root holds a prebuilt `first-xi.html` (double-click to open). **After a
 - Milestones (`MS_DEFS`, port of `modMilestones`): logged once per `fmt:pid:cat:thr` key (`S.msKeys` - normalised ids, so they never re-fire). Fastest 50/100 are checked live at the exact ball (`liveFastest`), never from post-match totals; the first one sets the benchmark and records count after 10 matches in a format.
 - Tests are new (Excel only had an MVP): `CARD_WEIGHTS.TEST` (RR_3 most overs, RR_7 the wicket card), 450 overs, 2-over changeovers, weather (`WEATHER_P`), pitches (`PITCHES`, by home region), wear from day 4 (`TEST_WEAR`), innings pressure (`TEST_INN_PRESSURE`), follow-on at 200, AI declarations (`aiShouldDeclare`). Tuned with `tests/engine-stats.js` to ~34 runs a wicket, ~3.4 an over, ~12% draws. Change those constants only with that script.
 
+- Captaincy (Settings → Captaincy → Me; `M.manualCaptain` = your followed team if playing, else both, from `captainOf`): `M.nextBowler` (consumed by `captainBowler` at the start of an over; options and rules in `bowlerOptions`: anyone but the keeper, not the last over's bowler, max 10 ODI overs; part-timers join `eng.B` as rating ≤6), `setNextBatter` (reorders who's still to bat), attitude `M.att[batTeam]` / `M.att['f'+bowlTeam]` ±1 added in `situationShift`. A position can lift a derived batting colour one step at most (no BLUE No.11 by opening him). Test declarations/follow-on are yours too.
+
 ## Layout
 - `src/template.html` - page shell with `/*@@CSS@@*/`, `/*@@DATA@@*/`, `/*@@JS@@*/`
 - `src/styles.css` - all CSS (Excel dark palette: navy `#0a0e1a`, panels `#0f172a`/`#1e293b`, cyan `#06b6d4`, gold `#ffd700`)

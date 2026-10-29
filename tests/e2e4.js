@@ -15,7 +15,8 @@ const pid=n=>G(`+Object.keys(WORLD.players).find(k=>WORLD.players[k][0]===${JSON
 const tendulkar=pid('SR Tendulkar'),mcgrath=pid('GD McGrath'),kenyan=pid('KO Otieno');
 ok(G(`pAttr(${tendulkar}).bat`)==='B'&&G(`pAttr(${mcgrath}).bat`)==='R'&&G(`pAttr(${kenyan}).bat`)==='BG','derived colours (Tendulkar B, McGrath R, Otieno BG)');
 const M={batMode:'player'};w.__M=M;
-ok(G(`batColour(__M,${mcgrath},3,1)`)==='B','a derived colour is never weaker than his position (McGrath at 3 = BLUE)');
+ok(G(`batColour(__M,${mcgrath},3,1)`)==='G','position lifts a derived colour one step at most (McGrath RED at 3 = GREEN)');
+ok(G(`batColour(__M,${mcgrath},8,1)`)==='G','...and McGrath at 8 is GREEN');
 ok(G(`batColour(__M,${tendulkar},10,1)`)==='B','a top-order batter at 10 stays BLUE');
 ok(G(`batColour(__M,${kenyan},1,1)`)==='G','an unproven associate opener is GREEN against a Test nation');
 ok(G(`batColour(__M,${kenyan},1,13)`)==='B','...and BLUE against an associate');

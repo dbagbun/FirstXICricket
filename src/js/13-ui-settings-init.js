@@ -11,6 +11,8 @@ except that associate batters not yet proven against Test nations are GREEN agai
 Ratings 1 (elite) to 5 (part-timer) come from your Excel ratings where you set them, otherwise from each bowler's real spells. Edit any of them on a player's card.</p>
 <p><b>Tests</b> use their own card weights (RR_3 most overs, RR_7 as the wicket card), five days of 90 overs, weather, pitches that wear, follow-ons at 200 and declarations.</p>
 <p><b>Your dice:</b> switch Settings → Dice to "I roll" and enter each roll yourself.</p>
+<p><b>Captain:</b> Settings → Captaincy → Me, and you captain the team you follow (or both sides): choose who bowls each over (the real bowler of that over is marked),
+who goes in next, and whether to attack or defend - attack moves the over one card faster, defend one slower. A batter sent up the order gains at most one colour.</p>
 <p><b>Knockouts</b> are re-seeded from your own tables once a tournament's league stage is finished (Settings to follow history instead).</p>`;
 function openGuide(){openModal(GUIDE);}
 
@@ -21,7 +23,7 @@ RENDER.settings=(el)=>{
   el.innerHTML=`<div class="grid g2">
   <div class="card stack"><h3>Game</h3>
     <div class="spread"><span>Dice</span>${seg('dice',[['auto','Automatic'],['manual','I roll']])}</div>
-    <div class="spread"><span>Test captaincy (declarations, follow-on)</span>${seg('captain',[['auto','AI'],['manual','Me']])}</div>
+    <div class="spread"><span>Captaincy (bowling changes, batting order, attitude, declarations)</span>${seg('captain',[['auto','AI'],['manual','Me']])}</div>
     <div class="spread"><span>Ratings &amp; colours</span>${seg('ratings',[['era','By era (form)'],['career','Whole career']])}</div>
     <div class="spread"><span>Batting colours</span>${seg('batColours',[['player','Player'],['position','Classic (by position)']])}</div>
     <div class="spread"><span>Tournament knockouts</span>${seg('knockouts',[['timeline','My timeline'],['history','History']])}</div>
@@ -36,7 +38,7 @@ RENDER.settings=(el)=>{
   </div>
   <div class="card" style="margin-top:14px"><h3>Data</h3><p class="sub">${FIX.length.toLocaleString()} ODI fixtures from Cricsheet (${fmtDate(FIX[0].date)} - ${fmtDate(FIX[FIX.length-1].date)}), ${Object.keys(WORLD.xi).length.toLocaleString()} real XIs and bowling plans, ${Object.keys(WORLD.players).length.toLocaleString()} players. Built from ${esc(WORLD.source||'the First XI workbook')}.</p></div>`;
   $$('[data-set]').forEach(b=>b.onclick=()=>{const k=b.dataset.set,v=b.dataset.val;st[k]=k==='ballDelay'?+v:v;
-    if(S.live&&S.live.state!=='done'){if(k==='dice')S.live.manual=v==='manual';if(k==='captain')S.live.manualCaptain=v==='manual'?Object.fromEntries(S.live.teams.map(t=>[t,true])):null;if(k==='batColours')S.live.batMode=v;}
+    if(S.live&&S.live.state!=='done'){if(k==='dice')S.live.manual=v==='manual';if(k==='captain')S.live.manualCaptain=v==='manual'?captainOf(S.live):null;if(k==='batColours')S.live.batMode=v;}
     saveGame();rerender();});
   $('#st-team').onchange=e=>{st.myTeam=+e.target.value;saveGame();};
   $('#st-guide').onclick=openGuide;

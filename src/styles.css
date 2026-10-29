@@ -52,6 +52,7 @@ main{max-width:1180px;margin:0 auto;padding:16px}
 .seg button{background:none;border:0;padding:6px 12px;color:var(--sub)}
 .seg button.on{background:var(--deep);color:var(--text)}
 select,input[type=text],input[type=number],input[type=date],input[type=search]{background:var(--card);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font:inherit;min-height:36px}
+select{max-width:100%}
 input:focus,select:focus,button:focus-visible{outline:2px solid var(--cyan);outline-offset:1px}
 .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;background:var(--card);border:1px solid var(--line);color:var(--sub);white-space:nowrap}
 .pill.live{background:var(--red);border-color:var(--red);color:#fff}

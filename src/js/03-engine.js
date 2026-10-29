@@ -4,8 +4,9 @@
 // (column 1 of the new row). A wicket only counts if its colour can get that batter out: a BLUE batter
 // falls only to BLUE, GREEN to BLUE/GREEN, RED to anything; otherwise the ball is a dot.
 // Batting colours (batColour): the classic rule is by position (1-6 BLUE, 7-9 GREEN, 10-11 RED). With player
-// colours, a colour you set (workbook BatGroup or the player card) applies exactly; a derived colour never makes
-// him weaker than his position, except an associate's second letter against a Test nation ('BG', 'GR').
+// colours, a colour you set (workbook BatGroup or the player card) applies exactly; a derived colour is lifted
+// at most one step by his position (a promoted all-rounder keeps the top-order BLUE; a No.11 sent in to open is
+// GREEN, not BLUE), except an associate's second letter against a Test nation ('BG', 'GR').
 const RR_CODES=['3','4A','4B','5','6','7'];
 const CARD_WEIGHTS={
   ODI:{1:[35,30,20,10,4,1],2:[15,30,30,15,8,2],3:[5,15,30,30,15,5],4:[2,8,15,30,30,15],5:[1,4,10,20,35,30]},
@@ -84,7 +85,7 @@ function batColour(M,pid,pos,bowlTeam){
   const vsFull=!!TEAMS.get(+bowlTeam)?.full;
   const own=c.length===2?c[vsFull?1:0]:c;
   if(a.batSrc==='h'||a.batSrc==='e'||(c.length===2&&vsFull))return own;
-  return COL_RANK[own]<COL_RANK[pc]?own:pc;
+  return COL_RANK[pc]<COL_RANK[own]?'BGR'[COL_RANK[own]-1]:own;
 }
 const BOWLER_CREDIT={b:1,lbw:1,ct:1,ctof:1,ctwk:1,st:1,ro:0};
 
@@ -219,6 +220,35 @@ function bowlEngEndOver(M,I,idx,over){
   I.eng.lastIdx=idx;
 }
 
+// ---------- your captaincy: bowler for the next over, next batter in ----------
+// Bowlers you can call on: anyone in the XI but the keeper, not the last over's bowler, max 10 overs in an ODI.
+function bowlerOptions(M){
+  const I=curInn(M),x=M.xi[I.bowl],E=I.eng,last=E.lastIdx>=0?E.B[E.lastIdx].pid:0,over=Math.floor(I.lb/6)+1;
+  const real=E.plan&&E.plan[over-1]||0;
+  return x.bat.filter(p=>p!==x.wk).map(pid=>{
+    const b=E.B.find(b=>b.pid===pid),W=I.bw[pid]||{b:0,r:0,w:0,md:0},a=pAttr(pid,M.date);
+    const used=b?b.used:0,why=pid===last?'bowled the last over':M.fmt==='ODI'&&used>=10?'bowled out':'';
+    return{pid,used,W,style:b?b.style:a.style==='N'?'M':a.style,rating:b?b.rating:a.style==='N'?6:a.rating,ok:!why,why,real:pid===real,regular:!!b};
+  });
+}
+function captainBowler(M,I,over){
+  const pid=M.nextBowler;M.nextBowler=null;
+  if(!pid||!M.manualCaptain?.[I.bowl])return null;
+  const opt=bowlerOptions(M).find(o=>o.pid===pid);
+  if(!opt||!opt.ok)return null;
+  const E=I.eng;let i=E.B.findIndex(b=>b.pid===pid);
+  if(i<0){E.B.push({pid,style:opt.style,rating:opt.rating,max:M.fmt==='TEST'?999:10,used:0,last:0,spell:0,spellMax:0,rest:0,active:false});i=E.B.length-1;}
+  const b=E.B[i];
+  if(!b.active){b.active=true;b.spell=0;const sp=SPELLS[M.fmt][b.style]||[2,4,2,3];b.spellMax=rndInt(sp[0],sp[1]);}
+  return i;
+}
+// Send in a different batter next: he moves to the front of those still to bat.
+function setNextBatter(M,pid){
+  const I=curInn(M),k=I.wkts+2,j=I.order.indexOf(pid);
+  if(j<k||I.bt[pid])return false;
+  I.order.splice(j,1);I.order.splice(k,0,pid);return true;
+}
+
 // ---------- situation shift (port of CalcSituationShift, plus Test match situations) ----------
 function situationShift(M,I,over){
   let s=0;
@@ -240,6 +270,8 @@ function situationShift(M,I,over){
     }
   }
   if(I.wkts>=8)s-=1;
+  // captains' attitude (you, when you captain a side): attack +1, defend -1, for the batting and the fielding side
+  if(M.att)s+=(M.att[I.bat]||0)+(M.att['f'+I.bowl]||0);
   return clamp(s,-1,3);
 }
 
@@ -270,7 +302,7 @@ function bowlBall(M,manualRoll){
   if(M.state!=='live'||M.pending)return null;
   const I=curInn(M);
   if(!M.cur){
-    const over=Math.floor(I.lb/6)+1,bi=chooseBowler(M,I,over),b=I.eng.B[bi];
+    const over=Math.floor(I.lb/6)+1,bi=captainBowler(M,I,over)??chooseBowler(M,I,over),b=I.eng.B[bi];
     const card=pickCard(applyShift(wearWeights(M,b,baseWeights(M.fmt,b.rating)),situationShift(M,I,over)));
     M.cur={over,bi,bowler:b.pid,card,roll:0,col:1,comp:false,legal:0,n:0,runs:0};
     if(!I.bw[b.pid]){I.bw[b.pid]={b:0,r:0,w:0,md:0,wd:0,nb:0};I.bwOrder.push(b.pid);}
