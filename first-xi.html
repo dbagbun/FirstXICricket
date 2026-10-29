@@ -312,6 +312,9 @@ const TEAM_GAMES=new Map();
 for(const f of FIX)for(const t of[f.a,f.b])if(WORLD.xi[f.cid]&&WORLD.xi[f.cid][t]){
   if(!TEAM_GAMES.has(t))TEAM_GAMES.set(t,[]);TEAM_GAMES.get(t).push(f);
 }
+// First appearance in the data (debut, or the start of the data for players already playing in 2002).
+const DEBUT=new Map();
+for(const f of FIX)if(WORLD.xi[f.cid])for(const t in WORLD.xi[f.cid])for(const p of WORLD.xi[f.cid][t].slice(0,11))if(!DEBUT.has(p))DEBUT.set(p,f.date);
 function nearestXI(tid,date,opts={}){
   const games=TEAM_GAMES.get(+tid)||[];
   let best=null,bd=1e9;
@@ -860,7 +863,7 @@ function newCareer(opts={}){
     live:null,        // match in progress
     stats:{ODI:{},TEST:{}},teams:{ODI:{},TEST:{}},
     ms:[],msKeys:{},fast:{ODI:{f50:null,f100:null},TEST:{f50:null,f100:null}},
-    tests:[],testSeq:0,attrEdits:{},seen:{},reseed:{},
+    tests:[],testSeq:0,attrEdits:{},seen:{},reseed:{},rk:blankRankings(),
   };
 }
 const LOG_KEEP=25;
@@ -951,6 +954,7 @@ function applyStats(E){
 function rebuildStats(){
   S.stats={ODI:{},TEST:{}};S.teams={ODI:{},TEST:{}};
   for(const E of S.matches)applyStats(E);
+  rebuildRankings();
 }
 const batAvg=s=>s.inn-s.no>0?s.r/(s.inn-s.no):NaN;
 const batSR=s=>s.b?100*s.r/s.b:NaN;
@@ -1277,10 +1281,11 @@ function onMatchDone(M){
   S.logs[E.id]=packBalls(M);
   const ids=Object.keys(S.logs);if(ids.length>LOG_KEEP)for(const id of ids.slice(0,ids.length-LOG_KEEP))delete S.logs[id];
   applyStats(E);
-  const ms=checkMilestones(E);
+  applyRankings(E);
+  const ms=checkMilestones(E),pos=playerOfSeries(E.sid),aw=yearEnd(E);
   if(S.live&&S.live.id===M.id)S.live=null;
   if(!M.sim)saveGame();
-  if(uiDoneHook)uiDoneHook(M,E,ms);
+  if(uiDoneHook)uiDoneHook(M,E,ms,pos,aw);
 }
 // Quick-sim a fixture with auto dice and AI captains.
 function simFixture(fx){
@@ -1312,6 +1317,7 @@ function loadSlot(i){
   S.settings=Object.assign(newCareer().settings,S.settings||{});
   for(const k of['tests','ms','matches'])S[k]=S[k]||[];
   for(const k of['logs','msKeys','attrEdits','seen','reseed','done'])S[k]=S[k]||{};
+  if(!S.rk)rebuildRankings();
   return true;
 }
 function exportCareer(){return JSON.stringify(S);}
@@ -1406,6 +1412,126 @@ function recordsData(fmt){
 }
 const otherOf=(E,t)=>E.teams[0]===t?E.teams[1]:E.teams[0];
 
+// ═══ RANKINGS & AWARDS — team ratings, player rankings, player of the series, the year's awards ═══
+// Team ratings are Elo underneath (full members start 1500, Zimbabwe/Bangladesh 1400, associates 1250) and are
+// shown ICC-style: points = (Elo - 1000) / 5. Player rankings are an exponential average of match performances,
+// scaled by the opposition's rating, so form counts more than history.
+const RANK_K={ODI:24,TEST:32},RANK_ALPHA=.12,RANK_ACTIVE_DAYS=420,AWARD_MIN_MATCHES=15;
+const eloStart=t=>{const T=TEAMS.get(+t);return T&&T.full?([10,11].includes(+t)?1400:1500):1250;};
+const rankPts=elo=>Math.round((elo-1000)/5);
+function blankRankings(){return{team:{ODI:{},TEST:{}},yr:{ODI:{},TEST:{}},bat:{ODI:{},TEST:{}},bowl:{ODI:{},TEST:{}},pos:{},awards:{},awardYear:0};}
+function R_(){if(!S.rk)S.rk=blankRankings();return S.rk;}
+
+// MOTM-style score for every player in a match (shared with pickMOTM's formula, without the winner bonus option)
+function matchScores(E,winnerBonus=true){
+  const out={};
+  for(const L of Object.values(playerMatchLines(E))){
+    let s=L.b>0?L.r*(L.r/L.b):L.r;
+    s+=L.w*25+L.md*10;
+    if(L.bb>0)s-=(L.br/(L.bb/6))*3;
+    s+=L.ct*10+L.st*15+L.ro*12+L.c100*30+L.c50*15+L.w5*40;
+    if(winnerBonus&&E.result.winner&&L.team===E.result.winner)s*=1.25;
+    out[L.pid]={s,team:L.team,L};
+  }
+  return out;
+}
+function applyRankings(E){
+  const R=R_(),T=R.team[E.fmt],[a,b]=E.teams,y=E.date.slice(0,4);
+  for(const t of E.teams)if(T[t]==null)T[t]=eloStart(t);
+  if(!R.yr[E.fmt][y])R.yr[E.fmt][y]={...T};     // ratings going into the year
+  for(const t of E.teams)if(R.yr[E.fmt][y][t]==null)R.yr[E.fmt][y][t]=T[t];
+  const ea=1/(1+10**((T[b]-T[a])/400)),res=E.result;
+  const sa=res.winner===a?1:res.winner===b?0:.5;
+  const k=RANK_K[E.fmt]*(E.stage&&/final|semi|quarter/i.test(E.stage)?1.25:1);
+  const d=k*(sa-ea);T[a]+=d;T[b]-=d;
+  // players
+  const base=E.fmt==='ODI'?4.8:3.2,L=playerMatchLines(E);
+  for(const pid in L){
+    const l=L[pid],opp=otherOf(E,l.team),f=(T[opp]||1500)/1500;
+    if(l.bat){
+      const sr=E.fmt==='ODI'&&l.b?(l.r/l.b*100-80)/400:0;
+      const perf=(l.r+(l.r*sr))*f;
+      upd(R.bat[E.fmt],pid,perf,E.date);
+    }
+    if(l.bb>=6){
+      const perf=(l.w*22-(l.br-l.bb/6*base)*.35)*f;
+      upd(R.bowl[E.fmt],pid,perf,E.date);
+    }
+  }
+}
+function upd(tab,pid,perf,date){const x=tab[pid]||(tab[pid]={p:0,n:0,d:date});x.p=x.p*(1-RANK_ALPHA)+perf*RANK_ALPHA;x.n++;x.d=date;}
+const PLAYER_SCALE={bat:{ODI:16,TEST:10},bowl:{ODI:14,TEST:12}};
+const COMPOSITE=new Set(WORLD.teams.filter(t=>/ XI$/.test(t.name)).map(t=>t.id));   // Africa XI, Asia XI, ICC World XI
+function playerRanking(fmt,kind,n=20){
+  const R=R_(),now=careerDate(),tab=R[kind==='ar'?'bat':kind][fmt];
+  const pts=(k,pid)=>{const x=R[k][fmt][pid];return x?Math.max(0,Math.round(x.p*PLAYER_SCALE[k][fmt])):0;};
+  let L=Object.entries(tab).filter(([,x])=>x.n>=5&&daysBetween(x.d,now)<=RANK_ACTIVE_DAYS).map(([pid])=>+pid);
+  if(kind==='ar')L=L.filter(pid=>R.bowl[fmt][pid]&&R.bowl[fmt][pid].n>=5).map(pid=>({pid,v:Math.round(pts('bat',pid)*pts('bowl',pid)/1000)}));
+  else L=L.map(pid=>({pid,v:pts(kind,pid)}));
+  return L.sort((x,y)=>y.v-x.v).slice(0,n);
+}
+function teamRanking(fmt){
+  const R=R_(),T=R.team[fmt],y=careerDate().slice(0,4),Y=(R.yr[fmt]||{})[y]||{};
+  return Object.entries(T).filter(([t])=>(S.teams[fmt][t]||{}).p>0).map(([t,e])=>({team:+t,pts:rankPts(e),was:Y[t]!=null?rankPts(Y[t]):null,p:S.teams[fmt][t].p}))
+    .sort((a,b)=>b.pts-a.pts);
+}
+
+// ---------- player of the series: best total match score over a finished series ----------
+function seriesDone(sid){
+  return allFixtures().filter(x=>x.sid===sid&&x.playable).every(x=>S.done[x.key]);
+}
+function playerOfSeries(sid){
+  const R=R_();if(R.pos[sid]||!sid||!seriesDone(sid))return null;
+  const M=S.matches.filter(E=>E.sid===sid);if(M.length<2)return null;
+  const tot={};
+  for(const E of M)for(const[pid,x]of Object.entries(matchScores(E,false))){const t=tot[pid]=tot[pid]||{s:0,team:x.team};t.s+=x.s;}
+  const [pid,x]=Object.entries(tot).sort((a,b)=>b[1].s-a[1].s)[0];
+  R.pos[sid]={pid:+pid,team:x.team,date:M[M.length-1].date,title:M[0].series,matches:M.length};
+  return R.pos[sid];
+}
+
+// ---------- the year's awards ----------
+function awardsFor(year){
+  const M=S.matches.filter(E=>E.date.startsWith(year));if(M.length<AWARD_MIN_MATCHES)return null;
+  const score={},runs={ODI:{},TEST:{}},wk={ODI:{},TEST:{}};
+  const newcomer=p=>{const d=DEBUT.get(p)||'';return d>=(+year-1)+'-01-01'&&daysBetween(CAREER_START,d)>365;};
+  for(const E of M){
+    for(const[pid,x]of Object.entries(matchScores(E,false))){const o=score[pid]=score[pid]||{s:0,tm:{}};o.s+=x.s;o.tm[x.team]=(o.tm[x.team]||0)+1;}
+    for(const I of E.inns){for(const r of I.bt)runs[E.fmt][r[0]]=(runs[E.fmt][r[0]]||0)+r[1];for(const w of I.bw)wk[E.fmt][w[0]]=(wk[E.fmt][w[0]]||0)+w[4];}
+  }
+  for(const o of Object.values(score))o.team=+Object.entries(o.tm).sort((a,b)=>b[1]-a[1])[0][0];   // his main team that year
+  const best=(o,f=()=>true)=>{const e=Object.entries(o).filter(([p,v])=>f(+p,v)).sort((a,b)=>(b[1].s??b[1])-(a[1].s??a[1]))[0];return e?{pid:+e[0],v:Math.round(e[1].s??e[1])}:null;};
+  const full=t=>TEAMS.get(+t)?.full;
+  const A={year,matches:M.length};
+  A.coty=best(score);
+  A.odiBat=best(runs.ODI);A.odiBowl=best(wk.ODI);
+  if(M.some(E=>E.fmt==='TEST')){A.testBat=best(runs.TEST);A.testBowl=best(wk.TEST);}
+  A.emerging=best(score,p=>newcomer(p));
+  A.associate=best(score,(p,v)=>!full(v.team)&&!COMPOSITE.has(v.team));
+  const tw={};for(const E of M)for(const t of E.teams){if(COMPOSITE.has(t))continue;const x=tw[t]=tw[t]||{p:0,w:0};x.p++;if(E.result.winner===t)x.w++;}
+  const team=Object.entries(tw).filter(([,x])=>x.p>=8).sort((a,b)=>b[1].w/b[1].p-a[1].w/a[1].p)[0];
+  if(team)A.team={team:+team[0],w:team[1].w,p:team[1].p};
+  return A;
+}
+// Called after every match: awards every finished year once (a year is finished when a match from a later year,
+// or the end of the calendar, has been played).
+function yearEnd(E){
+  const R=R_(),y=+E.date.slice(0,4),done=!nextFixture(),out=[];
+  const upto=done?y:y-1;
+  for(let yy=Math.max(R.awardYear+1,+CAREER_START.slice(0,4));yy<=upto;yy++){
+    const A=awardsFor(String(yy));if(A){R.awards[yy]=A;out.push(A);}
+    R.awardYear=yy;
+  }
+  return out;
+}
+function rebuildRankings(){
+  S.rk=blankRankings();
+  for(const E of S.matches){applyRankings(E);playerOfSeries(E.sid);}
+  if(S.matches.length)yearEnd(S.matches[S.matches.length-1]);
+}
+const AWARD_NAMES=[['coty','Cricketer of the Year'],['odiBat','ODI Batter of the Year','runs'],['odiBowl','ODI Bowler of the Year','wickets'],
+  ['testBat','Test Batter of the Year','runs'],['testBowl','Test Bowler of the Year','wickets'],['emerging','Emerging Player of the Year'],['associate','Associate Player of the Year']];
+
 // ═══ UI SHELL — navigation, views, modal, shared widgets ═══
 const TEAM_COL={AUS:'#c9a400',IND:'#1f4fbf',ENG:'#1d3a8a',RSA:'#0f7a3e',PAK:'#0b6e2e',SL:'#173f8f',WI:'#7a1f2b',NZ:'#222',ZIM:'#b8341b',
   BAN:'#05683f',KEN:'#9c1b1b',IRE:'#169b62',NED:'#e8601c',SCO:'#1b3f94',CAN:'#c8102e',UAE:'#00732f',NAM:'#003580',USA:'#3c3b6e',NEP:'#dc143c',
@@ -1413,7 +1539,7 @@ const TEAM_COL={AUS:'#c9a400',IND:'#1f4fbf',ENG:'#1d3a8a',RSA:'#0f7a3e',PAK:'#0b
 const badge=t=>`<span class="tbadge" style="background:${TEAM_COL[teamShort(t)]||'#334155'}">${esc(teamShort(t))}</span>`;
 const tlabel=t=>`${badge(t)} ${esc(teamName(t))}`;
 const plink=pid=>`<span class="plink" data-pid="${pid}">${esc(pName(pid))}</span>`;
-const VIEWS=[['home','Dashboard'],['match','Match'],['fixtures','Fixtures'],['tour','Tournament Centre'],['records','Records'],['players','Players'],['history','Results'],['miles','Milestones'],['settings','Settings']];
+const VIEWS=[['home','Dashboard'],['match','Match'],['fixtures','Fixtures'],['tour','Tournament Centre'],['rank','Rankings'],['records','Records'],['players','Players'],['history','Results'],['miles','Milestones'],['settings','Settings']];
 let VIEW='home',VIEW_ARG=null;
 const RENDER={};
 
@@ -1472,6 +1598,7 @@ function openPlayer(pid){
   ${rows.length?rows.map(([f,s])=>`<h3>${f==='TEST'?'Test':'ODI'} career</h3><div class="tbl-wrap"><table class="num"><tr><th>M</th><th>Inn</th><th>NO</th><th>Runs</th><th>HS</th><th>Avg</th><th>SR</th><th>100</th><th>50</th><th>Wkts</th><th>BB</th><th>Avg</th><th>Econ</th><th>5w</th><th>Ct</th><th>St</th><th>MoM</th></tr>
     <tr><td>${s.m}</td><td>${s.inn}</td><td>${s.no}</td><td>${s.r}</td><td>${s.hs}${s.hsNo?'*':''}</td><td>${f2(batAvg(s))}</td><td>${f1(batSR(s))}</td><td>${s.c100}</td><td>${s.c50}</td><td>${s.bw}</td><td>${s.best[0]}/${s.best[1]}</td><td>${f2(bowlAvg(s))}</td><td>${f2(bowlEcon(s))}</td><td>${s.w5}</td><td>${s.ct}</td><td>${s.st}</td><td>${s.motm}</td></tr></table></div>`).join(''):'<p class="muted">Hasn\'t played in this career yet.</p>'}
   ${recent.length?`<h3>Recent matches</h3><table>${recent.map(E=>`<tr data-mid="${E.id}" style="cursor:pointer"><td>${fmtDate(E.date)}</td><td>${E.fmt}</td><td>v ${badge(otherOf(E,E.teams.find(t=>E.xi[t].slice(0,11).includes(pid))))}</td><td class="r num">${line(E)}</td></tr>`).join('')}</table>`:''}
+  ${(()=>{const h=playerHonours(pid);return h.ranks.length||h.awards.length?`<h3>Rankings &amp; honours</h3>${h.ranks.map(x=>`<span class="pill" style="margin:0 4px 4px 0">${esc(x)}</span>`).join('')}${h.awards.map(x=>`<div>🏆 ${esc(x)}</div>`).join('')}`:'';})()}
   ${ms.length?`<h3>Milestones</h3>${ms.map(m=>`<div>🏅 ${esc(m.text)} <span class="muted">${fmtDate(m.date)} · ${m.fmt}</span></div>`).join('')}`:''}`);
   $('#pa-edit').onclick=()=>$('#pa-form').classList.toggle('hidden');
   $('#pa-save').onclick=()=>{S.attrEdits[pid]={style:$('#pa-style').value,rating:+$('#pa-rating').value,max:clamp(+$('#pa-max').value,0,10),bat:$('#pa-bat').value};if(S.attrEdits[pid].style==='N')Object.assign(S.attrEdits[pid],{rating:7,max:0});saveGame();openPlayer(pid);};
@@ -1899,10 +2026,11 @@ function miniTable(sid){
 
 // ---------- bulk sim ----------
 let SIM_STOP=false;
+const SIM_NEWS={pos:0,aw:[]};
 function simMany(list,what){
   if(!list.length){toast('Nothing to sim.');return;}
   if(S.live&&S.live.state!=='done'&&list.some(x=>x.key===S.live.key))S.live=null;
-  SIM_STOP=false;
+  SIM_STOP=false;SIM_NEWS.pos=0;SIM_NEWS.aw=[];
   let i=0,ms0=S.ms.length;
   openModal(`<h2>Simulating ${esc(what)}</h2><div class="bar" style="margin:10px 0"><i id="sim-bar" style="width:0"></i></div><div id="sim-txt" class="sub">Starting…</div><div class="row" style="margin-top:12px"><button class="btn" id="sim-stop">Stop</button></div>`);
   $('#sim-stop').onclick=()=>{SIM_STOP=true;};
@@ -1915,7 +2043,9 @@ function simMany(list,what){
     }
     $('#sim-bar')&&($('#sim-bar').style.width=(100*i/list.length)+'%');
     if(i<list.length&&!SIM_STOP)setTimeout(tick,0);
-    else{saveGame();closeModal();toast(`Simmed ${i} ${i===1?'match':'matches'}. ${S.ms.length-ms0} new milestones.`);rerender();}
+    else{saveGame();closeModal();
+      if(SIM_NEWS.aw.length)openModal(`<h2>Season review</h2><div class="stack">${honoursHTML(SIM_NEWS.aw)}</div>`);
+      toast(`Simmed ${i} ${i===1?'match':'matches'}. ${S.ms.length-ms0} new milestones${SIM_NEWS.pos?`, ${SIM_NEWS.pos} players of the series`:''}.`);rerender();}
   };
   setTimeout(tick,30);
 }
@@ -2125,6 +2255,51 @@ RENDER.miles=(el)=>{
   $('#ms-c').onchange=e=>{MS_F.cat=e.target.value;rerender();};
 };
 
+// ═══ RANKINGS SCREEN — team & player rankings, honours board, players of the series ═══
+let RK_F={fmt:'ODI',tab:'teams'};
+function awardLine(A,k,unit){
+  const x=A[k];if(!x)return'';
+  return`${plink(x.pid)} <span class="muted">${unit?x.v+' '+unit:Math.round(x.v)+' pts'}</span>`;
+}
+function honoursHTML(years){
+  return years.map(y=>{const A=S.rk.awards[y];return`<div class="card"><h3>${y}</h3><table>${AWARD_NAMES.filter(([k])=>A[k]).map(([k,n,u])=>`<tr><td class="sub">${n}</td><td>${awardLine(A,k,u)}</td></tr>`).join('')}
+    ${A.team?`<tr><td class="sub">Team of the Year</td><td>${tlabel(A.team.team)} <span class="muted">${A.team.w} wins from ${A.team.p}</span></td></tr>`:''}</table></div>`;}).join('');
+}
+RENDER.rank=(el)=>{
+  const R=R_(),f=RK_F.fmt;
+  const tabs=[['teams','Teams'],['bat','Batting'],['bowl','Bowling'],['ar','All-rounders'],['honours','Honours'],['pos','Players of the series']];
+  let body='';
+  if(RK_F.tab==='teams'){
+    const L=teamRanking(f);
+    body=L.length?`<table class="num"><tr><th>#</th><th>Team</th><th class="r">Matches</th><th class="r">Rating</th><th class="r">This year</th></tr>
+      ${L.map((r,i)=>`<tr class="${r.team===S.settings.myTeam?'me':''}"><td class="muted">${i+1}</td><td>${tlabel(r.team)}</td><td class="r">${r.p}</td><td class="r"><b>${r.pts}</b></td>
+      <td class="r ${r.was==null?'muted':r.pts>r.was?'green':r.pts<r.was?'red':'muted'}">${r.was==null?'new':(r.pts>=r.was?'+':'')+(r.pts-r.was)}</td></tr>`).join('')}</table>`:'<div class="empty">Play some matches to see the rankings.</div>';
+  }else if(['bat','bowl','ar'].includes(RK_F.tab)){
+    const L=playerRanking(f,RK_F.tab);
+    body=L.length?`<table class="num"><tr><th>#</th><th>Player</th><th class="r">Points</th></tr>${L.map((r,i)=>`<tr><td class="muted">${i+1}</td><td>${plink(r.pid)} <span class="muted" style="font-size:11px">${(S.stats[f][r.pid]?.teams||[]).map(teamShort).join('/')}</span></td><td class="r"><b>${r.v}</b></td></tr>`).join('')}</table>
+      <div class="muted" style="font-size:12px;margin-top:8px">Form over recent matches, weighted by the strength of the opposition. Players need 5 matches and a game in the last ${Math.round(RANK_ACTIVE_DAYS/30)} months.</div>`:'<div class="empty">Nobody qualifies yet.</div>';
+  }else if(RK_F.tab==='honours'){
+    const ys=Object.keys(R.awards).sort().reverse();
+    body=ys.length?`<div class="grid g2">${honoursHTML(ys)}</div>`:'<div class="empty">Awards are given when each year is over.</div>';
+  }else{
+    const L=Object.entries(R.pos).sort((a,b)=>b[1].date.localeCompare(a[1].date)).slice(0,60);
+    body=L.length?`<table>${L.map(([sid,x])=>`<tr><td class="muted num" style="white-space:nowrap">${fmtDate(x.date)}</td><td>${esc(x.title)}</td><td>${badge(x.team)} ${plink(x.pid)}</td></tr>`).join('')}</table>`:'<div class="empty">Finish a series to crown its player.</div>';
+  }
+  el.innerHTML=`<div class="card"><div class="row">${['teams','bat','bowl','ar'].includes(RK_F.tab)?`<div class="seg">${['ODI','TEST'].map(x=>`<button data-rkf="${x}" class="${f===x?'on':''}">${x==='TEST'?'Tests':'ODIs'}</button>`).join('')}</div>`:''}
+    <div class="seg">${tabs.map(([k,n])=>`<button data-rkt="${k}" class="${RK_F.tab===k?'on':''}">${n}</button>`).join('')}</div></div></div>
+    <div class="${RK_F.tab==='honours'?'':'card'}" style="margin-top:14px">${body}</div>`;
+  $$('[data-rkf]').forEach(b=>b.onclick=()=>{RK_F.fmt=b.dataset.rkf;rerender();});
+  $$('[data-rkt]').forEach(b=>b.onclick=()=>{RK_F.tab=b.dataset.rkt;rerender();});
+};
+// Rankings and honours for the player card
+function playerHonours(pid){
+  const R=R_(),out=[];
+  for(const f of['ODI','TEST'])for(const k of['bat','bowl','ar']){const i=playerRanking(f,k,100).findIndex(x=>x.pid===pid);if(i>=0)out.push(`No.${i+1} ${f} ${k==='ar'?'all-rounder':k==='bat'?'batter':'bowler'}`);}
+  const aw=[];for(const[y,A]of Object.entries(R.awards))for(const[k,n]of AWARD_NAMES)if(A[k]&&A[k].pid===pid)aw.push(`${n} ${y}`);
+  const pos=Object.values(R.pos).filter(x=>x.pid===pid).map(x=>`Player of the series: ${x.title}`);
+  return{ranks:out,awards:aw.concat(pos)};
+}
+
 // ═══ SETTINGS, SPLASH, LIVE HOOKS & INIT ═══
 const GUIDE=`<h2>How First XI works</h2>
 <p><b>Every over</b> the bowler's rating picks one of six run-rate cards - RR_3 (tight) up to RR_7 (carnage) - shifted by the match situation:
@@ -2202,9 +2377,9 @@ uiMatchHook=(M,e,fast)=>{
   if(e.t==='innsEnd'&&M.state==='live')toast(esc(evText(e)));
   if(fast)toast('🏆 '+esc(pName(fast.pid))+': '+esc(fast.text),'ms');
 };
-uiDoneHook=(M,E,ms)=>{
+uiDoneHook=(M,E,ms,pos,aw)=>{
   REC_CACHE=null;
-  if(M.sim)return;
+  if(M.sim){SIM_NEWS.pos+=pos?1:0;SIM_NEWS.aw.push(...(aw||[]).map(a=>a.year));return;}
   stopWatch();LM=M;
   const ss=E.sid?seriesStatus(E.sid):null;
   setTimeout(()=>{
@@ -2213,7 +2388,9 @@ uiDoneHook=(M,E,ms)=>{
       ${E.inns.map(I=>`<div class="spread"><span>${badge(I.bat)} ${esc(teamName(I.bat))}</span><b class="num">${innsShort(I,E.fmt)}</b></div>`).join('')}
       ${E.motm?`<div class="banner" style="margin-top:10px">Man of the Match: <b>${plink(E.motm)}</b></div>`:''}
       ${ss&&SERIES.get(E.sid)?.kind!=='tournament'?`<p class="sub">${esc(ss.text)}</p>`:''}
+      ${pos?`<div class="banner" style="margin-top:10px">Player of the series (${esc(pos.title)}): <b>${plink(pos.pid)}</b></div>`:''}
       ${ms.length?`<h3 style="margin-top:12px">Milestones</h3>${ms.map(m=>`<div>🏅 ${plink(m.pid)} <span class="sub">${esc(m.text)}</span></div>`).join('')}`:''}
+      ${aw&&aw.length?`<h3 style="margin-top:12px">Season review</h3><div class="stack">${honoursHTML(aw.map(a=>a.year))}</div>`:''}
       <div class="row" style="margin-top:14px"><button class="btn pri" id="r-next">Next fixture</button><button class="btn" id="r-card">Full scorecard</button></div>`);
     $('#r-next').onclick=()=>{closeModal();const n=nextFixture();LM=null;if(n)startFixture(n.key);else go('home');};
     $('#r-card').onclick=()=>{closeModal();MATCH_TAB='card';go('match');};

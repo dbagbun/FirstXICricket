@@ -19,6 +19,8 @@ The repo root holds a prebuilt `first-xi.html` (double-click to open). **After a
 
 - Captaincy (Settings → Captaincy → Me; `M.manualCaptain` = your followed team if playing, else both, from `captainOf`): `M.nextBowler` (consumed by `captainBowler` at the start of an over; options and rules in `bowlerOptions`: anyone but the keeper, not the last over's bowler, max 10 ODI overs; part-timers join `eng.B` as rating ≤6), `setNextBatter` (reorders who's still to bat), attitude `M.att[batTeam]` / `M.att['f'+bowlTeam]` ±1 added in `situationShift`. A position can lift a derived batting colour one step at most (no BLUE No.11 by opening him). Test declarations/follow-on are yours too.
 
+- Rankings & awards (`07b-rankings.js`, state `S.rk` from `blankRankings`, rebuilt by `rebuildRankings` for old saves): team Elo per format (`RANK_K`, start 1500 / 1400 ZIM-BAN / 1250 associates, shown as `(elo-1000)/5`), player rankings = exponential average (`RANK_ALPHA`) of match performance × opposition strength, scaled by `PLAYER_SCALE`, active within `RANK_ACTIVE_DAYS`; `playerOfSeries` when a series has no fixtures left (`matchScores` = MOTM formula without the winner bonus); `yearEnd` awards every finished year once (`awardsFor`, min `AWARD_MIN_MATCHES`), composite XIs excluded. Called from `onMatchDone`; UI `12b-ui-rankings.js`.
+
 ## Layout
 - `src/template.html` - page shell with `/*@@CSS@@*/`, `/*@@DATA@@*/`, `/*@@JS@@*/`
 - `src/styles.css` - all CSS (Excel dark palette: navy `#0a0e1a`, panels `#0f172a`/`#1e293b`, cyan `#06b6d4`, gold `#ffd700`)

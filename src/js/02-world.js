@@ -80,6 +80,9 @@ const TEAM_GAMES=new Map();
 for(const f of FIX)for(const t of[f.a,f.b])if(WORLD.xi[f.cid]&&WORLD.xi[f.cid][t]){
   if(!TEAM_GAMES.has(t))TEAM_GAMES.set(t,[]);TEAM_GAMES.get(t).push(f);
 }
+// First appearance in the data (debut, or the start of the data for players already playing in 2002).
+const DEBUT=new Map();
+for(const f of FIX)if(WORLD.xi[f.cid])for(const t in WORLD.xi[f.cid])for(const p of WORLD.xi[f.cid][t].slice(0,11))if(!DEBUT.has(p))DEBUT.set(p,f.date);
 function nearestXI(tid,date,opts={}){
   const games=TEAM_GAMES.get(+tid)||[];
   let best=null,bd=1e9;

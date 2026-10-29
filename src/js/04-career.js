@@ -11,7 +11,7 @@ function newCareer(opts={}){
     live:null,        // match in progress
     stats:{ODI:{},TEST:{}},teams:{ODI:{},TEST:{}},
     ms:[],msKeys:{},fast:{ODI:{f50:null,f100:null},TEST:{f50:null,f100:null}},
-    tests:[],testSeq:0,attrEdits:{},seen:{},reseed:{},
+    tests:[],testSeq:0,attrEdits:{},seen:{},reseed:{},rk:blankRankings(),
   };
 }
 const LOG_KEEP=25;
@@ -102,6 +102,7 @@ function applyStats(E){
 function rebuildStats(){
   S.stats={ODI:{},TEST:{}};S.teams={ODI:{},TEST:{}};
   for(const E of S.matches)applyStats(E);
+  rebuildRankings();
 }
 const batAvg=s=>s.inn-s.no>0?s.r/(s.inn-s.no):NaN;
 const batSR=s=>s.b?100*s.r/s.b:NaN;

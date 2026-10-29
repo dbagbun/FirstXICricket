@@ -59,10 +59,11 @@ function miniTable(sid){
 
 // ---------- bulk sim ----------
 let SIM_STOP=false;
+const SIM_NEWS={pos:0,aw:[]};
 function simMany(list,what){
   if(!list.length){toast('Nothing to sim.');return;}
   if(S.live&&S.live.state!=='done'&&list.some(x=>x.key===S.live.key))S.live=null;
-  SIM_STOP=false;
+  SIM_STOP=false;SIM_NEWS.pos=0;SIM_NEWS.aw=[];
   let i=0,ms0=S.ms.length;
   openModal(`<h2>Simulating ${esc(what)}</h2><div class="bar" style="margin:10px 0"><i id="sim-bar" style="width:0"></i></div><div id="sim-txt" class="sub">Starting…</div><div class="row" style="margin-top:12px"><button class="btn" id="sim-stop">Stop</button></div>`);
   $('#sim-stop').onclick=()=>{SIM_STOP=true;};
@@ -75,7 +76,9 @@ function simMany(list,what){
     }
     $('#sim-bar')&&($('#sim-bar').style.width=(100*i/list.length)+'%');
     if(i<list.length&&!SIM_STOP)setTimeout(tick,0);
-    else{saveGame();closeModal();toast(`Simmed ${i} ${i===1?'match':'matches'}. ${S.ms.length-ms0} new milestones.`);rerender();}
+    else{saveGame();closeModal();
+      if(SIM_NEWS.aw.length)openModal(`<h2>Season review</h2><div class="stack">${honoursHTML(SIM_NEWS.aw)}</div>`);
+      toast(`Simmed ${i} ${i===1?'match':'matches'}. ${S.ms.length-ms0} new milestones${SIM_NEWS.pos?`, ${SIM_NEWS.pos} players of the series`:''}.`);rerender();}
   };
   setTimeout(tick,30);
 }

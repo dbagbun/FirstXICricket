@@ -75,9 +75,9 @@ uiMatchHook=(M,e,fast)=>{
   if(e.t==='innsEnd'&&M.state==='live')toast(esc(evText(e)));
   if(fast)toast('🏆 '+esc(pName(fast.pid))+': '+esc(fast.text),'ms');
 };
-uiDoneHook=(M,E,ms)=>{
+uiDoneHook=(M,E,ms,pos,aw)=>{
   REC_CACHE=null;
-  if(M.sim)return;
+  if(M.sim){SIM_NEWS.pos+=pos?1:0;SIM_NEWS.aw.push(...(aw||[]).map(a=>a.year));return;}
   stopWatch();LM=M;
   const ss=E.sid?seriesStatus(E.sid):null;
   setTimeout(()=>{
@@ -86,7 +86,9 @@ uiDoneHook=(M,E,ms)=>{
       ${E.inns.map(I=>`<div class="spread"><span>${badge(I.bat)} ${esc(teamName(I.bat))}</span><b class="num">${innsShort(I,E.fmt)}</b></div>`).join('')}
       ${E.motm?`<div class="banner" style="margin-top:10px">Man of the Match: <b>${plink(E.motm)}</b></div>`:''}
       ${ss&&SERIES.get(E.sid)?.kind!=='tournament'?`<p class="sub">${esc(ss.text)}</p>`:''}
+      ${pos?`<div class="banner" style="margin-top:10px">Player of the series (${esc(pos.title)}): <b>${plink(pos.pid)}</b></div>`:''}
       ${ms.length?`<h3 style="margin-top:12px">Milestones</h3>${ms.map(m=>`<div>🏅 ${plink(m.pid)} <span class="sub">${esc(m.text)}</span></div>`).join('')}`:''}
+      ${aw&&aw.length?`<h3 style="margin-top:12px">Season review</h3><div class="stack">${honoursHTML(aw.map(a=>a.year))}</div>`:''}
       <div class="row" style="margin-top:14px"><button class="btn pri" id="r-next">Next fixture</button><button class="btn" id="r-card">Full scorecard</button></div>`);
     $('#r-next').onclick=()=>{closeModal();const n=nextFixture();LM=null;if(n)startFixture(n.key);else go('home');};
     $('#r-card').onclick=()=>{closeModal();MATCH_TAB='card';go('match');};

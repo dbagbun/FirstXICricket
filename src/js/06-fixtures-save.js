@@ -93,10 +93,11 @@ function onMatchDone(M){
   S.logs[E.id]=packBalls(M);
   const ids=Object.keys(S.logs);if(ids.length>LOG_KEEP)for(const id of ids.slice(0,ids.length-LOG_KEEP))delete S.logs[id];
   applyStats(E);
-  const ms=checkMilestones(E);
+  applyRankings(E);
+  const ms=checkMilestones(E),pos=playerOfSeries(E.sid),aw=yearEnd(E);
   if(S.live&&S.live.id===M.id)S.live=null;
   if(!M.sim)saveGame();
-  if(uiDoneHook)uiDoneHook(M,E,ms);
+  if(uiDoneHook)uiDoneHook(M,E,ms,pos,aw);
 }
 // Quick-sim a fixture with auto dice and AI captains.
 function simFixture(fx){
@@ -128,6 +129,7 @@ function loadSlot(i){
   S.settings=Object.assign(newCareer().settings,S.settings||{});
   for(const k of['tests','ms','matches'])S[k]=S[k]||[];
   for(const k of['logs','msKeys','attrEdits','seen','reseed','done'])S[k]=S[k]||{};
+  if(!S.rk)rebuildRankings();
   return true;
 }
 function exportCareer(){return JSON.stringify(S);}
