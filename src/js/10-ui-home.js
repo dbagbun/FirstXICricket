@@ -1,0 +1,146 @@
+// ═══ DASHBOARD, FIXTURES & BULK SIM ═══
+function fixtureTeams(fx){
+  // what the fixture will be in your timeline (knockouts may be re-seeded)
+  if(fx.fmt==='ODI'){const k=resolveFixture(fx.f);if(k)return[k.a,k.b];}
+  return[fx.a,fx.b];
+}
+RENDER.home=(el)=>{
+  const n=nextFixture(),live=S.live&&S.live.state!=='done'?S.live:null;
+  const playedO=S.matches.filter(m=>m.fmt==='ODI').length,playedT=S.matches.length-playedO,total=ODI_FX.filter(x=>x.playable).length;
+  const recent=S.matches.slice(-5).reverse();
+  const top=(fmt,f,lab)=>{const L=Object.entries(S.stats[fmt]).sort((a,b)=>f(b[1])-f(a[1]))[0];return L&&f(L[1])>0?`<div class="spread"><span class="sub">${lab}</span><span>${plink(+L[0])} <b class="num">${f(L[1])}</b></span></div>`:'';};
+  let nextCard='<div class="card empty">Every fixture has been played. What a career.</div>';
+  if(n){
+    const [a,b]=fixtureTeams(n),E=n.fmt==='ODI'?edition(n.sid):null,st=E?E.stageOf.get(n.f.no):'';
+    const re=n.fmt==='ODI'&&(a!==n.a||b!==n.b)&&!(a===n.b&&b===n.a);
+    const ss=seriesStatus(n.sid);
+    nextCard=`<div class="card hi stack"><div class="spread"><h3 style="margin:0">Next fixture</h3><span class="pill ${n.fmt==='TEST'?'test':st&&st!=='group'&&st!=='super'?'ko':''}">${n.fmt==='TEST'?'TEST':st&&st!=='group'?stageName(st,E):'ODI'}</span></div>
+      <div class="sub">${esc(n.title)} · ${esc(n.label)}</div>
+      <h2 style="margin:2px 0">${tlabel(a)} <span class="muted">v</span> ${tlabel(b)}</h2>
+      ${re?`<div class="banner">Re-seeded from your tables (in history: ${esc(teamName(n.a))} v ${esc(teamName(n.b))})</div>`:''}
+      <div class="muted">${esc(n.venue)} · ${fmtDate(n.date)}${ss&&ss.played?' · '+esc(ss.text):''}</div>
+      <div class="row"><button class="btn pri" id="h-play">${live&&live.key===n.key?'Resume match':'Play match'}</button><button class="btn" id="h-sim">Quick sim</button>
+        <button class="btn" id="h-sims">Sim rest of series</button><button class="btn" id="h-simn">Sim more…</button></div></div>`;
+  }
+  const tourn=n&&n.fmt==='ODI'&&SERIES.get(n.sid).kind==='tournament'?miniTable(n.sid):'';
+  const my=S.settings.myTeam,myT=my&&(S.teams.ODI[my]||S.teams.TEST[my]);
+  el.innerHTML=`<div class="grid g3" style="grid-template-columns:2fr 1fr">
+    <div class="stack">
+      ${live&&(!n||live.key!==n.key)?`<div class="card"><div class="spread"><div><span class="pill live">LIVE</span> <b>${esc(teamName(live.teams[0]))} v ${esc(teamName(live.teams[1]))}</b></div><button class="btn pri" data-go="match">Resume</button></div></div>`:''}
+      ${nextCard}${tourn}
+      <div class="card"><h3>Recent results</h3>${recent.length?recent.map(matchLine).join('<hr style="border:0;border-top:1px solid var(--line)">'):'<p class="muted">No matches yet. Your career starts with the '+esc(seriesOf(FIX[0]).title)+'.</p>'}</div>
+    </div>
+    <div class="stack">
+      <div class="card"><h3>Career</h3><div class="spread"><span class="sub">ODIs played</span><b class="num">${playedO} / ${total}</b></div>
+        <div class="bar" style="margin:6px 0 10px"><i style="width:${(100*playedO/total).toFixed(1)}%"></i></div>
+        ${playedT?`<div class="spread"><span class="sub">Tests played</span><b class="num">${playedT}</b></div>`:''}
+        ${top('ODI',s=>s.r,'Most ODI runs')}${top('ODI',s=>s.bw,'Most ODI wickets')}${top('TEST',s=>s.r,'Most Test runs')}${top('TEST',s=>s.bw,'Most Test wickets')}</div>
+      ${myT?`<div class="card"><h3>${badge(my)} ${esc(teamName(my))}</h3>${['ODI','TEST'].filter(f=>S.teams[f][my]).map(f=>{const T=S.teams[f][my];return`<div class="spread"><span class="sub">${f}</span><span class="num">P${T.p} W${T.w} L${T.l}${T.d?' D'+T.d:''}${T.t?' T'+T.t:''}</span></div>`;}).join('')}</div>`:''}
+      <div class="card"><h3>Latest milestones</h3>${S.ms.slice(-6).reverse().map(m=>`<div style="margin-bottom:6px">🏅 ${plink(m.pid)} <span class="sub">${esc(m.text)}</span></div>`).join('')||'<p class="muted">None yet.</p>'}
+        <button class="btn sm" data-go="miles">All milestones</button></div>
+      <div class="card"><h3>Test cricket</h3><p class="sub" style="margin-top:0">The fixture list is the real ODI calendar. Schedule Test series between any two Test nations and they slot into your career by date.</p><button class="btn" id="h-test">Schedule a Test series</button></div>
+    </div></div>`;
+  if(n){
+    $('#h-play').onclick=()=>startFixture(n.key);
+    $('#h-sim').onclick=()=>{const M=quickSim(n.key);toast(esc(M.result.text));rerender();};
+    $('#h-sims').onclick=()=>simMany(allFixtures().filter(x=>x.sid===n.sid&&x.playable&&!S.done[x.key]),'the rest of the series');
+    $('#h-simn').onclick=openSimMore;
+  }
+  $('#h-test').onclick=openTestCreator;
+};
+function miniTable(sid){
+  const E=edition(sid);if(!E)return'';
+  const res=editionResults(sid);if(!res.size)return'';
+  const st=E.hasSuper&&leagueComplete(E,'group')?superTable(E):null;
+  const tabs=st?[{g:superName(E),rows:st}]:groupTables(E).map(t=>({g:E.labels.length>1?'Group '+t.g:'Table',rows:t.rows}));
+  return`<div class="card"><div class="spread"><h3 style="margin:0">${esc(E.s.title)}</h3><button class="btn sm" data-go="tour" data-arg="${esc(sid)}">Tournament Centre</button></div>
+    <div class="grid ${tabs.length>1?'g2':''}" style="margin-top:8px">${tabs.slice(0,4).map(t=>`<div><div class="sub" style="font-size:12px">${esc(t.g)}</div><table class="num">${t.rows.slice(0,6).map(r=>`<tr><td>${badge(r.team)}</td><td class="r">${r.p}</td><td class="r"><b>${r.pts}</b></td><td class="r muted">${r.nrr>=0?'+':''}${r.nrr.toFixed(2)}</td></tr>`).join('')}</table></div>`).join('')}</div></div>`;
+}
+
+// ---------- bulk sim ----------
+let SIM_STOP=false;
+function simMany(list,what){
+  if(!list.length){toast('Nothing to sim.');return;}
+  if(S.live&&S.live.state!=='done'&&list.some(x=>x.key===S.live.key))S.live=null;
+  SIM_STOP=false;
+  let i=0,ms0=S.ms.length;
+  openModal(`<h2>Simulating ${esc(what)}</h2><div class="bar" style="margin:10px 0"><i id="sim-bar" style="width:0"></i></div><div id="sim-txt" class="sub">Starting…</div><div class="row" style="margin-top:12px"><button class="btn" id="sim-stop">Stop</button></div>`);
+  $('#sim-stop').onclick=()=>{SIM_STOP=true;};
+  const tick=()=>{
+    const t0=Date.now();
+    while(i<list.length&&Date.now()-t0<60&&!SIM_STOP){
+      const fx=fixtureByKey(list[i].key);
+      if(fx&&!S.done[fx.key]){const M=simFixture(fx);$('#sim-txt')&&($('#sim-txt').textContent=`${fmtDate(fx.date)} - ${M.result.text}`);}
+      i++;
+    }
+    $('#sim-bar')&&($('#sim-bar').style.width=(100*i/list.length)+'%');
+    if(i<list.length&&!SIM_STOP)setTimeout(tick,0);
+    else{saveGame();closeModal();toast(`Simmed ${i} ${i===1?'match':'matches'}. ${S.ms.length-ms0} new milestones.`);rerender();}
+  };
+  setTimeout(tick,30);
+}
+function openSimMore(){
+  const n=nextFixture();if(!n)return;
+  openModal(`<h2>Sim ahead</h2><div class="stack">
+    <div class="row"><input type="number" id="sm-n" value="10" min="1" max="3000" style="width:90px"><button class="btn pri" id="sm-go-n">Sim next N matches</button></div>
+    <div class="row"><input type="date" id="sm-d" value="${addDays(n.date,90)}"><button class="btn pri" id="sm-go-d">Sim up to this date</button></div>
+    <div class="row"><button class="btn" id="sm-yr">Sim to the end of ${n.date.slice(0,4)}</button></div>
+    <p class="muted">Quick sims use automatic dice and AI captains. Stats, records and milestones all count.</p></div>`);
+  const up=allFixtures().filter(x=>x.playable&&!S.done[x.key]);
+  $('#sm-go-n').onclick=()=>simMany(up.slice(0,clamp(+$('#sm-n').value||1,1,5000)),'the next '+$('#sm-n').value+' matches');
+  $('#sm-go-d').onclick=()=>{const d=$('#sm-d').value;simMany(up.filter(x=>x.date<=d),'to '+fmtDate(d));};
+  $('#sm-yr').onclick=()=>{const y=n.date.slice(0,4);simMany(up.filter(x=>x.date.slice(0,4)===y),'the rest of '+y);};
+}
+function openTestCreator(){
+  const d=(nextFixture()||{date:careerDate()}).date;
+  const opts=sel=>TEST_TEAMS.map(t=>`<option value="${t}" ${t===sel?'selected':''}>${esc(teamName(t))}</option>`).join('');
+  openModal(`<h2>Schedule a Test series</h2><div class="stack">
+    <div class="row"><label>Hosts <select id="ts-a">${opts(S.settings.myTeam&&TEST_TEAMS.includes(S.settings.myTeam)?S.settings.myTeam:4)}</select></label>
+      <label>Tourists <select id="ts-b">${opts(1)}</select></label></div>
+    <div class="row"><label>Tests <select id="ts-n">${[1,2,3,4,5].map(k=>`<option ${k===3?'selected':''}>${k}</option>`).join('')}</select></label>
+      <label>First Test starts <input type="date" id="ts-d" value="${d}"></label></div>
+    <p class="muted">Squads come from each side's real XI nearest the date (you can swap players before each Test). Grounds are the hosts' home venues.</p>
+    <button class="btn pri" id="ts-go">Create series</button></div>`);
+  $('#ts-go').onclick=()=>{
+    const a=+$('#ts-a').value,b=+$('#ts-b').value;if(a===b){toast('Pick two different teams.','warn');return;}
+    const T=createTestSeries({a,b,n:+$('#ts-n').value,start:$('#ts-d').value||d});
+    saveGame();closeModal();toast(esc(T.title)+' scheduled.');rerender();
+  };
+}
+
+// ---------- fixtures ----------
+let FX_F={year:null,team:'',fmt:'',status:'up'};
+RENDER.fixtures=(el)=>{
+  const all=allFixtures();
+  if(FX_F.year===null)FX_F.year=(nextFixture()||all[all.length-1]).date.slice(0,4);
+  const years=[...new Set(all.map(x=>x.date.slice(0,4)))];
+  const teams=[...TEAMS.values()].sort((a,b)=>a.name.localeCompare(b.name));
+  const list=all.filter(x=>(!FX_F.year||x.date.startsWith(FX_F.year))&&(!FX_F.team||x.a===+FX_F.team||x.b===+FX_F.team)&&(!FX_F.fmt||x.fmt===FX_F.fmt)
+    &&(FX_F.status==='all'||(FX_F.status==='up'?!S.done[x.key]:!!S.done[x.key])));
+  const groups=[];for(const x of list){const g=groups[groups.length-1];if(g&&g.sid===x.sid)g.items.push(x);else groups.push({sid:x.sid,title:x.title,items:[x]});}
+  const byId=new Map(S.matches.map(E=>[E.id,E]));
+  el.innerHTML=`<div class="card"><div class="row">
+    <select id="fx-y"><option value="">All years</option>${years.map(y=>`<option ${y===FX_F.year?'selected':''}>${y}</option>`).join('')}</select>
+    <select id="fx-t"><option value="">All teams</option>${teams.map(t=>`<option value="${t.id}" ${+FX_F.team===t.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select>
+    <div class="seg">${[['','All'],['ODI','ODI'],['TEST','Test']].map(([k,n])=>`<button data-ff="${k}" class="${FX_F.fmt===k?'on':''}">${n}</button>`).join('')}</div>
+    <div class="seg">${[['up','Upcoming'],['done','Played'],['all','All']].map(([k,n])=>`<button data-fs="${k}" class="${FX_F.status===k?'on':''}">${n}</button>`).join('')}</div>
+    <button class="btn" id="fx-test">+ Test series</button></div></div>
+  <div class="stack" style="margin-top:14px">${groups.slice(0,80).map(g=>{
+    const ss=seriesStatus(g.sid),tour=(SERIES.get(g.sid)||{}).kind==='tournament';
+    const T=S.tests.find(t=>t.id===g.sid);
+    return`<div class="card"><div class="spread"><div><b>${esc(g.title)}</b> <span class="muted">${ss&&!tour?esc(ss.text):''}</span></div>
+      <div class="row">${tour?`<button class="btn sm" data-go="tour" data-arg="${esc(g.sid)}">Tournament Centre</button>`:''}${T&&!T.fix.some(x=>S.done[x.key])?`<button class="btn sm" data-deltest="${T.id}">Remove</button>`:''}</div></div>
+      <div class="tbl-wrap"><table>${g.items.map(x=>{const E=S.done[x.key]&&byId.get(S.done[x.key]);const[a,b]=E?E.teams:fixtureTeams(x);
+        return`<tr ${E?`data-mid="${E.id}" style="cursor:pointer"`:''}><td class="muted num" style="white-space:nowrap">${fmtDate(x.date)}</td><td>${badge(a)} v ${badge(b)}</td>
+        <td class="hide-sm sub" style="font-size:12px">${esc(x.fmt==='TEST'?x.label:(x.f.mno?'Match '+x.f.mno:stageName(edition(x.sid)?.stageOf.get(x.f.no),edition(x.sid))||''))} · ${esc(x.venue)}</td>
+        <td class="r">${E?`<span class="${E.result.winner?'green':'sub'}">${esc(E.result.text)}</span>`:x.playable?`<button class="btn sm pri" data-play="${x.key}">Play</button> <button class="btn sm" data-sim="${x.key}">Sim</button>`:'<span class="muted">no XI data</span>'}</td></tr>`;}).join('')}</table></div></div>`;}).join('')||'<div class="card empty">No fixtures match.</div>'}
+  ${groups.length>80?`<div class="muted">Showing the first 80 series - narrow the filters to see more.</div>`:''}</div>`;
+  $('#fx-y').onchange=e=>{FX_F.year=e.target.value;rerender();};
+  $('#fx-t').onchange=e=>{FX_F.team=e.target.value;rerender();};
+  $$('[data-ff]').forEach(b=>b.onclick=()=>{FX_F.fmt=b.dataset.ff;rerender();});
+  $$('[data-fs]').forEach(b=>b.onclick=()=>{FX_F.status=b.dataset.fs;rerender();});
+  $$('[data-play]').forEach(b=>b.onclick=()=>startFixture(b.dataset.play));
+  $$('[data-sim]').forEach(b=>b.onclick=()=>{const M=quickSim(b.dataset.sim);toast(esc(M.result.text));rerender();});
+  $$('[data-deltest]').forEach(b=>b.onclick=()=>{if(deleteTestSeries(b.dataset.deltest)){saveGame();rerender();}});
+  $('#fx-test').onclick=openTestCreator;
+};

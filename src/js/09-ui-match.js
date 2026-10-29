@@ -1,0 +1,323 @@
+// ═══ MATCH SCREEN — pre-match, live play, dice, commentary, charts, scorecards ═══
+let LM=null;            // the match on screen (S.live)
+let WATCH=null;         // watch-mode timer
+let MATCH_TAB='card';
+const HOW_LABEL={b:'bowled',lbw:'lbw',ct:'caught',ctof:'caught',ctwk:'caught behind',st:'stumped',ro:'run out'};
+
+function dismissalText(how,bowler,fielder){
+  if(!how)return'not out';
+  const b=pName(bowler),f=fielder?pName(fielder):'';
+  switch(how){
+    case'b':return'b '+b;
+    case'lbw':return'lbw b '+b;
+    case'ctwk':return`c †${f} b ${b}`;
+    case'st':return`st †${f} b ${b}`;
+    case'ro':return`run out (${f})`;
+    default:return fielder===bowler?'c &amp; b '+b:`c ${f} b ${b}`;
+  }
+}
+const ballChip=b=>{
+  if(b.w)return'<span class="bi w">W</span>';
+  if(b.voided)return'<span class="bi v" title="Wicket card, wrong colour for this batter">•</span>';
+  if(b.exType==='wd')return`<span class="bi x">wd</span>`;
+  if(b.exType==='nb')return`<span class="bi x">nb</span>`;
+  if(b.exType)return`<span class="bi x">${b.ex}${b.exType}</span>`;
+  return`<span class="bi ${b.bat===4?'b4':b.bat===6?'b6':''}">${b.bat||'•'}</span>`;
+};
+function ballText(b){
+  const who=`${esc(pName(b.bowler))} to ${esc(pName(b.st))}`;
+  let t;
+  if(b.w)t=`<span class="w">OUT! ${dismissalText(b.how,b.bowler,b.fielder||0)}</span>`;
+  else if(b.voided)t=`<span class="sub">wicket card (${esc(String(b.tok).split('_')[1]||'')}) - not the colour to get a No.${b.pos||''} out: dot ball</span>`;
+  else if(b.exType==='wd')t='wide';
+  else if(b.exType==='nb')t='no-ball';
+  else if(b.exType==='lb')t=plural(b.ex,'leg bye');
+  else if(b.exType==='b')t=plural(b.ex,'bye');
+  else t=b.bat===4?'<b>FOUR</b>':b.bat===6?'<b>SIX</b>':b.bat?plural(b.bat,'run'):'no run';
+  const ev=(b.ev||[]).filter(e=>e.t!=='innsEnd').map(e=>' <span class="ms">'+evText(e)+'</span>').join('');
+  return`<div><span class="ov">${b.over-1}.${b.legal||b.n}</span>${who}, ${t}${ev} <span class="muted mono" style="font-size:11px">RR_${b.card} · ${b.roll} · c${b.col}</span></div>`;
+}
+function evText(e){
+  switch(e.t){
+    case'50':return`${pName(e.pid)} - fifty off ${e.balls} balls`;
+    case'100':return`${pName(e.pid)} - HUNDRED off ${e.balls} balls`;
+    case'200':return`${pName(e.pid)} - DOUBLE HUNDRED`;
+    case'5w':return`${pName(e.pid)} - five wickets (${e.w}/${e.r})`;
+    case'hat':return`${pName(e.pid)} - HAT-TRICK!`;
+    case'rain':return`Rain: ${e.lost} overs lost on day ${e.day}`;
+    case'followon':return`${teamName(e.team)} enforce the follow-on`;
+    case'innsEnd':return`End of innings: ${teamName(e.bat)} ${e.runs}${e.wkts<10?'/'+e.wkts:''} (${e.why})`;
+    case'result':return e.text;
+  }
+  return'';
+}
+
+// ---------- start a fixture ----------
+function startFixture(key){
+  if(S.live&&S.live.state!=='done'){
+    if(S.live.key===key){go('match');return;}
+    if(!confirm('A match is in progress. Abandon it and start this one?'))return;
+  }
+  const fx=fixtureByKey(key);if(!fx)return;
+  LM=buildMatch(fx);
+  LM.manual=S.settings.dice==='manual';
+  if(S.settings.captain==='manual')LM.manualCaptain=Object.fromEntries(LM.teams.map(t=>[t,true]));
+  S.live=LM;saveGame();
+  go('match');
+}
+function quickSim(key){
+  if(S.live&&S.live.key===key&&S.live.state!=='done')S.live=null;
+  const M=simFixture(fixtureByKey(key));
+  saveGame();
+  return M;
+}
+
+RENDER.match=(el)=>{
+  LM=S.live&&S.live.state!=='done'?S.live:LM;
+  if(!LM){
+    const last=S.matches[S.matches.length-1];
+    el.innerHTML=`<div class="card empty">No match in progress.<br><br><button class="btn pri" data-go="home">Go to the dashboard</button></div>`
+      +(last?`<div class="card" style="margin-top:14px"><h3>Last result</h3>${matchLine(last)}</div>`:'');
+    return;
+  }
+  if(LM.state==='pre')return renderPre(el,LM);
+  renderLive(el,LM);
+};
+
+// ---------- pre-match ----------
+function xiTable(M,t){
+  const x=M.xi[t];
+  return`<table>${x.bat.map((p,i)=>{const a=pAttr(p);return`<tr><td class="muted">${i+1}</td><td>${plink(p)}${p===x.cap?' <span class="gold">(c)</span>':''}${p===x.wk?' <span class="cyan">†</span>':''}</td>
+    <td class="r muted" style="font-size:12px">${a.style==='N'?'':STYLE_NAME[a.style]+' '+'●'.repeat(6-Math.min(a.rating,5))}</td><td class="r"><button class="btn sm" data-swap="${t}:${i}">Swap</button></td></tr>`;}).join('')}</table>`;
+}
+function renderPre(el,M){
+  const fx=fixtureByKey(M.key);
+  const reseed=M.reseeded?`<div class="banner" style="margin-bottom:12px">In history this was <b>${esc(teamName(M.reseeded.a))} v ${esc(teamName(M.reseeded.b))}</b>. In your timeline the tables say <b>${esc(teamName(M.teams[0]))} v ${esc(teamName(M.teams[1]))}</b>.</div>`:'';
+  const P=M.pitch&&PITCHES[M.pitch];
+  el.innerHTML=`<div class="card hi stack">
+    <div class="spread"><div><div class="sub">${esc(M.series)}${M.stage?' · <span class="gold">'+esc(M.stage)+'</span>':''}</div>
+      <h2 style="margin:4px 0">${tlabel(M.teams[0])} <span class="muted">v</span> ${tlabel(M.teams[1])}</h2>
+      <div class="muted">${esc(M.venue)}${M.city&&!M.venue.includes(M.city)?', '+esc(M.city):''} · ${fmtDate(M.date)} · ${M.fmt==='TEST'?'Test match (5 days)':M.maxOv+'-over ODI'}</div></div>
+      <span class="pill ${M.fmt==='TEST'?'test':''}">${M.fmt==='TEST'?'TEST':'ODI'}</span></div>
+    ${reseed}
+    ${P?`<div class="card"><b>Pitch report:</b> ${P.name}. <span class="sub">${P.desc}</span></div>`:''}
+    <div class="grid g2"><div class="card"><h3>${esc(teamName(M.teams[0]))}</h3>${xiTable(M,M.teams[0])}</div><div class="card"><h3>${esc(teamName(M.teams[1]))}</h3>${xiTable(M,M.teams[1])}</div></div>
+    <div class="card"><h3>The toss</h3><div class="row">
+      <select id="toss-w"><option value="r">Random winner</option>${M.teams.map(t=>`<option value="${t}">${esc(teamName(t))} win it</option>`).join('')}</select>
+      <select id="toss-c"><option value="">Captain decides</option><option value="bat">and bat</option><option value="bowl">and bowl</option></select>
+      <button class="btn pri" id="toss-go">Toss &amp; start</button>
+      <button class="btn" id="pre-sim">Quick sim</button></div>
+      <div class="muted" style="margin-top:6px;font-size:12px">Dice: ${S.settings.dice==='manual'?'you roll (enter each 1-100 roll)':'automatic'} · Captains: ${S.settings.captain==='manual'?'you make the Test calls':'AI'} - change in Settings.</div></div>
+  </div>`;
+  $('#toss-go').onclick=()=>{const w=$('#toss-w').value;doToss(M,w==='r'?null:+w,$('#toss-c').value||null);
+    toast(`${esc(teamName(M.toss.w))} won the toss and chose to ${M.toss.choice}.`);saveGame();rerender();};
+  $('#pre-sim').onclick=()=>{doToss(M);M.manual=false;M.manualCaptain=null;simMatch(M);};
+  $$('[data-swap]').forEach(b=>b.onclick=()=>{const[t,i]=b.dataset.swap.split(':').map(Number);openSwap(M,t,i);});
+}
+function openSwap(M,t,i){
+  const x=M.xi[t],cur=x.bat[i],pool=squadAround(t,M.date,500).filter(p=>!x.bat.includes(p)).slice(0,30);
+  openModal(`<h2>Replace ${esc(pName(cur))}</h2><p class="muted">Players who turned out for ${esc(teamName(t))} around this date.</p>
+    <div class="grid g2">${pool.map(p=>{const a=pAttr(p);return`<button class="btn" data-rep="${p}" style="text-align:left">${esc(pName(p))} <span class="muted">${a.style==='N'?'':STYLE_NAME[a.style]+' r'+a.rating}</span></button>`;}).join('')||'<p class="muted">No one else available.</p>'}</div>
+    <h3 style="margin-top:14px">Batting order</h3><div class="row"><button class="btn sm" id="sw-up">Move up</button><button class="btn sm" id="sw-dn">Move down</button><button class="btn sm" id="sw-wk">Make keeper</button><button class="btn sm" id="sw-cap">Make captain</button></div>`);
+  $$('[data-rep]').forEach(b=>b.onclick=()=>{const p=+b.dataset.rep;if(x.wk===cur)x.wk=p;if(x.cap===cur)x.cap=p;x.bat[i]=p;delete M.plans[t];closeModal();rerender();});
+  const mv=d=>{const j=i+d;if(j<0||j>10)return;[x.bat[i],x.bat[j]]=[x.bat[j],x.bat[i]];closeModal();rerender();};
+  $('#sw-up').onclick=()=>mv(-1);$('#sw-dn').onclick=()=>mv(1);
+  $('#sw-wk').onclick=()=>{x.wk=cur;closeModal();rerender();};$('#sw-cap').onclick=()=>{x.cap=cur;closeModal();rerender();};
+}
+
+// ---------- live ----------
+function statusLine(M,I){
+  if(M.fmt==='ODI'){
+    if(I.no===2){const need=I.target-I.runs,left=M.maxOv*6-I.lb;
+      return need>0?`<b>${teamName(I.bat)} need ${plural(need,'run')} from ${plural(left,'ball')}</b> · RRR ${f2(need/(left/6))}`:'';}
+    return`Run rate ${f2(I.lb?I.runs/(I.lb/6):0)} · Projected ${I.lb?Math.round(I.runs/(I.lb/6)*M.maxOv):'-'}`;
+  }
+  const lead=testTotals(M,I.bat)-testTotals(M,I.bowl);
+  const ld=I.no===1?'':lead>0?`${teamName(I.bat)} lead by ${lead}`:lead<0?`${teamName(I.bat)} trail by ${-lead}`:'Scores level';
+  const tgt=I.no===4?`<b>${teamName(I.bat)} need ${I.target-I.runs} to win</b> · `:'';
+  return`${tgt}Day ${testDay(M)}, session ${testSession(M)} · ${Math.floor(testOversLeft(M))} overs left in the match${ld?' · '+ld:''}`;
+}
+function renderLive(el,M){
+  const I=curInn(M),done=M.state==='done';
+  const sc=t=>M.inns.filter(x=>x.bat===t).map(x=>`${x.runs}${x.wkts<10?'/'+x.wkts:''}${x.why==='declared'?'d':''}`).join(' &amp; ');
+  const ovs=t=>{const x=[...M.inns].reverse().find(y=>y.bat===t);return x?oversTxt(x.lb)+' ov':'';};
+  const A=M.toss.bat,B=otherTeam(M,A);
+  const bt=I.bt,st=bt[I.st],ns=bt[I.ns];
+  const C=M.cur,bowlerId=C?C.bowler:(I.overs.length?I.overs[I.overs.length-1].bowler:0),W=bowlerId&&I.bw[bowlerId];
+  const ovNo=C?C.over:(I.overs.length?I.overs[I.overs.length-1].over:0);
+  const thisOver=I.balls.filter(b=>b.over===ovNo).slice(-12);
+  const lastOvers=I.balls.slice(-18);
+  const P=I.part;
+  const pend=M.pending&&M.pending.type==='followon';
+  el.innerHTML=`<div class="stack">
+  <div class="sub">${esc(M.series)}${M.stage?' · <span class="gold">'+esc(M.stage)+'</span>':''} · ${esc(M.venue)}</div>
+  <div class="scorebar">
+    <div class="sb-team">${badge(A)}<div><div class="sb-score">${sc(A)||'-'}<small>${ovs(A)}</small></div><div class="sub">${esc(teamName(A))}</div></div></div>
+    <div class="sb-mid">${done?`<div class="result-big">${esc(M.result.text)}</div>`:`<b>${ordinal(I.no)} innings</b><br>${statusLine(M,I)}`}
+      ${M.fmt==='TEST'&&M.pitch?`<br><span class="muted">${PITCHES[M.pitch].name}${M.lost?' · '+M.lost+' overs lost to rain':''}</span>`:''}</div>
+    <div class="sb-team r"><div><div class="sb-score">${sc(B)||'-'}<small>${ovs(B)}</small></div><div class="sub">${esc(teamName(B))}</div></div>${badge(B)}</div>
+  </div>
+  ${done?doneBlock(M):`<div class="grid g2">
+    <div class="card"><h3>At the crease</h3>
+      ${[I.st,I.ns].filter(p=>bt[p]&&!bt[p].out).map(p=>`<div class="bat-line ${p===I.st?'on':''}"><span class="nm">${plink(p)}</span><b class="num">${bt[p].r}</b><span class="muted num">(${bt[p].b})</span><span class="muted num" style="font-size:12px">${bt[p].f4}×4 ${bt[p].f6}×6</span></div>`).join('')}
+      ${P?`<div class="muted" style="margin-top:6px">Partnership ${P.r} (${P.bl})</div>`:''}
+      ${W?`<h3 style="margin-top:12px">Bowling</h3><div class="bat-line"><span>${plink(bowlerId)}</span><b class="num">${W.w}-${W.r}</b><span class="muted num">${oversTxt(W.b)} ov</span><span class="muted" style="font-size:12px">${STYLE_NAME[pAttr(bowlerId).style]||''}</span></div>`:''}
+    </div>
+    <div class="card"><h3>This over</h3>
+      <div class="ticker">${thisOver.length?thisOver.map(ballChip).join(''):'<span class="muted">New over</span>'}</div>
+      ${C?diceBlock(M,C):'<div class="muted" style="margin-top:8px">The next over picks a card from the bowler\'s rating and the match situation, then one roll reads all six balls.</div>'}
+      <div class="ticker" style="margin-top:10px;opacity:.75">${lastOvers.map(ballChip).join('')}</div>
+    </div></div>
+  <div class="card"><div class="row" id="controls">
+    ${pend?`<b>${esc(teamName(M.pending.team))} lead by ${M.pending.lead}.</b> Enforce the follow-on? <button class="btn pri" id="fo-yes">Enforce</button><button class="btn" id="fo-no">Bat again</button>`:`
+    <button class="btn" id="c-ball">Next ball</button><button class="btn pri" id="c-over">Bowl over</button>
+    <button class="btn" id="c-5">5 overs</button><button class="btn" id="c-inn">End of innings</button>
+    <button class="btn" id="c-watch">${WATCH?'❚❚ Pause':'▶ Watch'}</button><button class="btn" id="c-sim">Sim match</button>
+    ${M.fmt==='TEST'&&I.no<4?`<button class="btn warn" id="c-dec">Declare</button>`:''}`}
+    <span id="dice-in"></span></div></div>`}
+  <div class="card"><div class="seg" style="margin-bottom:10px">${[['card','Scorecard'],['comm','Ball by ball'],['charts','Charts'],['rr','Run-rate card']].map(([k,n])=>`<button data-tab="${k}" class="${MATCH_TAB===k?'on':''}">${n}</button>`).join('')}</div>
+    <div id="mtab"></div></div>
+  </div>`;
+  drawMatchTab(M);
+  $$('[data-tab]').forEach(b=>b.onclick=()=>{MATCH_TAB=b.dataset.tab;$$('[data-tab]').forEach(x=>x.classList.toggle('on',x===b));drawMatchTab(M);});
+  if(done){$('#d-next')&&($('#d-next').onclick=()=>{const n=nextFixture();LM=null;if(n)startFixture(n.key);else go('home');});return;}
+  if(pend){$('#fo-yes').onclick=()=>{decideFollowOn(M,true);afterStep(M);};$('#fo-no').onclick=()=>{decideFollowOn(M,false);afterStep(M);};return;}
+  $('#c-ball').onclick=()=>step(M,'ball');$('#c-over').onclick=()=>step(M,'over');$('#c-5').onclick=()=>step(M,'5');
+  $('#c-inn').onclick=()=>step(M,'inn');$('#c-sim').onclick=()=>step(M,'match');$('#c-watch').onclick=()=>toggleWatch(M);
+  $('#c-dec')&&($('#c-dec').onclick=()=>{if(confirm(`Declare ${teamName(I.bat)}'s innings at ${I.runs}/${I.wkts}?`)){declare(M);afterStep(M);}});
+  if(M.needRoll)askRoll(M);
+}
+function diceBlock(M,C){
+  const row=WORLD.cards[C.card][(C.roll||1)-1];
+  return`<div class="row" style="margin-top:10px"><span class="dice">RR_${C.card} <span class="muted">roll</span> <b>${C.roll||'?'}</b></span>
+    <span class="muted" style="font-size:12px">${esc(pName(C.bowler))} (rating ${Math.min(pAttr(C.bowler).rating,5)})</span></div>
+    ${C.roll?`<div class="cardgrid" style="margin-top:8px">${row.map((t,i)=>`<span class="${i+1===C.col?'cur':i+1<C.col?'used':''}" title="${esc(t)}">${esc(t.replace(/^W_/,'W ').replace(/_/g,' '))}</span>`).join('')}</div>`:''}`;
+}
+function doneBlock(M){
+  const E=S.matches.find(x=>x.id===M.id);
+  const n=nextFixture();
+  return`<div class="card hi"><div class="spread"><div><div class="result-big">${esc(M.result.text)}</div>
+    ${E&&E.motm?`<div style="margin-top:4px">Man of the Match: <b>${plink(E.motm)}</b></div>`:''}</div>
+    <div class="row">${n?`<button class="btn pri" id="d-next">Next: ${esc(teamShort(n.a))} v ${esc(teamShort(n.b))}</button>`:''}<button class="btn" data-go="home">Dashboard</button></div></div></div>`;
+}
+// Steps: ball / over / 5 overs / innings / match. Stops early for a manual roll or a follow-on decision.
+function step(M,kind){
+  stopWatch();
+  const I0=curInn(M),n0=M.inns.length,ov0=I0.lb;
+  let g=0;
+  const target=kind==='over'?1:kind==='5'?5:0;
+  let overs=0;
+  while(M.state==='live'&&!M.pending&&g++<50000){
+    const r=bowlBall(M,M.rollIn);M.rollIn=null;
+    if(r&&r.need){M.needRoll=r.need;break;}
+    M.needRoll=null;
+    if(kind==='ball')break;
+    if(!M.cur&&target){overs++;if(overs>=target)break;}
+    if(kind==='inn'&&M.inns.length!==n0)break;
+  }
+  afterStep(M);
+}
+function afterStep(M){
+  if(M.state==='live'&&M.cur===null&&curInn(M).lb%6===0)saveGame();
+  rerender();
+}
+function askRoll(M){
+  const C=M.cur,what=M.needRoll==='comp'?'a fresh roll for the re-bowled ball':'the roll for this over';
+  $('#dice-in').innerHTML=`<span class="dice">🎲 Enter ${what} (RR_${C?C.card:'?'}): <input type="number" id="roll-v" min="1" max="100" style="width:70px"> <button class="btn sm pri" id="roll-ok">Roll in</button> <button class="btn sm" id="roll-auto">Roll for me</button></span>`;
+  const go_=v=>{v=+v;if(!(v>=1&&v<=100)){toast('Rolls are 1 to 100.','warn');return;}M.rollIn=v;M.needRoll=null;step(M,'ball');};
+  $('#roll-ok').onclick=()=>go_($('#roll-v').value);
+  $('#roll-v').onkeydown=e=>{if(e.key==='Enter')go_(e.target.value);};
+  $('#roll-auto').onclick=()=>go_(roll100());
+  $('#roll-v').focus();
+}
+function toggleWatch(M){
+  if(WATCH){stopWatch();rerender();return;}
+  if(M.manual){toast('Watch mode needs automatic dice (Settings).','warn');return;}
+  const tick=()=>{
+    if(VIEW!=='match'||M.state!=='live'||M.pending){stopWatch();rerender();return;}
+    bowlBall(M);rerender();
+    WATCH=setTimeout(tick,S.settings.ballDelay);
+  };
+  WATCH=setTimeout(tick,10);rerender();
+}
+function stopWatch(){if(WATCH){clearTimeout(WATCH);WATCH=null;}}
+
+function drawMatchTab(M){
+  const el=$('#mtab');if(!el)return;
+  const E=M.state==='done'?(S.matches.find(x=>x.id===M.id)||archiveMatch(M)):archiveMatch(M);
+  if(MATCH_TAB==='card')el.innerHTML=scorecardHTML(E,M);
+  else if(MATCH_TAB==='comm'){
+    const balls=M.inns.flatMap(I=>I.balls.map(b=>({...b,pos:I.order.indexOf(b.st)+1}))).slice(-150).reverse();
+    el.innerHTML=`<div class="commentary">${balls.map(ballText).join('')||'<span class="muted">No balls yet.</span>'}</div>`;
+  }else if(MATCH_TAB==='charts')el.innerHTML=chartsHTML(E);
+  else el.innerHTML=rrCardHTML(M);
+}
+function rrCardHTML(M){
+  const C=M.cur,code=C?C.card:(curInn(M).overs.slice(-1)[0]||{}).card||'3';
+  const grid=WORLD.cards[code];
+  return`<div class="row" style="margin-bottom:8px">${RR_CODES.map(c=>`<button class="btn sm ${c===code?'pri':''}" data-rr="${c}">RR_${c}</button>`).join('')}</div>
+  <div class="muted" style="font-size:12px;margin-bottom:6px">Rows are the 1-100 roll, columns balls 1-6. BLUE wickets get anyone out, GREEN only Nos.7-11, RED only Nos.10-11.</div>
+  <div class="tbl-wrap" style="max-height:380px;overflow:auto"><table class="mono" style="font-size:11px" id="rr-tbl">${rrRows(code,C)}</table></div>`;
+}
+function rrRows(code,C){
+  return'<tr><th>Roll</th>'+[1,2,3,4,5,6].map(i=>`<th>B${i}</th>`).join('')+'</tr>'+WORLD.cards[code].map((r,i)=>`<tr ${C&&C.card===code&&C.roll===i+1?'style="background:rgba(6,182,212,.18)"':''}><td class="muted">${i+1}</td>${r.map(t=>`<td style="color:${/BLUE/.test(t)?'#60a5fa':/GREEN/.test(t)?'#4ade80':/RED/.test(t)?'#f87171':t==='4'||t==='6'?'#fde047':''}">${esc(t.replace(/^W_/,'W ').replace(/_/g,' '))}</td>`).join('')}</tr>`).join('');
+}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-rr]');if(!b)return;const t=$('#rr-tbl');if(t){t.innerHTML=rrRows(b.dataset.rr,LM&&LM.cur);$$('[data-rr]').forEach(x=>x.classList.toggle('pri',x===b));}});
+
+// ---------- scorecard ----------
+function scorecardHTML(E,M){
+  return E.inns.map((I,k)=>{
+    const ex=I.ex,extras=sum(ex);
+    const dnb=E.xi[I.bat].slice(0,11).filter(p=>!I.bt.some(r=>r[0]===p));
+    const live=M&&M.state!=='done'&&k===E.inns.length-1;
+    const atCrease=live?[M.inns[k].st,M.inns[k].ns]:[];
+    return`<div style="margin-bottom:16px"><div class="spread"><h3 style="margin:0">${esc(teamName(I.bat))} - ${E.fmt==='ODI'?'innings':ordinal(E.inns.filter((x,j)=>j<=k&&x.bat===I.bat).length)+' innings'}</h3>
+      <b class="num">${I.runs}${I.wkts<10?'/'+I.wkts:''}${I.why==='declared'?' dec':''} <span class="muted">(${oversTxt(I.lb)} ov${I.target?', target '+I.target:''})</span></b></div>
+    <div class="tbl-wrap"><table class="num"><tr><th>Batter</th><th class="hide-sm"></th><th class="r">R</th><th class="r">B</th><th class="r">4s</th><th class="r">6s</th><th class="r">SR</th></tr>
+    ${I.bt.map(r=>`<tr><td>${plink(r[0])}${r[0]===E.xi[I.bat][12]?' (c)':''}${r[0]===E.xi[I.bat][11]?' †':''}${atCrease.includes(r[0])&&!r[5]?' <span class="cyan">*</span>':''}</td>
+      <td class="hide-sm sub" style="font-size:12px">${r[5]?dismissalText(r[5],r[6],r[7]):live&&atCrease.includes(r[0])?'batting':'not out'}</td>
+      <td class="r"><b>${r[1]}</b></td><td class="r">${r[2]}</td><td class="r">${r[3]}</td><td class="r">${r[4]}</td><td class="r">${r[2]?f1(100*r[1]/r[2]):'-'}</td></tr>`).join('')}
+    <tr><td>Extras</td><td class="hide-sm sub" style="font-size:12px">(b ${ex[0]}, lb ${ex[1]}, w ${ex[2]}, nb ${ex[3]})</td><td class="r">${extras}</td><td colspan="4"></td></tr></table></div>
+    ${dnb.length&&!live?`<div class="muted" style="font-size:12px">Did not bat: ${dnb.map(p=>esc(pName(p))).join(', ')}</div>`:''}
+    ${I.fow.length?`<div class="muted" style="font-size:12px;margin-top:4px">Fall of wickets: ${I.fow.map(f=>`${f[1]}-${f[0]} (${esc(pName(f[2]))}, ${f[3]})`).join(', ')}</div>`:''}
+    <div class="tbl-wrap" style="margin-top:8px"><table class="num"><tr><th>Bowler</th><th class="r">O</th><th class="r">M</th><th class="r">R</th><th class="r">W</th><th class="r">Econ</th><th class="r hide-sm">Wd</th><th class="r hide-sm">Nb</th></tr>
+    ${I.bw.map(w=>`<tr><td>${plink(w[0])}</td><td class="r">${oversTxt(w[1])}</td><td class="r">${w[2]}</td><td class="r">${w[3]}</td><td class="r"><b>${w[4]}</b></td><td class="r">${w[1]?f2(w[3]/(w[1]/6)):'-'}</td><td class="r hide-sm">${w[5]}</td><td class="r hide-sm">${w[6]}</td></tr>`).join('')}</table></div>
+    ${I.parts.length?`<details style="margin-top:6px"><summary class="muted" style="cursor:pointer">Partnerships</summary><table class="num">${I.parts.map(p=>`<tr><td>${ordinal(p[4])} wkt</td><td>${esc(pName(p[0]))} &amp; ${esc(pName(p[1]))}</td><td class="r"><b>${p[2]}</b>${p[5]?'':'*'}</td><td class="r muted">(${p[3]} balls)</td></tr>`).join('')}</table></details>`:''}
+    </div>`;
+  }).join('')+(E.inns.length?'':'<div class="muted">No play yet.</div>')+(E.result&&E.motm&&(!M||M.state==='done')?`<div class="banner">Man of the Match: <b>${plink(E.motm)}</b></div>`:'')
+  +realBlock(E);
+}
+// "What really happened": the real bowling figures for a historical ODI.
+function realBlock(E){
+  const f=E.fid&&FIX_BY_NO.get(E.fid);if(!f||E.reseeded)return'';
+  const rows=E.teams.map(t=>[t,realFigures(f.cid,t)]).filter(x=>x[1].length);
+  if(!rows.length)return'';
+  return`<details style="margin-top:12px"><summary class="muted" style="cursor:pointer">What really happened (real bowling figures)</summary>${rows.map(([t,fig])=>`<h3 style="margin-top:10px">${esc(teamName(t))} bowling</h3><table class="num">${fig.map(r=>`<tr><td>${esc(pName(r[0]))}</td><td class="r">${r[1]} ov</td><td class="r">${r[2]} m</td><td class="r">${r[3]} r</td><td class="r"><b>${r[4]} w</b></td></tr>`).join('')}</table>`).join('')}</details>`;
+}
+
+// ---------- charts ----------
+function chartsHTML(E){
+  if(!E.inns.length||!E.inns[0].ov.length)return'<div class="muted">Charts appear once an over has been bowled.</div>';
+  const col=['#06b6d4','#ffd700','#34d394','#f97316'];
+  const W=640,H=220,pad=30;
+  const maxOv=Math.max(...E.inns.map(I=>I.ov.length),E.fmt==='ODI'?50:10);
+  const worm=E.inns.map(I=>{let c=0;return I.ov.map(o=>c+=o[0]);});
+  const maxR=Math.max(50,...worm.map(w=>w[w.length-1]||0));
+  const x=i=>pad+(W-pad*2)*(i/maxOv),y=v=>H-pad-(H-pad*2)*(v/maxR);
+  const ticks=[0,.25,.5,.75,1].map(t=>Math.round(maxR*t));
+  const wormSvg=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Worm chart">${ticks.map(t=>`<line x1="${pad}" x2="${W-pad}" y1="${y(t)}" y2="${y(t)}" stroke="#1e293b"/><text x="4" y="${y(t)+3}">${t}</text>`).join('')}
+    ${worm.map((w,k)=>`<polyline fill="none" stroke="${col[k]}" stroke-width="2" points="${pad},${y(0)} ${w.map((v,i)=>`${x(i+1)},${y(v)}`).join(' ')}"/>`+E.inns[k].ov.map((o,i)=>o[1]?`<circle cx="${x(i+1)}" cy="${y(w[i])}" r="3.5" fill="#ef4444"/>`:'').join('')).join('')}
+    <text x="${W/2}" y="${H-6}" text-anchor="middle">overs</text></svg>`;
+  const man=E.inns.map((I,k)=>{
+    const mx=Math.max(8,...I.ov.map(o=>o[0])),bw=(W-pad*2)/Math.max(I.ov.length,E.fmt==='ODI'?50:20);
+    return`<div class="sub" style="margin-top:8px">${esc(teamName(I.bat))} - runs per over</div><svg viewBox="0 0 ${W} 120" role="img" aria-label="Manhattan">${I.ov.map((o,i)=>`<rect x="${pad+i*bw}" y="${100-90*o[0]/mx}" width="${Math.max(1,bw-1)}" height="${90*o[0]/mx}" fill="${col[k]}" opacity=".85"/>${o[1]?`<circle cx="${pad+i*bw+bw/2}" cy="${96-90*o[0]/mx}" r="3" fill="#ef4444"/>`:''}`).join('')}<text x="4" y="14">${mx}</text></svg>`;
+  }).join('');
+  return`<div class="chart"><div class="row" style="font-size:12px">${E.inns.map((I,k)=>`<span><span style="display:inline-block;width:10px;height:10px;background:${col[k]};border-radius:2px"></span> ${esc(teamShort(I.bat))} ${ordinal(k+1)} inns</span>`).join('')}<span class="muted">● wicket</span></div>${wormSvg}${man}</div>`;
+}
+function openScorecard(mid){
+  const E=S.matches.find(x=>x.id===mid);if(!E)return;
+  openModal(`<div class="sub">${esc(E.series)}${E.stage?' · '+esc(E.stage):''} · ${esc(E.venue)} · ${fmtDate(E.date)}</div>
+    <h2 style="margin:6px 0">${tlabel(E.teams[0])} v ${tlabel(E.teams[1])}</h2><div class="result-big" style="margin-bottom:10px">${esc(E.result.text)}</div>
+    <div class="muted" style="margin-bottom:10px">Toss: ${esc(teamName(E.toss[0]))}, chose to ${E.toss[1]}${E.pitch?' · '+PITCHES[E.pitch].name:''}${E.reseeded?' · re-seeded knockout':''}</div>
+    ${scorecardHTML(E)}<h3 style="margin-top:14px">Charts</h3>${chartsHTML(E)}`);
+}

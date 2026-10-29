@@ -1,0 +1,12 @@
+{
+  "name": "first-xi",
+  "private": true,
+  "description": "First XI Cricket - single-file HTML cricket career sim (ODI & Test)",
+  "scripts": {
+    "build": "node tools/build.js",
+    "test": "bash tests/runall.sh",
+    "check": "node tools/check.js --root",
+    "extract": "python3 tools/extract.py"
+  },
+  "devDependencies": { "jsdom": "^26.0.0" }
+}
