@@ -8,7 +8,8 @@ The repo root holds a prebuilt `first-xi.html` (double-click to open). **After a
 ## The rules (sacred - this is the board game)
 - Each over: a run-rate card RR_3 / 4A / 4B / 5 / 6 / 7 is picked by weighted random from the bowler's rating (`CARD_WEIGHTS[fmt][rating]`), shifted by the situation (`situationShift`, port of `CalcSituationShift`; `applyShift` ports `ApplyShift` including its lossy overflow).
 - One roll 1-100 per over picks the row; balls 1-6 read columns B-G. A wide/no-ball is re-bowled off a fresh roll, column 1 (`M.cur.comp`).
-- Wicket colours (`wicketCounts`): batting positions 1-6 fall only to BLUE, 7-9 to BLUE/GREEN, 10-11 to anything; otherwise the ball is a dot (`ball.voided`).
+- Wicket colours (`wicketCounts(colour, cardColour)`): a BLUE batter falls only to BLUE, GREEN to BLUE/GREEN, RED to anything; otherwise the ball is a dot (`ball.voided`, `ball.bcol`).
+- Batting colours (`batColour`): classic rule = by position (1-6 BLUE, 7-9 GREEN, 10-11 RED; Settings → Batting colours → Classic, `M.batMode='position'`). Player colours (default): one letter, or two = vs associates + vs Test nations (`BG`). A colour from the workbook's BatGroup or the player card applies exactly; a derived colour is never weaker than his position, except an associate's second letter against a Test nation. Derived in `extract.py` `bat_group`: usual position ≥10 RED, 7-9 GREEN; full-member top order BLUE with `BAT_BLUE_CAPS` (20) caps else GREEN; associate top order BLUE with `BAT_BLUE_VS_FULL` (45) games against full members, else `BG`. Tuned with `tools/dev/strength.js`: full members beat associates ~81% (classic rule: ~50%; real ~80-85%), full v full and associate v associate score as in classic.
 - Striker is always the one out. Next batter = batting order[wkts+1]. Odd runs (incl. byes) swap strike on legal balls; end of over swaps.
 - Bowling engine (`bowlEngInit`/`chooseBowler`/`bowlEngEndOver`, port of `modBowlingEngine`): ODIs follow the real Cricsheet bowling plan per over (`M.plans`, from BowlingXI OverList) and fall back to the spell engine (spell/rest lengths `SPELLS`, phase bonus, quality, random 0-15). Max 10 overs, no consecutive overs.
 - MOTM (`pickMOTM`, port of `modMOTM`): runs×SR/100 + wkts×25 + maidens×10 − econ×3 + ct 10 / st 15 / ro 12 + 50/100/5w bonuses 15/30/40, ×1.25 for the winners.
@@ -19,7 +20,7 @@ The repo root holds a prebuilt `first-xi.html` (double-click to open). **After a
 - `src/template.html` - page shell with `/*@@CSS@@*/`, `/*@@DATA@@*/`, `/*@@JS@@*/`
 - `src/styles.css` - all CSS (Excel dark palette: navy `#0a0e1a`, panels `#0f172a`/`#1e293b`, cyan `#06b6d4`, gold `#ffd700`)
 - `src/js/NN-*.js` - concatenated **in filename order into one global scope** (not modules): top-level names must be unique across files; `const`/`let` are subject to TDZ.
-- `data/world.json` - generated, committed: teams, RR cards, fixtures, XIs, bowling plans, players with bowling attributes (`[name, style P/S/M/N, rating 1-5 or 7, maxOvers, src h|d]`), optional `tests`/`txi`.
+- `data/world.json` - generated, committed: teams, RR cards, fixtures, XIs, bowling plans, players (`[name, style P/S/M/N, rating 1-5 or 7, maxOvers, src h|d, batColour B/G/R/BG or '', batSrc h|d]`), optional `tests`/`txi`.
 - `tools/extract.py` - workbook → `data/world.json` (needs `openpyxl`). Bowling ratings: the workbook's Players sheet (by name) wins, else derived from real BowlingXI spells (percentile of runs/over − 9×wkts/over vs full members; associates +1).
 - `tools/cricsheet_tests.py` - adds real Tests from Cricsheet's `tests_json.zip` (stdlib only). Captain/keeper unknown in Cricsheet → -1, resolved in `testXI` from the nearest ODI XI.
 - `tools/build.js [out] [world.json]`, `tools/check.js`, `tools/dev/` (eval helper, team-strength report)
@@ -54,4 +55,4 @@ The repo root holds a prebuilt `first-xi.html` (double-click to open). **After a
 - Check for duplicate top-level names after adding code (`npm run check`).
 - Adding a feature = a section in the most relevant `src/js` file (or a new `NN-name.js`), plus a test in `tests/e2eN.js`.
 - Phones: `@media (max-width:600px)` at the end of `styles.css`; check new screens at 390px (no horizontal scroll).
-- Known design limit: batting has no individuality (only position + colour), so team strength comes from bowling ratings alone and associates beat full members far too often (`tools/dev/strength.js`: ~53% v ~85% real). Any fix changes the board-game rules - ask first.
+- The workbook has no batting figures, so batting colours are proxies (position, caps, caps v full members). Change the thresholds only with `tools/dev/strength.js` (and check `tests/engine-stats.js` for Tests). Weak bowlers bowl the fast cards, which carry the most wickets (RR_7: 52 BLUE) - that's why bowling ratings alone couldn't separate the teams.

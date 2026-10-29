@@ -6,7 +6,15 @@ Usage: python3 tools/extract.py path/to/FirstXI.xlsm [data/world.json]
 Reads Teams, Players, Fixtures, MatchXI, BowlingXI and the RR_* run-rate cards.
 Bowler ratings: a rating set by hand in the Players sheet (matched by name) wins;
 everyone else gets a rating derived from their real Cricsheet spells in BowlingXI.
+Batting colours (BLUE / GREEN / RED, the wicket colours that can get him out): the Players sheet's
+BatGroup wins; otherwise from where he usually bats, his caps, and his caps against full members
+(see bat_group). The workbook has no batting figures, so these are proxies.
 """
+BAT_BLUE_CAPS = int(__import__('os').environ.get('BAT_BLUE_CAPS', 20))       # full-member top-order batter with this many caps -> BLUE
+BAT_BLUE_VS_FULL = int(__import__('os').environ.get('BAT_BLUE_VS_FULL', 45))    # associate top-order batter with this many games against full members -> BLUE
+# A colour is one letter (B/G/R, against everyone) or two (against associates, against Test nations): an associate's
+# unproven top order is 'BG' - BLUE against associates, GREEN against Test nations. Tuned with tools/dev/strength.js
+# (full members beat associates ~80%, every other matchup scores as the classic rules do).
 import json, re, sys, collections
 import openpyxl
 
@@ -87,6 +95,30 @@ def main():
         cap = next((p for p in flagged_cap if p in eleven), eleven[0])
         xi[cid][tid] = eleven + [eleven.index(wk), eleven.index(cap)]
 
+    # ---- batting: usual position, caps, caps against full members ----
+    bat_pos, caps_vs_full, home = collections.defaultdict(list), collections.Counter(), collections.defaultdict(collections.Counter)
+    for cid, sides in xi.items():
+        for tid, lst in sides.items():
+            opp = next((t for t in sides if t != tid), None)
+            for i, p in enumerate(lst[:11]):
+                bat_pos[p].append(i + 1); home[p][tid] += 1
+                if opp in FULL:
+                    caps_vs_full[p] += 1
+
+    def bat_group(pid):
+        pos = sorted(bat_pos[pid])
+        if not pos:   # only ever 12th man: no colour, the position rule applies
+            return ''
+        med = pos[len(pos) // 2]
+        if med >= 10:
+            return 'R'
+        full = home[pid].most_common(1)[0][0] in FULL
+        if med >= 7:
+            return 'G'
+        if full:
+            return 'B' if len(pos) >= BAT_BLUE_CAPS else 'G'
+        return 'B' if caps_vs_full[pid] >= BAT_BLUE_VS_FULL else 'BG'
+
     # ---- bowling plans + real figures ----
     team_of = {}
     for cid, sides in xi.items():
@@ -125,7 +157,8 @@ def main():
     hand = {}
     for r in rows(wb['Players']):
         if r[1]:
-            hand[str(r[1]).strip()] = (str(r[8] or 'NONE').strip().upper(), num(r[9]), num(r[10]))
+            hand[str(r[1]).strip()] = (str(r[8] or 'NONE').strip().upper(), num(r[9]), num(r[10]),
+                                       {'BLUE': 'B', 'GREEN': 'G', 'RED': 'R'}.get(str(r[4] or '').strip().upper(), ''))
 
     def value(b):  # lower is better: runs per over minus wicket bonus
         balls, runs, wk, _ = b
@@ -153,15 +186,18 @@ def main():
             style = 'S' if (edge < .14 and tot >= 20) else 'P' if new >= .30 else 'M'
             avg = s['all'][0] / 6 / max(1, s['mt'])
             mx = 10 if avg >= 6.5 else max(2, min(10, round(avg * 1.4)))
+        bat, bsrc = bat_group(pid), 'd'
         h = hand.get(pname)
+        if h and h[3]:
+            bat, bsrc = h[3], 'h'
         if h:
-            hs, hr, hm = h
+            hs, hr, hm, _ = h
             if hs == 'NONE' or hm == 0:
                 style, rating, mx = 'N', 7, 0
             else:
                 style, rating, mx = hs[0], hr or 3, hm or 10
             src = 'h'
-        players[pid] = [pname, style, rating, mx, src]
+        players[pid] = [pname, style, rating, mx, src, bat, bsrc]
 
     world = {
         'source': SRC.split('/')[-1],
@@ -176,7 +212,8 @@ def main():
         json.dump(world, f, separators=(',', ':'))
     print('wrote', OUT, 'fixtures', len(fixtures), 'xis', len(xi), 'plans', len(plans), 'players', len(players),
           'hand-rated', sum(1 for p in players.values() if p[4] == 'h'))
-    print('ratings', collections.Counter(p[2] for p in players.values()), 'styles', collections.Counter(p[1] for p in players.values()))
+    print('ratings', collections.Counter(p[2] for p in players.values()), 'styles', collections.Counter(p[1] for p in players.values()),
+          'bat colours', collections.Counter(p[5] for p in players.values()))
 
 
 if __name__ == '__main__':

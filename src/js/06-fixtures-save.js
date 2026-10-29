@@ -64,7 +64,7 @@ function buildMatch(fx){
     const home=fx.real?(VENUE_HOME.get(fx.venue)||fx.a):fx.a;
     const M=newMatch({fmt:'TEST',a:fx.a,b:fx.b,home,date:fx.date,venue:fx.venue,city:fx.city,sid:fx.sid,series:fx.title,stage:fx.label,
       xiA:xi(fx.a),xiB:xi(fx.b)});
-    M.key=fx.key;return M;
+    M.key=fx.key;M.batMode=S.settings.batColours;return M;
   }
   const f=fx.f,E=edition(f.sid);
   let a=f.a,b=f.b,reseeded=false;
@@ -74,7 +74,7 @@ function buildMatch(fx){
   const M=newMatch({fmt:'ODI',a,b,date:f.date,venue:f.venue,city:f.city,cid:f.cid,fid:f.no,sid:f.sid,series:seriesOf(f).title,
     stage:E?stageName(E.stageOf.get(f.no),E):'',xiA:xiFor(a),xiB:xiFor(b),home:VENUE_HOME.get(f.venue)||0});
   if(reseeded){M.reseeded={a:f.a,b:f.b};for(const t of M.teams)if(t!==f.a&&t!==f.b)delete M.plans[t];}
-  M.key=fx.key;
+  M.key=fx.key;M.batMode=S.settings.batColours;
   return M;
 }
 

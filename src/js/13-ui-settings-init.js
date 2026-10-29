@@ -3,8 +3,10 @@ const GUIDE=`<h2>How First XI works</h2>
 <p><b>Every over</b> the bowler's rating picks one of six run-rate cards - RR_3 (tight) up to RR_7 (carnage) - shifted by the match situation:
 death overs and steep chases push towards the faster cards, a long tail pulls back. Then <b>one roll of 1-100</b> picks a row, and balls 1-6 are read straight across it.</p>
 <p><b>Wides and no-balls</b> are re-bowled off a fresh roll (column 1 of the new row).</p>
-<p><b>Wicket colours.</b> A wicket on the card only counts if its colour can get that batter out: Nos. 1-6 fall only to <span style="color:#60a5fa">BLUE</span>,
-Nos. 7-9 to BLUE or <span style="color:#4ade80">GREEN</span>, Nos. 10-11 to anything (including <span style="color:#f87171">RED</span>). Otherwise it's a dot ball.</p>
+<p><b>Wicket colours.</b> A wicket on the card only counts if its colour can get that batter out. Every batter has a colour:
+<span style="color:#60a5fa">BLUE</span> batters fall only to BLUE wickets, <span style="color:#4ade80">GREEN</span> to BLUE or GREEN, <span style="color:#f87171">RED</span> to anything. Otherwise it's a dot ball.</p>
+<p>Colours come from your workbook's BatGroup where set; otherwise from where he usually bats and his caps. A derived colour is never weaker than his batting position (Nos. 1-6 BLUE, 7-9 GREEN, 10-11 RED),
+except that associate batters not yet proven against Test nations are GREEN against them. Settings → Batting colours → Classic plays the original position-only rule.</p>
 <p><b>Bowlers</b> follow the real bowling plan of the match where Cricsheet has it, then a spell engine (pace with the new ball and at the death, spin through the middle).
 Ratings 1 (elite) to 5 (part-timer) come from your Excel ratings where you set them, otherwise from each bowler's real spells. Edit any of them on a player's card.</p>
 <p><b>Tests</b> use their own card weights (RR_3 most overs, RR_7 as the wicket card), five days of 90 overs, weather, pitches that wear, follow-ons at 200 and declarations.</p>
@@ -20,6 +22,7 @@ RENDER.settings=(el)=>{
   <div class="card stack"><h3>Game</h3>
     <div class="spread"><span>Dice</span>${seg('dice',[['auto','Automatic'],['manual','I roll']])}</div>
     <div class="spread"><span>Test captaincy (declarations, follow-on)</span>${seg('captain',[['auto','AI'],['manual','Me']])}</div>
+    <div class="spread"><span>Batting colours</span>${seg('batColours',[['player','Player'],['position','Classic (by position)']])}</div>
     <div class="spread"><span>Tournament knockouts</span>${seg('knockouts',[['timeline','My timeline'],['history','History']])}</div>
     <div class="spread"><span>Watch speed</span>${seg('ballDelay',[[600,'Slow'],[250,'Normal'],[60,'Fast']])}</div>
     <div class="spread"><span>Follow a team</span><select id="st-team"><option value="0">None</option>${[...TEAMS.values()].map(t=>`<option value="${t.id}" ${st.myTeam===t.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select></div>
@@ -32,7 +35,7 @@ RENDER.settings=(el)=>{
   </div>
   <div class="card" style="margin-top:14px"><h3>Data</h3><p class="sub">${FIX.length.toLocaleString()} ODI fixtures from Cricsheet (${fmtDate(FIX[0].date)} - ${fmtDate(FIX[FIX.length-1].date)}), ${Object.keys(WORLD.xi).length.toLocaleString()} real XIs and bowling plans, ${Object.keys(WORLD.players).length.toLocaleString()} players. Built from ${esc(WORLD.source||'the First XI workbook')}.</p></div>`;
   $$('[data-set]').forEach(b=>b.onclick=()=>{const k=b.dataset.set,v=b.dataset.val;st[k]=k==='ballDelay'?+v:v;
-    if(S.live&&S.live.state!=='done'){if(k==='dice')S.live.manual=v==='manual';if(k==='captain')S.live.manualCaptain=v==='manual'?Object.fromEntries(S.live.teams.map(t=>[t,true])):null;}
+    if(S.live&&S.live.state!=='done'){if(k==='dice')S.live.manual=v==='manual';if(k==='captain')S.live.manualCaptain=v==='manual'?Object.fromEntries(S.live.teams.map(t=>[t,true])):null;if(k==='batColours')S.live.batMode=v;}
     saveGame();rerender();});
   $('#st-team').onchange=e=>{st.myTeam=+e.target.value;saveGame();};
   $('#st-guide').onclick=openGuide;

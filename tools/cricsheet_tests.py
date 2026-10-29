@@ -40,7 +40,7 @@ def main():
         if len(by_name.get(name, [])) == 1:
             return by_name[name][0]
         pid = next_id; next_id += 1
-        players[str(pid)] = [name, 'N', 7, 0, 'd']
+        players[str(pid)] = [name, 'N', 7, 0, 'd', '', 'd']   # no batting colour: the position rule applies
         by_name[name].append(pid); by_name_team[(name, tid)] = pid
         return pid
 

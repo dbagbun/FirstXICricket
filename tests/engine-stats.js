@@ -3,7 +3,7 @@
 const fs=require('fs'),path=require('path'),vm=require('vm');
 const root=path.join(__dirname,'..');
 const ctx={console,Math,Date,JSON,Map,Set,isFinite,String,Number,Array,Object,parseInt};vm.createContext(ctx);
-vm.runInContext('const WORLD='+fs.readFileSync(path.join(root,'data/world.json'),'utf8')+';',ctx);
+ctx.process={env:process.env};vm.runInContext('const WORLD='+fs.readFileSync(path.join(root,'data/world.json'),'utf8')+';',ctx);
 for(const f of['01-util.js','02-world.js','03-engine.js'])vm.runInContext(fs.readFileSync(path.join(root,'src/js',f),'utf8').replace("'use strict';",''),ctx);
 const nO=+process.argv[2]||400,nT=+process.argv[3]||150;
 const out=vm.runInContext(`(function(nO,nT){
@@ -11,7 +11,7 @@ const out=vm.runInContext(`(function(nO,nT){
   const fx=FIX.filter(f=>WORLD.xi[f.cid]&&Object.keys(WORLD.xi[f.cid]).length===2);
   for(let k=0;k<nO;k++){
     const f=fx[Math.floor(Math.random()*fx.length)];
-    const M=newMatch({fmt:'ODI',a:f.a,b:f.b,date:f.date,cid:f.cid,xiA:fixtureXI(f.cid,f.a),xiB:fixtureXI(f.cid,f.b)});
+    const M=newMatch({fmt:'ODI',batMode:process.env.BATMODE,a:f.a,b:f.b,date:f.date,cid:f.cid,xiA:fixtureXI(f.cid,f.a),xiB:fixtureXI(f.cid,f.b)});
     doToss(M);simMatch(M);
     const [a,b]=M.inns;st.odi.n++;st.odi.inn1.push(a.runs);st.odi.wk1.push(a.wkts);st.odi.inn2.push(b.runs);st.odi.ov.push(a.lb/6);
     if(M.result.type==='wkts')st.odi.chaseW++;if(M.result.type==='tie')st.odi.ties++;
@@ -22,7 +22,7 @@ const out=vm.runInContext(`(function(nO,nT){
   for(let k=0;k<nT;k++){
     const a=full[Math.floor(Math.random()*8)];let b=a;while(b===a)b=full[Math.floor(Math.random()*8)];
     const d='2010-06-01';
-    const M=newMatch({fmt:'TEST',a,b,date:d,xiA:nearestXI(a,d),xiB:nearestXI(b,d)});
+    const M=newMatch({fmt:'TEST',a,b,home:a,date:d,xiA:nearestXI(a,d),xiB:nearestXI(b,d),batMode:process.env.BATMODE});
     doToss(M);simMatch(M);st.test.n++;
     for(const I of M.inns){st.test.inns.push(I.runs);if(I.why==='declared')st.test.decl++;for(const p in I.bt)if(I.bt[p].r>=100)st.test.hundreds++;}
     st.test.overs.push(testBallsBowled(M)/6);if(M.followOn)st.test.fo++;

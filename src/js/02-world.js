@@ -4,14 +4,20 @@ const teamName=id=>TEAMS.get(+id)?.name||('Team '+id);
 const teamShort=id=>TEAMS.get(+id)?.short||String(id);
 const pName=pid=>(WORLD.players[pid]||['#'+pid])[0];
 
-// Bowling attributes: [style P/S/M/N, rating 1-5 (7 = does not bowl), max overs]. Edits in S.attrEdits win.
+// Player attributes: WORLD.players[pid] = [name, style P/S/M/N, rating 1-5 (7 = does not bowl), max overs, src,
+// batting colour: B/G/R against everyone, or two letters = against associates + against Test nations
+// ('BG': BLUE v associates, GREEN v Test nations; '' = by position), batSrc].
+// Edits in S.attrEdits win (bowling fields and/or bat).
 function pAttr(pid){
   const e=typeof S!=='undefined'&&S&&S.attrEdits&&S.attrEdits[pid];
-  const p=WORLD.players[pid]||['?','N',7,0,'d'];
-  const a=e||{style:p[1],rating:p[2],max:p[3]};
-  return{style:a.style,rating:a.rating,max:a.max,src:e?'e':p[4]};
+  const p=WORLD.players[pid]||['?','N',7,0,'d','','d'];
+  const bw=e&&e.style?e:{style:p[1],rating:p[2],max:p[3]};
+  const bat=e&&e.bat!==undefined?e.bat:(p[5]||'');
+  return{style:bw.style,rating:bw.rating,max:bw.max,src:e&&e.style?'e':p[4],bat,batSrc:e&&e.bat!==undefined?'e':(p[6]||'d')};
 }
 const STYLE_NAME={P:'Pace',S:'Spin',M:'Medium',N:'-'};
+const BAT_NAME={B:'BLUE',G:'GREEN',R:'RED',BG:'BLUE (GREEN v Test nations)',GR:'GREEN (RED v Test nations)',BR:'BLUE (RED v Test nations)'};
+const posColour=pos=>pos<=6?'B':pos<=9?'G':'R';
 
 // Series names: "ICC World Cup (Match 12)" -> "ICC World Cup". The same name recurs across years
 // (NatWest Series, ICC World Cup ...), so an edition is a run of same-name fixtures with gaps under 60 days.

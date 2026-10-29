@@ -48,6 +48,7 @@ function openPlayer(pid){
   const line=(E)=>{const parts=[];for(const I of E.inns){const b=I.bt.find(r=>r[0]===pid);if(b)parts.push(b[1]+(b[5]?'':'*'));const w=I.bw.find(r=>r[0]===pid);if(w)parts.push(w[4]+'/'+w[3]);}return parts.join(', ')||'dnb';};
   openModal(`<h2>${esc(pName(pid))}</h2>
   <div class="row muted" style="margin-bottom:10px">${rows.length?rows[0][1].teams.map(badge).join(' '):''}
+    <span>Batting: <b>${esc(a.bat?BAT_NAME[a.bat]:'by position')}</b> <span class="pill">${a.batSrc==='h'?'from your Excel BatGroup':a.batSrc==='e'?'edited':'derived'}</span></span>
     <span>Bowling: ${a.style==='N'?'does not bowl':`${STYLE_NAME[a.style]}, rating ${a.rating}${a.rating>=5?' (part-timer)':a.rating===1?' (elite)':''}`}
     <span class="pill">${a.src==='h'?'from your Excel ratings':a.src==='e'?'edited':'from real spells'}</span></span>
     <button class="btn sm" id="pa-edit">Edit</button></div>
@@ -55,13 +56,14 @@ function openPlayer(pid){
     <label>Style <select id="pa-style">${['P','S','M','N'].map(s=>`<option value="${s}" ${a.style===s?'selected':''}>${s==='N'?'Does not bowl':STYLE_NAME[s]}</option>`).join('')}</select></label>
     <label>Rating <select id="pa-rating">${[1,2,3,4,5].map(r=>`<option ${a.rating===r?'selected':''}>${r}</option>`).join('')}</select></label>
     <label>Max ODI overs <input type="number" id="pa-max" min="0" max="10" value="${a.max}" style="width:70px"></label>
+    <label>Batting colour <select id="pa-bat">${[['','By position'],['B','BLUE'],['G','GREEN'],['R','RED'],['BG','BLUE (GREEN v Test nations)']].map(([v,n])=>`<option value="${v}" ${a.bat===v?'selected':''}>${n}</option>`).join('')}</select></label>
     <button class="btn pri sm" id="pa-save">Save</button><button class="btn sm" id="pa-reset">Reset</button></div>
-    <div class="muted" style="font-size:12px;margin-top:6px">Rating 1 is elite, 5 a part-timer: it sets the run-rate card weights for every over he bowls.</div></div>
+    <div class="muted" style="font-size:12px;margin-top:6px">Rating 1 is elite, 5 a part-timer: it sets the run-rate card weights for every over he bowls. Batting colour is the wicket colour that can get him out: BLUE batters fall only to BLUE, GREEN to BLUE or GREEN, RED to anything.</div></div>
   ${rows.length?rows.map(([f,s])=>`<h3>${f==='TEST'?'Test':'ODI'} career</h3><div class="tbl-wrap"><table class="num"><tr><th>M</th><th>Inn</th><th>NO</th><th>Runs</th><th>HS</th><th>Avg</th><th>SR</th><th>100</th><th>50</th><th>Wkts</th><th>BB</th><th>Avg</th><th>Econ</th><th>5w</th><th>Ct</th><th>St</th><th>MoM</th></tr>
     <tr><td>${s.m}</td><td>${s.inn}</td><td>${s.no}</td><td>${s.r}</td><td>${s.hs}${s.hsNo?'*':''}</td><td>${f2(batAvg(s))}</td><td>${f1(batSR(s))}</td><td>${s.c100}</td><td>${s.c50}</td><td>${s.bw}</td><td>${s.best[0]}/${s.best[1]}</td><td>${f2(bowlAvg(s))}</td><td>${f2(bowlEcon(s))}</td><td>${s.w5}</td><td>${s.ct}</td><td>${s.st}</td><td>${s.motm}</td></tr></table></div>`).join(''):'<p class="muted">Hasn\'t played in this career yet.</p>'}
   ${recent.length?`<h3>Recent matches</h3><table>${recent.map(E=>`<tr data-mid="${E.id}" style="cursor:pointer"><td>${fmtDate(E.date)}</td><td>${E.fmt}</td><td>v ${badge(otherOf(E,E.teams.find(t=>E.xi[t].slice(0,11).includes(pid))))}</td><td class="r num">${line(E)}</td></tr>`).join('')}</table>`:''}
   ${ms.length?`<h3>Milestones</h3>${ms.map(m=>`<div>🏅 ${esc(m.text)} <span class="muted">${fmtDate(m.date)} · ${m.fmt}</span></div>`).join('')}`:''}`);
   $('#pa-edit').onclick=()=>$('#pa-form').classList.toggle('hidden');
-  $('#pa-save').onclick=()=>{S.attrEdits[pid]={style:$('#pa-style').value,rating:+$('#pa-rating').value,max:clamp(+$('#pa-max').value,0,10)};if(S.attrEdits[pid].style==='N')Object.assign(S.attrEdits[pid],{rating:7,max:0});saveGame();openPlayer(pid);};
+  $('#pa-save').onclick=()=>{S.attrEdits[pid]={style:$('#pa-style').value,rating:+$('#pa-rating').value,max:clamp(+$('#pa-max').value,0,10),bat:$('#pa-bat').value};if(S.attrEdits[pid].style==='N')Object.assign(S.attrEdits[pid],{rating:7,max:0});saveGame();openPlayer(pid);};
   $('#pa-reset').onclick=()=>{delete S.attrEdits[pid];saveGame();openPlayer(pid);};
 }

@@ -1,8 +1,11 @@
 // ═══ MATCH ENGINE — run-rate cards, one roll per over, wicket colours (the First XI rules) ═══
 // Each over: pick a run-rate card (weights from the bowler's rating, shifted by the match situation),
 // roll 1-100 once, and read balls 1-6 off that row. A wide or no-ball is re-bowled off a fresh roll
-// (column 1 of the new row). A wicket only counts if its colour can get that batter out:
-// positions 1-6 fall to BLUE, 7-9 to BLUE/GREEN, 10-11 to anything; otherwise the ball is a dot.
+// (column 1 of the new row). A wicket only counts if its colour can get that batter out: a BLUE batter
+// falls only to BLUE, GREEN to BLUE/GREEN, RED to anything; otherwise the ball is a dot.
+// Batting colours (batColour): the classic rule is by position (1-6 BLUE, 7-9 GREEN, 10-11 RED). With player
+// colours, a colour you set (workbook BatGroup or the player card) applies exactly; a derived colour never makes
+// him weaker than his position, except an associate's second letter against a Test nation ('BG', 'GR').
 const RR_CODES=['3','4A','4B','5','6','7'];
 const CARD_WEIGHTS={
   ODI:{1:[35,30,20,10,4,1],2:[15,30,30,15,8,2],3:[5,15,30,30,15,5],4:[2,8,15,30,30,15],5:[1,4,10,20,35,30]},
@@ -71,7 +74,18 @@ function parseToken(tok){
   }
   return o;
 }
-const wicketCounts=(pos,color)=>pos<=6?color==='BLUE':pos<=9?(color==='BLUE'||color==='GREEN'):color!=='';
+const wicketCounts=(group,color)=>group==='B'?color==='BLUE':group==='G'?(color==='BLUE'||color==='GREEN'):color!=='';
+const COL_RANK={B:0,G:1,R:2};
+function batColour(M,pid,pos,bowlTeam){
+  const pc=posColour(pos);
+  if(M.batMode==='position')return pc;
+  const a=pAttr(pid),c=a.bat;
+  if(!c)return pc;
+  const vsFull=!!TEAMS.get(+bowlTeam)?.full;
+  const own=c.length===2?c[vsFull?1:0]:c;
+  if(a.batSrc==='h'||a.batSrc==='e'||(c.length===2&&vsFull))return own;
+  return COL_RANK[own]<COL_RANK[pc]?own:pc;
+}
 const BOWLER_CREDIT={b:1,lbw:1,ct:1,ctof:1,ctwk:1,st:1,ro:0};
 
 // ---------- match setup ----------
@@ -81,7 +95,7 @@ function newMatch(o){
     id:o.id||('m'+Date.now().toString(36)+(MATCH_SEQ++)),fmt:o.fmt||'ODI',fid:o.fid||null,cid:o.cid||null,sid:o.sid||null,
     series:o.series||'',stage:o.stage||'',date:o.date,venue:o.venue||'',city:o.city||'',teams:[+o.a,+o.b],
     xi:{[o.a]:o.xiA,[o.b]:o.xiB},plans:{},toss:null,inns:[],state:'pre',result:null,
-    maxOv:o.maxOv||50,events:[],pending:null,followOn:false,cur:null,home:o.home||0,
+    maxOv:o.maxOv||50,events:[],pending:null,followOn:false,cur:null,home:o.home||0,batMode:o.batMode||'player',
   };
   if(M.fmt==='TEST')M.pitch=o.pitch||rollPitch(M.home);
   // Historical bowling plans (ODIs): the real bowler of each over, by player id.
@@ -276,8 +290,8 @@ function bowlBall(M,manualRoll){
   const tok=WORLD.cards[C.card][roll-1][col-1];
   const t=parseToken(tok);
   const striker=I.st,pos=I.order.indexOf(striker)+1;
-  let voided=false;
-  if(t.w&&!wicketCounts(pos,t.color)){voided=true;Object.assign(t,{w:false,color:'',how:'',bat:0,ex:0,exType:''});}
+  let voided=false;const bcol=batColour(M,striker,pos,I.bowl);
+  if(t.w&&!wicketCounts(bcol,t.color)){voided=true;Object.assign(t,{w:false,color:'',how:'',bat:0,ex:0,exType:''});}
   const illegal=t.exType==='wd'||t.exType==='nb';
   const runs=t.bat+t.ex,B=I.bt[striker],W=I.bw[C.bowler];
   C.n++;
@@ -292,7 +306,7 @@ function bowlBall(M,manualRoll){
   const P=I.part;P.r+=runs;if(t.exType!=='wd')P.bl++;
   if(striker===P.a)P.ra+=t.bat;else P.rb+=t.bat;
   const ball={inn:I.no,over:C.over,n:C.n,legal:0,card:C.card,roll,col,tok,st:striker,ns:I.ns,bowler:C.bowler,
-    bat:t.bat,ex:t.ex,exType:t.exType,w:0,how:'',fielder:0,out:0,runs:I.runs,wkts:I.wkts,voided,ev:[]};
+    bat:t.bat,ex:t.ex,exType:t.exType,w:0,how:'',fielder:0,out:0,runs:I.runs,wkts:I.wkts,voided,bcol,ev:[]};
   if(illegal){
     C.comp=true;
   }else{

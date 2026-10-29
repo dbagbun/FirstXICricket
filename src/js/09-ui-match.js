@@ -28,7 +28,7 @@ function ballText(b){
   const who=`${esc(pName(b.bowler))} to ${esc(pName(b.st))}`;
   let t;
   if(b.w)t=`<span class="w">OUT! ${dismissalText(b.how,b.bowler,b.fielder||0)}</span>`;
-  else if(b.voided)t=`<span class="sub">wicket card (${esc(String(b.tok).split('_')[1]||'')}) - not the colour to get a No.${b.pos||''} out: dot ball</span>`;
+  else if(b.voided)t=`<span class="sub">${esc(String(b.tok).split('_')[1]||'')} wicket on the card - ${esc(pName(b.st))} is ${BAT_NAME[b.bcol]||'?'} and survives: dot ball</span>`;
   else if(b.exType==='wd')t='wide';
   else if(b.exType==='nb')t='no-ball';
   else if(b.exType==='lb')t=plural(b.ex,'leg bye');
@@ -85,9 +85,10 @@ RENDER.match=(el)=>{
 };
 
 // ---------- pre-match ----------
+const batChip=c=>`<span class="bchip b${c}" title="Falls to ${c==='B'?'BLUE wickets only':c==='G'?'BLUE or GREEN wickets':'any wicket'}">${c}</span>`;
 function xiTable(M,t){
   const x=M.xi[t];
-  return`<table>${x.bat.map((p,i)=>{const a=pAttr(p);return`<tr><td class="muted">${i+1}</td><td>${plink(p)}${p===x.cap?' <span class="gold">(c)</span>':''}${p===x.wk?' <span class="cyan">†</span>':''}</td>
+  return`<table>${x.bat.map((p,i)=>{const a=pAttr(p);return`<tr><td class="muted">${i+1}</td><td>${batChip(batColour(M,p,i+1,otherTeam(M,t)))} ${plink(p)}${p===x.cap?' <span class="gold">(c)</span>':''}${p===x.wk?' <span class="cyan">†</span>':''}</td>
     <td class="r muted" style="font-size:12px">${a.style==='N'?'':STYLE_NAME[a.style]+' '+'●'.repeat(6-Math.min(a.rating,5))}</td><td class="r"><button class="btn sm" data-swap="${t}:${i}">Swap</button></td></tr>`;}).join('')}</table>`;
 }
 function renderPre(el,M){

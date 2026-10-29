@@ -6,7 +6,7 @@ Every ODI from June 2002 to January 2026 - the real fixtures, the real XIs and t
 
 ## How it plays
 - Each over the bowler's rating picks a run-rate card (RR_3 tight … RR_7 carnage), the match situation shifts it, and **one roll of 1-100** reads all six balls off the card. Roll the dice yourself if you like (Settings → Dice → I roll).
-- Wickets only count if their colour can get that batter out: top six to BLUE, 7-9 to BLUE or GREEN, the tail to anything.
+- Wickets only count if their colour can get that batter out: BLUE batters fall only to BLUE wickets, GREEN to BLUE or GREEN, RED to anything. Every player has a colour (from your workbook's BatGroup, or worked out from where he bats and his caps) - so Australia's top order is harder to shift than Kenya's. Classic position-only colours are a setting.
 - Real bowling plans where Cricsheet has them; a spell engine otherwise. Bowler ratings from the workbook, or derived from real spells - edit any player's rating on his card.
 - Tests: five days, weather, pitch reports, wear, follow-ons and declarations (you can captain them).
 - Tournament Centre with pools, NRR, Super Six/Eight tables and brackets. Knockouts are re-seeded from **your** tables - in your timeline Kenya might make the final.
