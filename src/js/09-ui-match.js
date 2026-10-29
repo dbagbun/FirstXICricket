@@ -34,7 +34,7 @@ function ballText(b){
   else if(b.exType==='lb')t=plural(b.ex,'leg bye');
   else if(b.exType==='b')t=plural(b.ex,'bye');
   else t=b.bat===4?'<b>FOUR</b>':b.bat===6?'<b>SIX</b>':b.bat?plural(b.bat,'run'):'no run';
-  const ev=(b.ev||[]).filter(e=>e.t!=='innsEnd').map(e=>' <span class="ms">'+evText(e)+'</span>').join('');
+  const ev=(b.ev||[]).filter(e=>e.t!=='innsEnd'&&e.t!=='w').map(e=>' <span class="ms">'+evText(e)+'</span>').join('');
   return`<div><span class="ov">${b.over-1}.${b.legal||b.n}</span>${who}, ${t}${ev} <span class="muted mono" style="font-size:11px">RR_${b.card} · ${b.roll} · c${b.col}</span></div>`;
 }
 function evText(e){
@@ -208,6 +208,7 @@ function renderLive(el,M){
     <button class="btn" id="c-ball">Next ball</button><button class="btn pri" id="c-over">Bowl over</button>
     <button class="btn" id="c-5">5 overs</button><button class="btn" id="c-inn">End of innings</button>
     <button class="btn" id="c-watch">${WATCH?'❚❚ Pause':'▶ Watch'}</button><button class="btn" id="c-sim">Sim match</button>
+    <button class="btn" id="c-snd" aria-label="${S.settings.sound?'Sound off':'Sound on'}" title="Sound">${S.settings.sound?'🔊':'🔇'}</button>
     ${M.fmt==='TEST'&&I.no<4?`<button class="btn warn" id="c-dec">Declare</button>`:''}`}
     <span id="dice-in"></span></div>${captainPanel(M)}</div>`}
   <div class="card"><div class="seg" style="margin-bottom:10px">${[['card','Scorecard'],['comm','Ball by ball'],['charts','Charts'],['rr','Run-rate card']].map(([k,n])=>`<button data-tab="${k}" class="${MATCH_TAB===k?'on':''}">${n}</button>`).join('')}</div>
@@ -220,12 +221,13 @@ function renderLive(el,M){
   $('#c-ball').onclick=()=>step(M,'ball');$('#c-over').onclick=()=>step(M,'over');$('#c-5').onclick=()=>step(M,'5');
   $('#c-inn').onclick=()=>step(M,'inn');$('#c-sim').onclick=()=>step(M,'match');$('#c-watch').onclick=()=>toggleWatch(M);
   $('#c-dec')&&($('#c-dec').onclick=()=>{if(confirm(`Declare ${teamName(I.bat)}'s innings at ${I.runs}/${I.wkts}?`)){declare(M);afterStep(M);}});
-  wireCaptain(M);
+  wireCaptain(M);fxDice(M);
+  $('#c-snd')&&($('#c-snd').onclick=()=>{S.settings.sound=!S.settings.sound;if(S.settings.sound)SFX.crack(.8);saveGame();rerender();});
   if(M.needRoll)askRoll(M);
 }
 function diceBlock(M,C){
   const row=WORLD.cards[C.card][(C.roll||1)-1];
-  return`<div class="row" style="margin-top:10px"><span class="dice">RR_${C.card} <span class="muted">roll</span> <b>${C.roll||'?'}</b></span>
+  return`<div class="row" style="margin-top:10px"><span class="dice">RR_${C.card} <span class="muted">roll</span> <b id="dice-roll">${C.roll||'?'}</b></span>
     <span class="muted" style="font-size:12px">${esc(pName(C.bowler))} (rating ${Math.min(curInn(M).eng.B[C.bi].rating,5)})</span></div>
     ${C.roll?`<div class="cardgrid" style="margin-top:8px">${row.map((t,i)=>`<span class="${i+1===C.col?'cur':i+1<C.col?'used':''}" title="${esc(t)}">${esc(t.replace(/^W_/,'W ').replace(/_/g,' '))}</span>`).join('')}</div>`:''}`;
 }
@@ -243,11 +245,12 @@ function step(M,kind){
   let g=0;
   const target=kind==='over'?1:kind==='5'?5:0;
   let overs=0;
+  FX.allow=kind==='ball'||kind==='over';
   while(M.state==='live'&&!M.pending&&g++<50000){
     const r=bowlBall(M,M.rollIn);M.rollIn=null;
     if(r&&r.need){M.needRoll=r.need;break;}
     M.needRoll=null;
-    if(kind==='ball')break;
+    if(kind==='ball'){fxBall(M,r);break;}
     if(!M.cur&&target){overs++;if(overs>=target)break;}
     if(kind==='inn'&&M.inns.length!==n0)break;
   }
@@ -271,7 +274,7 @@ function toggleWatch(M){
   if(M.manual){toast('Watch mode needs automatic dice (Settings).','warn');return;}
   const tick=()=>{
     if(VIEW!=='match'||M.state!=='live'||M.pending){stopWatch();rerender();return;}
-    bowlBall(M);rerender();
+    FX.allow=true;fxBall(M,bowlBall(M));rerender();
     WATCH=setTimeout(tick,S.settings.ballDelay);
   };
   WATCH=setTimeout(tick,10);rerender();

@@ -21,6 +21,8 @@ The repo root holds a prebuilt `first-xi.html` (double-click to open). **After a
 
 - Rankings & awards (`07b-rankings.js`, state `S.rk` from `blankRankings`, rebuilt by `rebuildRankings` for old saves): team Elo per format (`RANK_K`, start 1500 / 1400 ZIM-BAN / 1250 associates, shown as `(elo-1000)/5`), player rankings = exponential average (`RANK_ALPHA`) of match performance × opposition strength, scaled by `PLAYER_SCALE`, active within `RANK_ACTIVE_DAYS`; `playerOfSeries` when a series has no fixtures left (`matchScores` = MOTM formula without the winner bonus); `yearEnd` awards every finished year once (`awardsFor`, min `AWARD_MIN_MATCHES`), composite XIs excluded. Called from `onMatchDone`; UI `12b-ui-rankings.js`.
 
+- Presentation (`12c-fx.js`): `FX.allow` is set by `step()` (true for a single ball / one over / watch, false for 5 overs, innings, sim) - graphics (`tvBanner` via `fxEvent`, from `uiMatchHook`; Settings → TV graphics) and sound (`SFX`, WebAudio synthesised, `fxBall`; off by default, 🔇 button on the match screen) only play then. `fxDice` tumbles a new over's roll (fixed sequence, not `Math.random`, so seeded tests stay repeatable). Engine fires a `w` event per wicket. `prefers-reduced-motion` respected.
+
 ## Layout
 - `src/template.html` - page shell with `/*@@CSS@@*/`, `/*@@DATA@@*/`, `/*@@JS@@*/`
 - `src/styles.css` - all CSS (Excel dark palette: navy `#0a0e1a`, panels `#0f172a`/`#1e293b`, cyan `#06b6d4`, gold `#ffd700`)
@@ -46,7 +48,7 @@ The repo root holds a prebuilt `first-xi.html` (double-click to open). **After a
 - `05-tournament`: `edition(sid)` (pools by pairing analysis - see rules below - stage per fixture), `pointsTable` (W4, T/NR 2, NRR with all-out = full overs), `groupTables`, `superTable` (carried points), timeline re-seeding `resolveFixture` (super stage: one-for-one swap inside each pool; knockouts: `resolveKO` SF 1v4/2v3 or A1vB2/B1vA2, QF A1vB4…), `seriesStatus`.
 - `06-fixtures-save`: fixture keys `o<no>` (ODI), `r<no>` (real Test), `T<n>.<k>` (Test series you schedule, `S.tests`); `allFixtures` (cached), `buildMatch`, `onMatchDone` (archive → stats → milestones → save), `simFixture`; saves in localStorage `fxi_save_1..3`, slot in `fxi_slot`; ball logs kept for the last `LOG_KEEP` matches.
 - `07-records`: `recordsData(fmt)` (cached by match count), qualification `REC_MIN`.
-- UI: `08-ui-shell` (nav/`go`/`RENDER`, modal, player card with rating edits), `09-ui-match` (pre-match XI swaps & toss, live view, dice panel, manual roll input, watch mode, scorecard, charts, RR card viewer, "what really happened"), `10-ui-home` (dashboard, bulk sim, Test series creator, fixtures), `11-ui-tour`, `12-ui-records` (records, players, results, milestones), `13-ui-settings-init` (settings, splash, live hooks, `init`).
+- UI (files before `13-…-init` so their consts exist when `init()` runs): `08-ui-shell` (nav/`go`/`RENDER`, modal, player card with rating edits), `09-ui-match` (pre-match XI swaps & toss, live view, dice panel, manual roll input, watch mode, scorecard, charts, RR card viewer, "what really happened"), `10-ui-home` (dashboard, bulk sim, Test series creator, fixtures), `11-ui-tour`, `12-ui-records` (records, players, results, milestones), `13-ui-settings-init` (settings, splash, live hooks, `init`).
 
 ## Rules learned the hard way (from the Excel version, still true)
 - **Stage detection uses team-pairing analysis.** Never match counts (Cricsheet has gaps: 2003 World Cup is missing four games) and never fixture position.

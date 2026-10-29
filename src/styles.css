@@ -129,6 +129,18 @@ tbody tr:hover td{background:rgba(30,41,59,.6)}
 .banner{padding:12px 14px;border-radius:var(--r);background:linear-gradient(90deg,rgba(255,215,0,.15),rgba(255,215,0,.02));border:1px solid rgba(255,215,0,.4)}
 .result-big{font-size:20px;font-weight:800;color:var(--gold)}
 
+.tv{position:fixed;left:50%;top:76px;z-index:70;transform:translate(-50%,-30px);opacity:0;pointer-events:none;min-width:280px;max-width:92vw;text-align:center;
+  background:linear-gradient(90deg,#0c4a6e,#1e293b 40%,#1e293b 60%,#0c4a6e);border:1px solid var(--cyan);border-radius:12px;padding:10px 22px;box-shadow:0 10px 30px rgba(0,0,0,.5);transition:opacity .25s,transform .25s}
+.tv.in{opacity:1;transform:translate(-50%,0)}
+.tv .tv-k{font-size:26px;font-weight:900;letter-spacing:.18em}
+.tv .tv-s{color:var(--sub);margin-top:2px}
+.tv.wkt{border-color:var(--red)}.tv.wkt .tv-k{color:#f87171}
+.tv.ms{border-color:var(--gold)}.tv.ms .tv-k{color:var(--gold)}
+.tv.res{border-color:var(--green)}.tv.res .tv-k{color:var(--green)}
+.dice.rolling b{color:var(--gold);animation:diceshake .09s infinite}
+@keyframes diceshake{50%{transform:translateY(-2px) rotate(-6deg)}}
+.ticker .bi:last-child{animation:pop .3s ease-out}
+@keyframes pop{from{transform:scale(.4);opacity:.2}}
 @media (max-width:900px){.g4{grid-template-columns:repeat(2,minmax(0,1fr))}.g3{grid-template-columns:1fr 1fr}}
 @media (max-width:600px){
   main{padding:12px}

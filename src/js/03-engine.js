@@ -350,6 +350,7 @@ function bowlBall(M,manualRoll){
       I.wkts++;if(credit)W.w++;
       I.fow.push({w:I.wkts,r:I.runs,pid:striker,ov:oversTxt(I.lb)});
       closePartnership(I,true);
+      fire(M,ball,{t:'w',pid:striker,how:t.how,bowler:C.bowler,fielder:ball.fielder});
       trackHat(M,I,C.bowler,credit,ball);
       if(I.wkts<10){
         const nb=I.order[I.wkts+1];I.st=nb;I.bt[nb]=newBat(I.wkts+1);

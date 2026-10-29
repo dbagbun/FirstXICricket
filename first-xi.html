@@ -136,6 +136,18 @@ tbody tr:hover td{background:rgba(30,41,59,.6)}
 .banner{padding:12px 14px;border-radius:var(--r);background:linear-gradient(90deg,rgba(255,215,0,.15),rgba(255,215,0,.02));border:1px solid rgba(255,215,0,.4)}
 .result-big{font-size:20px;font-weight:800;color:var(--gold)}
 
+.tv{position:fixed;left:50%;top:76px;z-index:70;transform:translate(-50%,-30px);opacity:0;pointer-events:none;min-width:280px;max-width:92vw;text-align:center;
+  background:linear-gradient(90deg,#0c4a6e,#1e293b 40%,#1e293b 60%,#0c4a6e);border:1px solid var(--cyan);border-radius:12px;padding:10px 22px;box-shadow:0 10px 30px rgba(0,0,0,.5);transition:opacity .25s,transform .25s}
+.tv.in{opacity:1;transform:translate(-50%,0)}
+.tv .tv-k{font-size:26px;font-weight:900;letter-spacing:.18em}
+.tv .tv-s{color:var(--sub);margin-top:2px}
+.tv.wkt{border-color:var(--red)}.tv.wkt .tv-k{color:#f87171}
+.tv.ms{border-color:var(--gold)}.tv.ms .tv-k{color:var(--gold)}
+.tv.res{border-color:var(--green)}.tv.res .tv-k{color:var(--green)}
+.dice.rolling b{color:var(--gold);animation:diceshake .09s infinite}
+@keyframes diceshake{50%{transform:translateY(-2px) rotate(-6deg)}}
+.ticker .bi:last-child{animation:pop .3s ease-out}
+@keyframes pop{from{transform:scale(.4);opacity:.2}}
 @media (max-width:900px){.g4{grid-template-columns:repeat(2,minmax(0,1fr))}.g3{grid-template-columns:1fr 1fr}}
 @media (max-width:600px){
   main{padding:12px}
@@ -693,6 +705,7 @@ function bowlBall(M,manualRoll){
       I.wkts++;if(credit)W.w++;
       I.fow.push({w:I.wkts,r:I.runs,pid:striker,ov:oversTxt(I.lb)});
       closePartnership(I,true);
+      fire(M,ball,{t:'w',pid:striker,how:t.how,bowler:C.bowler,fielder:ball.fielder});
       trackHat(M,I,C.bowler,credit,ball);
       if(I.wkts<10){
         const nb=I.order[I.wkts+1];I.st=nb;I.bt[nb]=newBat(I.wkts+1);
@@ -856,7 +869,7 @@ let S=null;
 function newCareer(opts={}){
   return{
     v:1,created:Date.now(),name:opts.name||'My career',
-    settings:{dice:'auto',captain:'auto',knockouts:'timeline',batColours:'player',ratings:'era',history:'after',myTeam:+opts.myTeam||0,ballDelay:250,sound:false},
+    settings:{dice:'auto',captain:'auto',knockouts:'timeline',batColours:'player',ratings:'era',history:'after',myTeam:+opts.myTeam||0,ballDelay:250,sound:false,tv:true},
     done:{},          // fixture no / test id -> match id
     matches:[],       // archived scorecards (compact), oldest first
     logs:{},          // match id -> compact ball log, last LOG_KEEP matches only
@@ -1681,7 +1694,7 @@ function ballText(b){
   else if(b.exType==='lb')t=plural(b.ex,'leg bye');
   else if(b.exType==='b')t=plural(b.ex,'bye');
   else t=b.bat===4?'<b>FOUR</b>':b.bat===6?'<b>SIX</b>':b.bat?plural(b.bat,'run'):'no run';
-  const ev=(b.ev||[]).filter(e=>e.t!=='innsEnd').map(e=>' <span class="ms">'+evText(e)+'</span>').join('');
+  const ev=(b.ev||[]).filter(e=>e.t!=='innsEnd'&&e.t!=='w').map(e=>' <span class="ms">'+evText(e)+'</span>').join('');
   return`<div><span class="ov">${b.over-1}.${b.legal||b.n}</span>${who}, ${t}${ev} <span class="muted mono" style="font-size:11px">RR_${b.card} · ${b.roll} · c${b.col}</span></div>`;
 }
 function evText(e){
@@ -1855,6 +1868,7 @@ function renderLive(el,M){
     <button class="btn" id="c-ball">Next ball</button><button class="btn pri" id="c-over">Bowl over</button>
     <button class="btn" id="c-5">5 overs</button><button class="btn" id="c-inn">End of innings</button>
     <button class="btn" id="c-watch">${WATCH?'❚❚ Pause':'▶ Watch'}</button><button class="btn" id="c-sim">Sim match</button>
+    <button class="btn" id="c-snd" aria-label="${S.settings.sound?'Sound off':'Sound on'}" title="Sound">${S.settings.sound?'🔊':'🔇'}</button>
     ${M.fmt==='TEST'&&I.no<4?`<button class="btn warn" id="c-dec">Declare</button>`:''}`}
     <span id="dice-in"></span></div>${captainPanel(M)}</div>`}
   <div class="card"><div class="seg" style="margin-bottom:10px">${[['card','Scorecard'],['comm','Ball by ball'],['charts','Charts'],['rr','Run-rate card']].map(([k,n])=>`<button data-tab="${k}" class="${MATCH_TAB===k?'on':''}">${n}</button>`).join('')}</div>
@@ -1867,12 +1881,13 @@ function renderLive(el,M){
   $('#c-ball').onclick=()=>step(M,'ball');$('#c-over').onclick=()=>step(M,'over');$('#c-5').onclick=()=>step(M,'5');
   $('#c-inn').onclick=()=>step(M,'inn');$('#c-sim').onclick=()=>step(M,'match');$('#c-watch').onclick=()=>toggleWatch(M);
   $('#c-dec')&&($('#c-dec').onclick=()=>{if(confirm(`Declare ${teamName(I.bat)}'s innings at ${I.runs}/${I.wkts}?`)){declare(M);afterStep(M);}});
-  wireCaptain(M);
+  wireCaptain(M);fxDice(M);
+  $('#c-snd')&&($('#c-snd').onclick=()=>{S.settings.sound=!S.settings.sound;if(S.settings.sound)SFX.crack(.8);saveGame();rerender();});
   if(M.needRoll)askRoll(M);
 }
 function diceBlock(M,C){
   const row=WORLD.cards[C.card][(C.roll||1)-1];
-  return`<div class="row" style="margin-top:10px"><span class="dice">RR_${C.card} <span class="muted">roll</span> <b>${C.roll||'?'}</b></span>
+  return`<div class="row" style="margin-top:10px"><span class="dice">RR_${C.card} <span class="muted">roll</span> <b id="dice-roll">${C.roll||'?'}</b></span>
     <span class="muted" style="font-size:12px">${esc(pName(C.bowler))} (rating ${Math.min(curInn(M).eng.B[C.bi].rating,5)})</span></div>
     ${C.roll?`<div class="cardgrid" style="margin-top:8px">${row.map((t,i)=>`<span class="${i+1===C.col?'cur':i+1<C.col?'used':''}" title="${esc(t)}">${esc(t.replace(/^W_/,'W ').replace(/_/g,' '))}</span>`).join('')}</div>`:''}`;
 }
@@ -1890,11 +1905,12 @@ function step(M,kind){
   let g=0;
   const target=kind==='over'?1:kind==='5'?5:0;
   let overs=0;
+  FX.allow=kind==='ball'||kind==='over';
   while(M.state==='live'&&!M.pending&&g++<50000){
     const r=bowlBall(M,M.rollIn);M.rollIn=null;
     if(r&&r.need){M.needRoll=r.need;break;}
     M.needRoll=null;
-    if(kind==='ball')break;
+    if(kind==='ball'){fxBall(M,r);break;}
     if(!M.cur&&target){overs++;if(overs>=target)break;}
     if(kind==='inn'&&M.inns.length!==n0)break;
   }
@@ -1918,7 +1934,7 @@ function toggleWatch(M){
   if(M.manual){toast('Watch mode needs automatic dice (Settings).','warn');return;}
   const tick=()=>{
     if(VIEW!=='match'||M.state!=='live'||M.pending){stopWatch();rerender();return;}
-    bowlBall(M);rerender();
+    FX.allow=true;fxBall(M,bowlBall(M));rerender();
     WATCH=setTimeout(tick,S.settings.ballDelay);
   };
   WATCH=setTimeout(tick,10);rerender();
@@ -2355,6 +2371,92 @@ function playerHonours(pid){
   return{ranks:out,awards:aw.concat(pos)};
 }
 
+// ═══ PRESENTATION — the dice roll, TV graphics for big moments, and sound (all synthesised, no assets) ═══
+// Graphics and sounds play when you step ball by ball, an over at a time or watch - not when you sim ahead.
+const FX={allow:true,lastKey:'',ctx:null,timer:null};
+const reduceMotion=()=>!!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+// ---------- sound ----------
+function fxAudio(){
+  if(!S||!S.settings.sound)return null;
+  try{
+    const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return null;
+    FX.ctx=FX.ctx||new AC();if(FX.ctx.state==='suspended')FX.ctx.resume();
+    return FX.ctx;
+  }catch(e){return null;}
+}
+function noise(ctx,sec){
+  const b=ctx.createBuffer(1,Math.max(1,Math.floor(ctx.sampleRate*sec)),ctx.sampleRate),d=b.getChannelData(0);
+  for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;
+  const s=ctx.createBufferSource();s.buffer=b;return s;
+}
+function envGain(ctx,t0,peak,attack,hold,release){
+  const g=ctx.createGain();g.gain.setValueAtTime(0.0001,t0);
+  g.gain.exponentialRampToValueAtTime(peak,t0+attack);
+  g.gain.setValueAtTime(peak,t0+attack+hold);
+  g.gain.exponentialRampToValueAtTime(0.0001,t0+attack+hold+release);
+  return g;
+}
+const SFX={
+  crack(v=1){const c=fxAudio();if(!c)return;const t=c.currentTime,n=noise(c,.12),f=c.createBiquadFilter();f.type='bandpass';f.frequency.value=1900;f.Q.value=1.4;
+    const g=envGain(c,t,.55*v,.002,.01,.08);n.connect(f).connect(g).connect(c.destination);n.start(t);n.stop(t+.13);
+    const o=c.createOscillator(),og=envGain(c,t,.25*v,.001,0,.05);o.frequency.value=900;o.connect(og).connect(c.destination);o.start(t);o.stop(t+.06);},
+  roar(v=1,len=1.4){const c=fxAudio();if(!c)return;const t=c.currentTime,n=noise(c,len+.2),f=c.createBiquadFilter();f.type='lowpass';f.frequency.value=950;
+    const g=envGain(c,t,.22*v,.25,len*.35,len*.6);n.connect(f).connect(g).connect(c.destination);n.start(t);n.stop(t+len+.2);},
+  stumps(){const c=fxAudio();if(!c)return;const t=c.currentTime;
+    [0,.06,.13].forEach((d,i)=>{const o=c.createOscillator();o.type='square';o.frequency.value=1300-i*250;const g=envGain(c,t+d,.12,.001,0,.07);o.connect(g).connect(c.destination);o.start(t+d);o.stop(t+d+.09);});},
+  applause(len=1.8){const c=fxAudio();if(!c)return;const t=c.currentTime;
+    for(let i=0;i<46;i++){const d=Math.random()*len,n=noise(c,.04),f=c.createBiquadFilter();f.type='highpass';f.frequency.value=1200+Math.random()*1500;
+      const g=envGain(c,t+d,.05+Math.random()*.05,.002,0,.035);n.connect(f).connect(g).connect(c.destination);n.start(t+d);n.stop(t+d+.05);}
+    SFX.roar(.35,len);},
+};
+function fxBall(M,b){
+  if(!b||b.need||!FX.allow)return;
+  if(b.w){if(b.how==='b')SFX.stumps();else SFX.crack(.7);SFX.roar(1,1.6);}
+  else if(b.bat===6){SFX.crack(1);SFX.roar(.85,1.5);}
+  else if(b.bat===4){SFX.crack(.9);SFX.roar(.45,1);}
+  else if(b.bat>0)SFX.crack(.35);
+}
+
+// ---------- TV graphics ----------
+function tvBanner(kind,title,sub){
+  if(!S||S.settings.tv===false)return;
+  let el=$('#tv');
+  if(!el){el=document.createElement('div');el.id='tv';el.setAttribute('aria-live','assertive');document.body.appendChild(el);}
+  el.className='tv '+kind;el.innerHTML=`<div class="tv-k">${esc(title)}</div>${sub?`<div class="tv-s">${sub}</div>`:''}`;
+  void el.offsetWidth;el.classList.add('in');
+  clearTimeout(FX.timer);FX.timer=setTimeout(()=>el.classList.remove('in'),reduceMotion()?2600:2000);
+}
+// returns true when it showed a graphic (so the caller can skip the toast)
+function fxEvent(M,e){
+  if(!FX.allow||M.sim||S.settings.tv===false)return false;
+  const I=M.inns.find(i=>i.no===e.inn)||curInn(M);
+  switch(e.t){
+    case'w':{const B=I.bt[e.pid];tvBanner('wkt','WICKET',`${esc(pName(e.pid))} ${dismissalText(e.how,e.bowler,e.fielder)} <b>${B.r}</b> (${B.b})`);return true;}
+    case'50':tvBanner('ms','FIFTY',`${esc(pName(e.pid))} · ${e.balls} balls`);SFX.applause(1.4);return true;
+    case'100':tvBanner('ms','HUNDRED',`${esc(pName(e.pid))} · ${e.balls} balls`);SFX.applause(2.4);return true;
+    case'200':tvBanner('ms','DOUBLE HUNDRED',esc(pName(e.pid)));SFX.applause(3);return true;
+    case'5w':tvBanner('ms','FIVE WICKETS',`${esc(pName(e.pid))} · ${e.w}/${e.r}`);SFX.applause(1.8);return true;
+    case'hat':tvBanner('ms','HAT-TRICK!',esc(pName(e.pid)));SFX.applause(3);return true;
+    case'innsEnd':tvBanner('inn','INNINGS',`${esc(teamName(e.bat))} ${e.runs}${e.wkts<10?'/'+e.wkts:''} · ${esc(e.why)}`);return true;
+    case'result':tvBanner('res','RESULT',esc(e.text));SFX.applause(2.5);return true;
+  }
+  return false;
+}
+
+// ---------- the dice ----------
+// A new over's roll tumbles before it lands, then the card row lights up ball by ball.
+function fxDice(M){
+  const C=M.cur,el=$('#dice-roll');if(!C||!C.roll||!el)return;
+  const key=M.id+':'+curInn(M).no+':'+C.over;
+  if(key===FX.lastKey)return;
+  FX.lastKey=key;
+  if(!FX.allow||reduceMotion()||S.settings.ballDelay<100)return;
+  const box=el.closest('.dice');box&&box.classList.add('rolling');
+  // the tumbling numbers are a fixed sequence, not Math.random, so seeded runs stay repeatable
+  let n=0;const iv=setInterval(()=>{el.textContent=1+(C.roll*13+n*37)%100;if(++n>=9){clearInterval(iv);el.textContent=C.roll;box&&box.classList.remove('rolling');}},45);
+}
+
 // ═══ SETTINGS, SPLASH, LIVE HOOKS & INIT ═══
 const GUIDE=`<h2>How First XI works</h2>
 <p><b>Every over</b> the bowler's rating picks one of six run-rate cards - RR_3 (tight) up to RR_7 (carnage) - shifted by the match situation:
@@ -2385,6 +2487,8 @@ RENDER.settings=(el)=>{
     <div class="spread"><span>Batting colours</span>${seg('batColours',[['player','Player'],['position','Classic (by position)']])}</div>
     <div class="spread"><span>Tournament knockouts</span>${seg('knockouts',[['timeline','My timeline'],['history','History']])}</div>
     ${HAS_REAL?`<div class="spread"><span>Real results (after you play a match)</span>${seg('history',[['after','Show'],['off','Hide']])}</div>`:''}
+    <div class="spread"><span>Sound</span>${seg('sound',[['false','Off'],['true','On']])}</div>
+    <div class="spread"><span>TV graphics for wickets &amp; milestones</span>${seg('tv',[['true','On'],['false','Off']])}</div>
     <div class="spread"><span>Watch speed</span>${seg('ballDelay',[[600,'Slow'],[250,'Normal'],[60,'Fast']])}</div>
     <div class="spread"><span>Follow a team</span><select id="st-team"><option value="0">None</option>${[...TEAMS.values()].map(t=>`<option value="${t.id}" ${st.myTeam===t.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select></div>
     <button class="btn" id="st-guide">How to play</button></div>
@@ -2395,7 +2499,7 @@ RENDER.settings=(el)=>{
     <div class="row"><button class="btn" id="st-rebuild">Rebuild stats from scorecards</button><button class="btn warn" id="st-reset">Start this slot again</button></div></div>
   </div>
   <div class="card" style="margin-top:14px"><h3>Data</h3><p class="sub">${FIX.length.toLocaleString()} ODI fixtures from Cricsheet (${fmtDate(FIX[0].date)} - ${fmtDate(FIX[FIX.length-1].date)}), ${Object.keys(WORLD.xi).length.toLocaleString()} real XIs and bowling plans, ${Object.keys(WORLD.players).length.toLocaleString()} players. Built from ${esc(WORLD.source||'the First XI workbook')}.</p></div>`;
-  $$('[data-set]').forEach(b=>b.onclick=()=>{const k=b.dataset.set,v=b.dataset.val;st[k]=k==='ballDelay'?+v:v;
+  $$('[data-set]').forEach(b=>b.onclick=()=>{const k=b.dataset.set,v=b.dataset.val;st[k]=k==='ballDelay'?+v:v==='true'?true:v==='false'?false:v;
     if(S.live&&S.live.state!=='done'){if(k==='dice')S.live.manual=v==='manual';if(k==='captain')S.live.manualCaptain=v==='manual'?captainOf(S.live):null;if(k==='batColours')S.live.batMode=v;}
     saveGame();rerender();});
   $('#st-team').onchange=e=>{st.myTeam=+e.target.value;saveGame();};
@@ -2429,8 +2533,9 @@ function showSplash(){
 // live match events -> toasts; end of match -> result
 uiMatchHook=(M,e,fast)=>{
   if(M.sim||VIEW!=='match')return;
-  if(['50','100','200','5w','hat','rain','followon'].includes(e.t))toast((e.t==='rain'?'🌧 ':e.t==='followon'?'':'🏏 ')+esc(evText(e)),e.t==='rain'?'warn':'ms');
-  if(e.t==='innsEnd'&&M.state==='live')toast(esc(evText(e)));
+  const shown=fxEvent(M,e);
+  if(!shown&&['50','100','200','5w','hat','rain','followon'].includes(e.t))toast((e.t==='rain'?'🌧 ':e.t==='followon'?'':'🏏 ')+esc(evText(e)),e.t==='rain'?'warn':'ms');
+  if(!shown&&e.t==='innsEnd'&&M.state==='live')toast(esc(evText(e)));
   if(fast)toast('🏆 '+esc(pName(fast.pid))+': '+esc(fast.text),'ms');
 };
 uiDoneHook=(M,E,ms,pos,aw)=>{

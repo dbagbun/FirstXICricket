@@ -28,6 +28,8 @@ RENDER.settings=(el)=>{
     <div class="spread"><span>Batting colours</span>${seg('batColours',[['player','Player'],['position','Classic (by position)']])}</div>
     <div class="spread"><span>Tournament knockouts</span>${seg('knockouts',[['timeline','My timeline'],['history','History']])}</div>
     ${HAS_REAL?`<div class="spread"><span>Real results (after you play a match)</span>${seg('history',[['after','Show'],['off','Hide']])}</div>`:''}
+    <div class="spread"><span>Sound</span>${seg('sound',[['false','Off'],['true','On']])}</div>
+    <div class="spread"><span>TV graphics for wickets &amp; milestones</span>${seg('tv',[['true','On'],['false','Off']])}</div>
     <div class="spread"><span>Watch speed</span>${seg('ballDelay',[[600,'Slow'],[250,'Normal'],[60,'Fast']])}</div>
     <div class="spread"><span>Follow a team</span><select id="st-team"><option value="0">None</option>${[...TEAMS.values()].map(t=>`<option value="${t.id}" ${st.myTeam===t.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select></div>
     <button class="btn" id="st-guide">How to play</button></div>
@@ -38,7 +40,7 @@ RENDER.settings=(el)=>{
     <div class="row"><button class="btn" id="st-rebuild">Rebuild stats from scorecards</button><button class="btn warn" id="st-reset">Start this slot again</button></div></div>
   </div>
   <div class="card" style="margin-top:14px"><h3>Data</h3><p class="sub">${FIX.length.toLocaleString()} ODI fixtures from Cricsheet (${fmtDate(FIX[0].date)} - ${fmtDate(FIX[FIX.length-1].date)}), ${Object.keys(WORLD.xi).length.toLocaleString()} real XIs and bowling plans, ${Object.keys(WORLD.players).length.toLocaleString()} players. Built from ${esc(WORLD.source||'the First XI workbook')}.</p></div>`;
-  $$('[data-set]').forEach(b=>b.onclick=()=>{const k=b.dataset.set,v=b.dataset.val;st[k]=k==='ballDelay'?+v:v;
+  $$('[data-set]').forEach(b=>b.onclick=()=>{const k=b.dataset.set,v=b.dataset.val;st[k]=k==='ballDelay'?+v:v==='true'?true:v==='false'?false:v;
     if(S.live&&S.live.state!=='done'){if(k==='dice')S.live.manual=v==='manual';if(k==='captain')S.live.manualCaptain=v==='manual'?captainOf(S.live):null;if(k==='batColours')S.live.batMode=v;}
     saveGame();rerender();});
   $('#st-team').onchange=e=>{st.myTeam=+e.target.value;saveGame();};
@@ -72,8 +74,9 @@ function showSplash(){
 // live match events -> toasts; end of match -> result
 uiMatchHook=(M,e,fast)=>{
   if(M.sim||VIEW!=='match')return;
-  if(['50','100','200','5w','hat','rain','followon'].includes(e.t))toast((e.t==='rain'?'🌧 ':e.t==='followon'?'':'🏏 ')+esc(evText(e)),e.t==='rain'?'warn':'ms');
-  if(e.t==='innsEnd'&&M.state==='live')toast(esc(evText(e)));
+  const shown=fxEvent(M,e);
+  if(!shown&&['50','100','200','5w','hat','rain','followon'].includes(e.t))toast((e.t==='rain'?'🌧 ':e.t==='followon'?'':'🏏 ')+esc(evText(e)),e.t==='rain'?'warn':'ms');
+  if(!shown&&e.t==='innsEnd'&&M.state==='live')toast(esc(evText(e)));
   if(fast)toast('🏆 '+esc(pName(fast.pid))+': '+esc(fast.text),'ms');
 };
 uiDoneHook=(M,E,ms,pos,aw)=>{
