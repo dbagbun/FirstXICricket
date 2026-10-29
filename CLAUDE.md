@@ -41,6 +41,8 @@ The repo root holds a prebuilt `first-xi.html` (double-click to open). **After a
 
 - Broadcast styles (`12h-broadcast.js`, CSS at the end of `styles.css` under `[data-bc=…]`): `S.settings.broadcast` standard/classic/modern/event, `applyBroadcast()` sets `body[data-bc]`; non-standard styles swap the scoreboard for `scorebugHTML(M)` (shared markup, each style is CSS only). TV graphics take the team for its colour (`tvBanner(kind,title,sub,team)` → `--tc`). Original looks only: no real broadcaster names or logos.
 
+- Fonts: `fonts/*.woff2` (latin subsets from @fontsource, SIL OFL, licences beside them) are embedded by `tools/build.js` as @font-face data URIs, so the page stays one offline file. UI: `--font` Barlow, `--head` Barlow Condensed; Settings → App font (`body[data-font]`: barlow/montserrat/oswald/saira/system). Broadcast styles use their own: Classic Oswald, Modern Saira Condensed, World event Montserrat. To add a weight, drop `<family>-latin-<weight>-normal.woff2` in `fonts/`.
+
 ## Layout
 - `src/template.html` - page shell with `/*@@CSS@@*/`, `/*@@DATA@@*/`, `/*@@JS@@*/`
 - `src/styles.css` - all CSS (Excel dark palette: navy `#0a0e1a`, panels `#0f172a`/`#1e293b`, cyan `#06b6d4`, gold `#ffd700`)

@@ -2,15 +2,25 @@
 :root{
   --bg:#0a0e1a;--panel:#0f172a;--card:#1e293b;--line:#334155;--muted:#64748b;--sub:#94a3b8;--text:#f8fafc;
   --cyan:#06b6d4;--cyan2:#67e8f9;--deep:#0c4a6e;--blue:#1e40af;--green:#34d394;--gold:#ffd700;--orange:#f97316;--red:#ef4444;--violet:#8b5cf6;
-  --r:10px;--font:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --r:10px;--mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --sys:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  /* embedded fonts (see fonts/): body and headings, switched by Settings -> App font (body[data-font]) */
+  --font:"Barlow",var(--sys);--head:"Barlow Condensed","Barlow",var(--sys);
 }
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 var(--font)}
 body{min-height:100vh}
 a{color:var(--cyan2)}
 button{font:inherit;color:inherit;cursor:pointer}
-h1,h2,h3{margin:0 0 .5em;font-weight:700;letter-spacing:.01em}
-h2{font-size:18px}h3{font-size:15px;color:var(--sub);text-transform:uppercase;letter-spacing:.06em}
+h1,h2,h3{margin:0 0 .5em;font-weight:700;letter-spacing:.01em;font-family:var(--head)}
+h1{font-size:30px}h2{font-size:22px}h3{font-size:15px;color:var(--sub);text-transform:uppercase;letter-spacing:.08em}
+.brand,.sb-score,.result-big,.tbadge,.pill,#nav button,.btn,th,.bug-runs,.dice b{font-family:var(--head)}
+#nav button,.btn{font-size:15px;letter-spacing:.02em}
+.sb-score{font-size:34px}
+:root[data-font=montserrat],[data-font=montserrat]{--font:"Montserrat",var(--sys);--head:"Montserrat",var(--sys)}
+[data-font=oswald]{--font:"Oswald",var(--sys);--head:"Oswald",var(--sys)}
+[data-font=saira]{--font:"Saira Condensed",var(--sys);--head:"Saira Condensed",var(--sys)}
+[data-font=system]{--font:var(--sys);--head:var(--sys)}
 .hidden{display:none!important}
 .muted{color:var(--muted)}.sub{color:var(--sub)}.gold{color:var(--gold)}.green{color:var(--green)}.red{color:var(--red)}.cyan{color:var(--cyan)}
 .num{font-variant-numeric:tabular-nums}
@@ -158,7 +168,12 @@ tbody tr:hover td{background:rgba(30,41,59,.6)}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
 /* ═══ Broadcast styles (body[data-bc]) - shared scorebug structure, three graphics packages ═══ */
-.bug{--cond:"Bahnschrift SemiCondensed","Bahnschrift","DIN Alternate","Roboto Condensed","Arial Narrow",system-ui,sans-serif;font-family:var(--cond)}
+.bug{--cond:"Barlow Condensed","Bahnschrift","Arial Narrow",system-ui,sans-serif;font-family:var(--cond)}
+.bug *{font-family:inherit}
+[data-bc=classic] .bug,[data-bc=classic] .tv,[data-bc=classic] .tv *{font-family:"Oswald","Arial Narrow",sans-serif!important}
+[data-bc=modern] .bug,[data-bc=modern] .tv,[data-bc=modern] .tv *{font-family:"Saira Condensed","Bahnschrift",sans-serif!important}
+[data-bc=event] .bug,[data-bc=event] .tv,[data-bc=event] .tv *{font-family:"Montserrat",system-ui,sans-serif!important}
+[data-bc=classic] .dice b{font-family:"Oswald",sans-serif}[data-bc=modern] .dice b{font-family:"Saira Condensed",sans-serif}[data-bc=event] .dice b{font-family:"Montserrat",sans-serif}
 .bug-head,.bug-info{display:flex;justify-content:space-between;gap:12px;padding:3px 12px;font-size:12px;letter-spacing:.06em}
 .bug-row{display:flex;align-items:stretch;flex-wrap:wrap}
 .bug-score{display:flex;align-items:baseline;gap:10px;padding:6px 14px}

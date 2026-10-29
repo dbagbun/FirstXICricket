@@ -35,6 +35,7 @@ RENDER.settings=(el)=>{
     <div class="spread"><span>Batting colours</span>${seg('batColours',[['player','Player'],['position','Classic (by position)']])}</div>
     <div class="spread"><span>Tournament knockouts</span>${seg('knockouts',[['timeline','My timeline'],['history','History']])}</div>
     ${HAS_REAL?`<div class="spread"><span>Real results (after you play a match)</span>${seg('history',[['after','Show'],['off','Hide']])}</div>`:''}
+    <div class="spread"><span>App font</span>${seg('font',APP_FONTS)}</div>
     <div class="spread"><span>Broadcast style</span>${seg('broadcast',BROADCASTS)}</div>
     <div class="spread"><span>Sound</span>${seg('sound',[['false','Off'],['true','On']])}</div>
     <div class="spread"><span>TV graphics for wickets &amp; milestones</span>${seg('tv',[['true','On'],['false','Off']])}</div>
@@ -52,7 +53,7 @@ RENDER.settings=(el)=>{
   <div class="card" style="margin-top:14px"><h3>Data</h3><p class="sub">${FIX.length.toLocaleString()} ODI fixtures from Cricsheet (${fmtDate(FIX[0].date)} - ${fmtDate(FIX[FIX.length-1].date)}), ${Object.keys(WORLD.xi).length.toLocaleString()} real XIs and bowling plans, ${Object.keys(WORLD.players).length.toLocaleString()} players. Built from ${esc(WORLD.source||'the First XI workbook')}.</p></div>`;
   $$('[data-set]').forEach(b=>b.onclick=()=>{const k=b.dataset.set,v=b.dataset.val;st[k]=k==='ballDelay'?+v:v==='true'?true:v==='false'?false:v;
     if(S.live&&S.live.state!=='done'){if(k==='dice')S.live.manual=v==='manual';if(k==='captain')S.live.manualCaptain=v==='manual'?captainOf(S.live):null;if(k==='batColours')S.live.batMode=v;}
-    if(k==='broadcast')applyBroadcast();
+    if(k==='broadcast'||k==='font')applyBroadcast();
     saveGame();rerender();});
   $('#st-team').onchange=e=>{st.myTeam=+e.target.value;saveGame();};
   $('#st-guide').onclick=openGuide;

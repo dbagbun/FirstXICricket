@@ -5,7 +5,8 @@
 //   event    world-tournament: white panels, team-colour blocks, purple and gold trim
 // 'standard' keeps the original scoreboard. The look is CSS on body[data-bc]; scorebugHTML is shared.
 const BROADCASTS=[['standard','Standard'],['classic','Classic'],['modern','Modern'],['event','World event']];
-function applyBroadcast(){try{document.body.dataset.bc=(S&&S.settings.broadcast)||'standard';}catch(e){}}
+const APP_FONTS=[['barlow','Barlow'],['montserrat','Montserrat'],['oswald','Oswald'],['saira','Saira'],['system','System']];
+function applyBroadcast(){try{document.body.dataset.bc=(S&&S.settings.broadcast)||'standard';document.body.dataset.font=(S&&S.settings.font)||'barlow';}catch(e){}}
 const bugName=pid=>pName(pid).replace(/^([A-Z]{1,4} )+/,'');   // "ME Trescothick" -> "Trescothick"
 const bugChip=b=>b.w?'<i class="bw">W</i>':b.exType==='wd'?'<i class="bx">wd</i>':b.exType==='nb'?'<i class="bx">nb</i>':b.exType?`<i class="bx">${b.ex}</i>`:`<i class="${b.bat===4?'b4':b.bat===6?'b6':''}">${b.bat||'•'}</i>`;
 function scorebugHTML(M){

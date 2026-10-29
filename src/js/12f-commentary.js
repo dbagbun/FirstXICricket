@@ -88,17 +88,18 @@ function canvasCard(title,sub,blocks,foot){
   c.width=W;c.height=h;const g=c.getContext&&c.getContext('2d');if(!g)return null;
   g.fillStyle='#0a0e1a';g.fillRect(0,0,W,h);
   g.fillStyle='#06b6d4';g.fillRect(0,0,W,10);
-  g.fillStyle='#f8fafc';g.font='bold 44px system-ui, sans-serif';g.fillText(title,pad,pad+40);
-  g.fillStyle='#94a3b8';g.font='26px system-ui, sans-serif';g.fillText(sub,pad,pad+84);
+  const H='"Barlow Condensed", system-ui, sans-serif',B='"Barlow", system-ui, sans-serif';
+  g.fillStyle='#f8fafc';g.font='700 52px '+H;g.fillText(title,pad,pad+40);
+  g.fillStyle='#94a3b8';g.font='26px '+B;g.fillText(sub,pad,pad+84);
   let y=pad+140;
   for(const b of blocks){
-    g.fillStyle='#ffd700';g.font='bold 28px system-ui, sans-serif';g.fillText(b.head,pad,y);y+=46;
-    for(const r of b.rows){g.fillStyle='#f8fafc';g.font='26px system-ui, sans-serif';g.fillText(r[0],pad,y);
-      if(r[1]!=null){g.textAlign='right';g.fillStyle='#67e8f9';g.font='bold 26px system-ui, sans-serif';g.fillText(String(r[1]),W-pad,y);g.textAlign='left';}
+    g.fillStyle='#ffd700';g.font='700 32px '+H;g.fillText(b.head.toUpperCase(),pad,y);y+=46;
+    for(const r of b.rows){g.fillStyle='#f8fafc';g.font='26px '+B;g.fillText(r[0],pad,y);
+      if(r[1]!=null){g.textAlign='right';g.fillStyle='#67e8f9';g.font='700 30px '+H;g.fillText(String(r[1]),W-pad,y);g.textAlign='left';}
       y+=lineH;}
     y+=14;
   }
-  g.fillStyle='#64748b';g.font='22px system-ui, sans-serif';g.fillText(foot||'First XI Cricket',pad,h-pad/2);
+  g.fillStyle='#64748b';g.font='22px '+B;g.fillText(foot||'First XI Cricket',pad,h-pad/2);
   return c;
 }
 function downloadCanvas(c,name){

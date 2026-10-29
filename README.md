@@ -29,4 +29,4 @@ npm test           # checks + end-to-end tests + engine stats
 ```
 See `CLAUDE.md` for the architecture and the rules of the game. Data: `python3 tools/extract.py FirstXI.xlsm data/world.json` (needs `openpyxl`); real Tests: `python3 tools/cricsheet_tests.py tests_json.zip`; real ODI results: `python3 tools/cricsheet_odis.py odis_json.zip` (both zips from cricsheet.org/downloads, JSON format).
 
-Match data © [Cricsheet](https://cricsheet.org), used under ODC-BY.
+Match data © [Cricsheet](https://cricsheet.org), used under ODC-BY. Fonts (Barlow, Barlow Condensed, Oswald, Saira Condensed, Montserrat) are embedded under the SIL Open Font License 1.1 - licences in `fonts/`.
