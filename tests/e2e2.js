@@ -9,6 +9,7 @@ const boot=store=>new JSDOM(html,{runScripts:'dangerously',pretendToBeVisual:tru
     w.addEventListener('error',e=>{fail++;console.log('PAGE ERROR',e.message);});}}).window;
 const w=boot(),G=k=>w.eval(k);
 w.document.querySelector('#sp-go').click();
+G(`S.settings.future='off'`);   // this test is about the real calendar
 const t0=Date.now();
 G(`for(let y=2003;y<=2025;y++)createTestSeries({a:TEST_TEAMS[y%TEST_TEAMS.length],b:TEST_TEAMS[(y*3+1)%TEST_TEAMS.length]===TEST_TEAMS[y%TEST_TEAMS.length]?TEST_TEAMS[(y+2)%TEST_TEAMS.length]:TEST_TEAMS[(y*3+1)%TEST_TEAMS.length],n:3,start:y+'-07-15'})`);
 const n=G(`(()=>{let n=0;for(const fx of allFixtures())if(fx.playable&&!S.done[fx.key]){simFixture(fx);n++;}return n;})()`);
