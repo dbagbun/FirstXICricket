@@ -39,6 +39,8 @@ The repo root holds a prebuilt `first-xi.html` (double-click to open). **After a
 
 - App (`12g-app.js`): `appInit` adds the manifest link and registers `sw.js` only on http(s); `askPersist` (storage.persist) on save; backups `backupNow` (`S.backupAt`), `backupBanner` every `BACKUP_EVERY` matches; `chooseSaveFile`/`writeSaveFile` auto-save to a file via the File System Access API (handle per session); `storageLine` for Settings. `tools/build.js` writes the manifest, icon and a versioned cache-first service worker next to the page.
 
+- Broadcast styles (`12h-broadcast.js`, CSS at the end of `styles.css` under `[data-bc=…]`): `S.settings.broadcast` standard/classic/modern/event, `applyBroadcast()` sets `body[data-bc]`; non-standard styles swap the scoreboard for `scorebugHTML(M)` (shared markup, each style is CSS only). TV graphics take the team for its colour (`tvBanner(kind,title,sub,team)` → `--tc`). Original looks only: no real broadcaster names or logos.
+
 ## Layout
 - `src/template.html` - page shell with `/*@@CSS@@*/`, `/*@@DATA@@*/`, `/*@@JS@@*/`
 - `src/styles.css` - all CSS (Excel dark palette: navy `#0a0e1a`, panels `#0f172a`/`#1e293b`, cyan `#06b6d4`, gold `#ffd700`)

@@ -203,12 +203,12 @@ function renderLive(el,M){
   const pend=M.pending&&M.pending.type==='followon';
   el.innerHTML=`<div class="stack">
   <div class="sub">${esc(M.series)}${M.stage?' · <span class="gold">'+esc(M.stage)+'</span>':''} · ${esc(M.venue)}</div>
-  <div class="scorebar">
+  ${S.settings.broadcast&&S.settings.broadcast!=='standard'?scorebugHTML(M):`<div class="scorebar">
     <div class="sb-team">${badge(A)}<div><div class="sb-score">${sc(A)||'-'}<small>${ovs(A)}</small></div><div class="sub">${esc(teamName(A))}</div></div></div>
     <div class="sb-mid">${done?`<div class="result-big">${esc(M.result.text)}</div>`:`<b>${ordinal(I.no)} innings</b><br>${statusLine(M,I)}`}
       ${M.fmt==='TEST'&&M.pitch?`<br><span class="muted">${PITCHES[M.pitch].name}${M.lost?' · '+M.lost+' overs lost to rain':''}</span>`:''}</div>
     <div class="sb-team r"><div><div class="sb-score">${sc(B)||'-'}<small>${ovs(B)}</small></div><div class="sub">${esc(teamName(B))}</div></div>${badge(B)}</div>
-  </div>
+  </div>`}
   ${done?doneBlock(M):`<div class="grid g2">
     <div class="card"><h3>At the crease</h3>
       ${[I.st,I.ns].filter(p=>bt[p]&&!bt[p].out).map(p=>`<div class="bat-line ${p===I.st?'on':''}"><span class="nm">${plink(p)}</span><b class="num">${bt[p].r}</b><span class="muted num">(${bt[p].b})</span><span class="muted num" style="font-size:12px">${bt[p].f4}×4 ${bt[p].f6}×6</span></div>`).join('')}

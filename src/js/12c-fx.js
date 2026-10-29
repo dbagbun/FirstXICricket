@@ -46,11 +46,11 @@ function fxBall(M,b){
 }
 
 // ---------- TV graphics ----------
-function tvBanner(kind,title,sub){
+function tvBanner(kind,title,sub,team){
   if(!S||S.settings.tv===false)return;
   let el=$('#tv');
   if(!el){el=document.createElement('div');el.id='tv';el.setAttribute('aria-live','assertive');document.body.appendChild(el);}
-  el.className='tv '+kind;el.innerHTML=`<div class="tv-k">${esc(title)}</div>${sub?`<div class="tv-s">${sub}</div>`:''}`;
+  el.className='tv '+kind;el.style.setProperty('--tc',team?TEAM_COL[teamShort(team)]||'#6a2fc0':'#6a2fc0');el.innerHTML=`<div class="tv-k">${esc(title)}</div>${sub?`<div class="tv-s">${sub}</div>`:''}`;
   void el.offsetWidth;el.classList.add('in');
   clearTimeout(FX.timer);FX.timer=setTimeout(()=>el.classList.remove('in'),reduceMotion()?2600:2000);
 }
@@ -59,14 +59,14 @@ function fxEvent(M,e){
   if(!FX.allow||M.sim||S.settings.tv===false)return false;
   const I=M.inns.find(i=>i.no===e.inn)||curInn(M);
   switch(e.t){
-    case'w':{const B=I.bt[e.pid];tvBanner('wkt','WICKET',`${esc(pName(e.pid))} ${dismissalText(e.how,e.bowler,e.fielder)} <b>${B.r}</b> (${B.b})`);return true;}
-    case'50':tvBanner('ms','FIFTY',`${esc(pName(e.pid))} · ${e.balls} balls`);SFX.applause(1.4);return true;
-    case'100':tvBanner('ms','HUNDRED',`${esc(pName(e.pid))} · ${e.balls} balls`);SFX.applause(2.4);return true;
-    case'200':tvBanner('ms','DOUBLE HUNDRED',esc(pName(e.pid)));SFX.applause(3);return true;
-    case'5w':tvBanner('ms','FIVE WICKETS',`${esc(pName(e.pid))} · ${e.w}/${e.r}`);SFX.applause(1.8);return true;
-    case'hat':tvBanner('ms','HAT-TRICK!',esc(pName(e.pid)));SFX.applause(3);return true;
-    case'innsEnd':tvBanner('inn','INNINGS',`${esc(teamName(e.bat))} ${e.runs}${e.wkts<10?'/'+e.wkts:''} · ${esc(e.why)}`);return true;
-    case'result':tvBanner('res','RESULT',esc(e.text));SFX.applause(2.5);return true;
+    case'w':{const B=I.bt[e.pid];tvBanner('wkt','WICKET',`${esc(pName(e.pid))} ${dismissalText(e.how,e.bowler,e.fielder)} <b>${B.r}</b> (${B.b})`,I.bowl);return true;}
+    case'50':tvBanner('ms','FIFTY',`${esc(pName(e.pid))} · ${e.balls} balls`,I.bat);SFX.applause(1.4);return true;
+    case'100':tvBanner('ms','HUNDRED',`${esc(pName(e.pid))} · ${e.balls} balls`,I.bat);SFX.applause(2.4);return true;
+    case'200':tvBanner('ms','DOUBLE HUNDRED',esc(pName(e.pid)),I.bat);SFX.applause(3);return true;
+    case'5w':tvBanner('ms','FIVE WICKETS',`${esc(pName(e.pid))} · ${e.w}/${e.r}`,I.bowl);SFX.applause(1.8);return true;
+    case'hat':tvBanner('ms','HAT-TRICK!',esc(pName(e.pid)),I.bowl);SFX.applause(3);return true;
+    case'innsEnd':tvBanner('inn','INNINGS',`${esc(teamName(e.bat))} ${e.runs}${e.wkts<10?'/'+e.wkts:''} · ${esc(e.why)}`,e.bat);return true;
+    case'result':tvBanner('res','RESULT',esc(e.text),M.result&&M.result.winner);SFX.applause(2.5);return true;
   }
   return false;
 }

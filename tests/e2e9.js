@@ -27,6 +27,11 @@ click('#c-snd');ok(G('S.settings.sound')===false,'sound toggled off');
 G(`S.settings.tv=false`);
 ok(G(`fxEvent(LM,{t:'50',pid:curInn(LM).st,balls:40,inn:curInn(LM).no})`)===false,'graphics off: no banner');
 G(`S.settings.tv=true`);
+// broadcast styles: the scorebug replaces the scoreboard; body carries the style
+for(const t of['classic','modern','event']){G(`S.settings.broadcast='${t}';applyBroadcast()`);w.go('match');
+  ok(w.document.body.dataset.bc===t&&$('.bug')&&!$('.scorebar')&&$('.bug-runs').textContent.includes('-'),'broadcast style '+t);}
+G(`S.settings.broadcast='standard';applyBroadcast()`);w.go('match');ok($('.scorebar')&&!$('.bug'),'standard keeps the scoreboard');
+w.go('settings');ok($('[data-set="broadcast"]'),'broadcast style setting');
 w.go('settings');ok($('[data-set="sound"]')&&$('[data-set="tv"]'),'sound and TV settings');
 $('[data-set="tv"][data-val="false"]').click();ok(G('S.settings.tv')===false,'TV setting saves a boolean');
 console.log(fail?`e2e9: ${fail} failing`:'e2e9 ok');
