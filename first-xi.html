@@ -537,12 +537,13 @@ const COL_RANK={B:0,G:1,R:2};
 function batColour(M,pid,pos,bowlTeam){
   const pc=posColour(pos);
   if(M.batMode==='position')return pc;
-  const a=pAttr(pid,M.date),c=a.bat;
-  if(!c)return pc;
+  const a=pAttr(pid,M.date),c=a.bat||pc;
   const vsFull=!!TEAMS.get(+bowlTeam)?.full;
   const own=c.length===2?c[vsFull?1:0]:c;
-  if(a.batSrc==='h'||a.batSrc==='e'||(c.length===2&&vsFull))return own;
-  return COL_RANK[pc]<COL_RANK[own]?'BGR'[COL_RANK[own]-1]:own;
+  let col=!a.bat||a.batSrc==='h'||a.batSrc==='e'||(c.length===2&&vsFull)?own:COL_RANK[pc]<COL_RANK[own]?'BGR'[COL_RANK[own]-1]:own;
+  const f=M.mods&&M.mods.bat[pid];   // form: hot +1 (GREEN plays BLUE), cold -1 (BLUE plays GREEN)
+  if(f)col='BGR'[clamp(COL_RANK[col]-f,0,2)];
+  return col;
 }
 const BOWLER_CREDIT={b:1,lbw:1,ct:1,ctof:1,ctwk:1,st:1,ro:0};
 
@@ -603,7 +604,8 @@ const SPELLS={
 };
 function bowlEngInit(M,I){
   const x=M.xi[I.bowl],B=[];let total=0;
-  const add=(pid,style,rating,max)=>{B.push({pid,style,rating,max,used:0,last:0,spell:0,spellMax:0,rest:0,active:false});total+=max;};
+  const mod=pid=>(M.mods&&M.mods.bowl[pid])||0;   // form and fatigue move a bowler's rating a step
+  const add=(pid,style,rating,max)=>{B.push({pid,style,rating:clamp(rating+mod(pid),1,6),max,used:0,last:0,spell:0,spellMax:0,rest:0,active:false});total+=max;};
   x.bat.forEach((pid,i)=>{
     const a=pAttr(pid,M.date);
     if(a.style!=='N'&&a.rating<=6&&a.max>0)add(pid,a.style,a.rating,M.fmt==='TEST'?999:Math.max(1,Math.round(a.max*perBowler(M)/10)));
@@ -982,7 +984,7 @@ let S=null;
 function newCareer(opts={}){
   return{
     v:1,created:Date.now(),name:opts.name||'My career',
-    settings:{dice:'auto',captain:'auto',knockouts:'timeline',batColours:'player',ratings:'era',history:'after',myTeam:+opts.myTeam||0,ballDelay:250,sound:false,tv:true},
+    settings:{dice:'auto',captain:'auto',knockouts:'timeline',batColours:'player',ratings:'era',history:'after',selection:'auto',form:'on',myTeam:+opts.myTeam||0,ballDelay:250,sound:false,tv:true},
     done:{},          // fixture no / test id -> match id
     matches:[],       // archived scorecards (compact), oldest first
     logs:{},          // match id -> compact ball log, last LOG_KEEP matches only
@@ -1081,7 +1083,8 @@ function applyStats(E){
 }
 function rebuildStats(){
   S.stats=perFmt(()=>({}));S.teams=perFmt(()=>({}));
-  for(const E of S.matches)applyStats(E);
+  S.form=perFmt(()=>({}));
+  for(const E of S.matches){applyStats(E);updateForm(E);}
   rebuildRankings();
 }
 const batAvg=s=>s.inn-s.no>0?s.r/(s.inn-s.no):NaN;
@@ -1426,6 +1429,7 @@ function buildMatch(fx){
     const M=newMatch({fmt:fx.fmt,a:fx.a,b:fx.b,home,date:fx.date,venue:fx.venue,city:fx.city,sid:fx.sid,series:fx.title,stage:fx.stage||fx.label,
       xiA:fx.xiA||xi(fx.a),xiB:fx.xiB||xi(fx.b)});
     if(fx.superOver)M.superOverOn=true;
+    selectAndMods(M,fx);
     M.key=fx.key;M.batMode=S.settings.batColours;return M;
   }
   const f=fx.f,E=edition(f.sid);
@@ -1437,7 +1441,14 @@ function buildMatch(fx){
     stage:E?stageName(E.stageOf.get(f.no),E):'',xiA:xiFor(a),xiB:xiFor(b),home:VENUE_HOME.get(f.venue)||0});
   if(reseeded){M.reseeded={a:f.a,b:f.b};for(const t of M.teams)if(t!==f.a&&t!==f.b)delete M.plans[t];}
   M.key=fx.key;M.batMode=S.settings.batColours;
+  selectAndMods(M,fx);
   return M;
+}
+// Your side picks from its squad (injuries, squad choices); then form & fatigue become the engine's mods.
+function selectAndMods(M,fx){
+  const my=managedTeam();
+  if(my&&M.teams.includes(my)&&M.xi[my]){const r=pickXI(fx,my,M.xi[my]);M.xi[my]=r.xi;M.selNotes=r.notes;}
+  M.mods=matchMods(M);
 }
 
 // ---------- end of match ----------
@@ -1456,10 +1467,12 @@ function onMatchDone(M){
   const ids=Object.keys(S.logs);if(ids.length>LOG_KEEP)for(const id of ids.slice(0,ids.length-LOG_KEEP))delete S.logs[id];
   applyStats(E);
   applyRankings(E);
+  updateForm(E);
+  const cn=coachAfter(E);
   const ms=checkMilestones(E),pos=playerOfSeries(E.sid),aw=yearEnd(E);
   if(S.live&&S.live.id===M.id)S.live=null;
   if(!M.sim)saveGame();
-  if(uiDoneHook)uiDoneHook(M,E,ms,pos,aw);
+  if(uiDoneHook)uiDoneHook(M,E,ms,pos,aw,cn);
 }
 // Quick-sim a fixture with auto dice and AI captains.
 function simFixture(fx){
@@ -1709,6 +1722,221 @@ function rebuildRankings(){
 const AWARD_NAMES=[['coty','Cricketer of the Year'],['odiBat','ODI Batter of the Year','runs'],['odiBowl','ODI Bowler of the Year','wickets'],
   ['testBat','Test Batter of the Year','runs'],['testBowl','Test Bowler of the Year','wickets'],['emerging','Emerging Player of the Year'],['associate','Associate Player of the Year']];
 
+// ═══ COACH CAREER, SQUADS, FORM, FATIGUE & INJURIES ═══
+// Form (every player): S.form[fmt][pid] = {bat:[last innings], bowl:[last performances]}, judged against his
+// role so that as many players run hot as cold (thresholds ~10th/80-90th percentiles, tools/dev eval): a top-order
+// BLUE batter averaging FORM_COLD or less over his last five plays GREEN; a GREEN batter averaging FORM_HOT or more
+// plays BLUE; a bowler's rating moves a step at FORM_BOWL. The tail (RED) is never touched.
+// Fatigue and injuries apply to the side you manage (coach mode or Settings -> Selection -> Me).
+// The engine only sees M.mods {bat:{pid:+1|-1}, bowl:{pid:+1|-1}}, built by matchMods() in buildMatch.
+const FORM_N=5,FORM_COLD={ODI:11,TEST:13,T20:7},FORM_HOT={ODI:16,TEST:20,T20:11},FORM_BOWL={cold:5,hot:46};
+function formOf(pid,fmt){
+  const F=S&&S.form&&S.form[fmt]&&S.form[fmt][pid];if(!F)return{bat:null,bowl:null};
+  const avg=a=>a.length>=3?a.reduce((x,y)=>x+y,0)/a.length:null;
+  return{bat:avg(F.bat),bowl:avg(F.bowl)};
+}
+// -1/0/+1 for display and for the engine, given the colour he'd bat with
+function formLevel(pid,fmt,col){
+  const f=formOf(pid,fmt),out={bat:0,bowl:0};
+  if(f.bat!=null){if(col==='B'&&f.bat<=FORM_COLD[fmt])out.bat=-1;else if(col==='G'&&f.bat>=FORM_HOT[fmt])out.bat=1;}
+  if(f.bowl!=null){if(f.bowl<=FORM_BOWL.cold)out.bowl=-1;else if(f.bowl>=FORM_BOWL.hot)out.bowl=1;}
+  return out;
+}
+function updateForm(E){
+  if(!S.form)S.form=perFmt(()=>({}));
+  const F=S.form[E.fmt]=S.form[E.fmt]||{},base={ODI:4.8,TEST:3.2,T20:7.5}[E.fmt];
+  const push=(pid,k,v)=>{const x=F[pid]=F[pid]||{bat:[],bowl:[]};x[k].push(Math.round(v));if(x[k].length>FORM_N)x[k].shift();};
+  for(const I of E.inns){
+    for(const r of I.bt)push(r[0],'bat',r[1]);
+    for(const w of I.bw)if(w[1]>=12)push(w[0],'bowl',w[4]*22-(w[3]-w[1]/6*base)*.35);
+  }
+}
+// ---------- fatigue & injuries (your side) ----------
+function fatigueOf(pid,date){
+  let ov=0,m=0;
+  for(let i=S.matches.length-1;i>=0;i--){
+    const E=S.matches[i],d=daysBetween(E.date,date);if(d>21)break;if(d<0)continue;
+    if(!E.teams.some(t=>E.xi[t].slice(0,11).includes(pid)))continue;
+    if(d<=10)m+=E.fmt==='TEST'?3:1;
+    for(const I of E.inns){const w=I.bw.find(x=>x[0]===pid);if(w&&d<=14)ov+=w[1]/6;}
+  }
+  const st=pAttr(pid,date).style;
+  return clamp(Math.round(ov*(st==='P'?1.3:st==='M'?1:.7)+m*5),0,100);   // 3 full ODI spells in a fortnight ~ 60
+}
+const injuredUntil=pid=>S.inj&&S.inj[pid]&&S.inj[pid].until;
+const isInjured=(pid,date)=>{const u=injuredUntil(pid);return!!u&&u>date;};
+const INJURIES=['hamstring','side strain','back spasms','broken finger','ankle','groin','shoulder','calf'];
+function rollInjuries(E,team){
+  if(!S.inj)S.inj={};
+  const out=[];
+  for(const pid of E.xi[team].slice(0,11)){
+    const f=fatigueOf(pid,E.date),st=pAttr(pid,E.date).style;
+    const p=(E.fmt==='TEST'?.006:.003)+f/100*.03*(st==='P'?2:1);
+    if(rnd()<p){const days=rndInt(7,45);S.inj[pid]={until:addDays(E.date,days),what:pick(INJURIES),since:E.date,team};out.push({pid,days,what:S.inj[pid].what});}
+  }
+  return out;
+}
+// ---------- the engine's view: form and fatigue as rating / colour steps ----------
+function matchMods(M){
+  const mods={bat:{},bowl:{}},my=managedTeam();
+  if(S.settings.form!=='off'&&M.batMode!=='position')for(const t of M.teams)M.xi[t].bat.forEach((pid,i)=>{
+    const opp=otherTeam(M,t),own=pAttr(pid,M.date).bat;
+    // an associate's GREEN against a Test nation is the opposition rule, not form: never lift it
+    const col=own&&own.length===2&&TEAMS.get(opp)?.full?'X':batColour({batMode:M.batMode,date:M.date},pid,i+1,opp);
+    const f=formLevel(pid,M.fmt,col);
+    if(f.bat)mods.bat[pid]=f.bat;
+    if(f.bowl)mods.bowl[pid]=-f.bowl;
+  });
+  if(my&&M.teams.includes(my))for(const pid of M.xi[my].bat)if(fatigueOf(pid,M.date)>=60)mods.bowl[pid]=(mods.bowl[pid]||0)+1;
+  return mods;
+}
+// ---------- squads (your side) ----------
+const SQUAD_SIZE=15;
+function managedTeam(){return S.coach?S.coach.team:(S.settings.selection==='me'?S.settings.myTeam:0);}
+function squadFor(sid,team,date){
+  S.squads=S.squads||{};
+  const k=sid+':'+team;
+  if(!S.squads[k]){
+    const real=allFixtures().filter(x=>x.sid===sid&&x.f&&WORLD.xi[x.f.cid]&&WORLD.xi[x.f.cid][team]).flatMap(x=>fixtureXI(x.f.cid,team).bat);
+    const pool=[...new Set([...real,...squadAround(team,date,365)])];
+    S.squads[k]=pool.filter(p=>!isInjured(p,date)).slice(0,SQUAD_SIZE);
+  }
+  return S.squads[k];
+}
+// Your XI: the real XI where those men are in the squad and fit, the gaps filled from the squad like for like.
+function pickXI(fx,team,base){
+  const squad=squadFor(fx.sid,team,fx.date),date=fx.date;
+  const ok=p=>squad.includes(p)&&!isInjured(p,date);
+  const bat=base.bat.slice(),used=new Set(bat.filter(ok));
+  const notes=[];
+  for(let i=0;i<11;i++){
+    if(ok(bat[i]))continue;
+    const out=bat[i],a=pAttr(out,date),keeper=out===base.wk;
+    const cands=squad.filter(p=>!used.has(p)&&ok(p));
+    const like=cands.filter(p=>keeper?true:(pAttr(p,date).style==='N')===(a.style==='N'));
+    const inn=(like[0]??cands[0]);
+    if(inn==null)continue;
+    used.add(inn);bat[i]=inn;notes.push({out,inn,why:isInjured(out,date)?'injured':'not in your squad'});
+  }
+  const wk=bat.includes(base.wk)?base.wk:bat[6],cap=bat.includes(base.cap)?base.cap:bat[0];
+  return{xi:{bat,wk,cap},notes};
+}
+
+// ---------- coach career ----------
+const COACH_SACK=15,COACH_RENEW=50,CONTRACT_DAYS=730;
+function newCoach(team,date){return{team:+team,start:date,until:addDays(date,CONTRACT_DAYS),conf:60,objs:[],history:[],offers:[],news:[]};}
+function rankPtsOf(t,fmt='ODI'){const e=R_().team[fmt][t];return e==null?rankPts(eloStart(t)):rankPts(e);}
+function stageRank(st){return{group:1,super:2,playoff:2,quarter:3,semi:4,final:5}[st]||(String(st).startsWith('final')?5:0);}
+function coachNews(text,cls=''){S.coach.news.push({date:careerDate(),text,cls});if(S.coach.news.length>40)S.coach.news.shift();}
+// Objectives for a series as soon as your next match belongs to it.
+function ensureObjectives(fx){
+  const C=S.coach;if(!C||!C.team||!fx||![fx.a,fx.b].includes(C.team)||C.objs.some(o=>o.sid===fx.sid))return;
+  const all=allFixtures().filter(x=>x.sid===fx.sid&&x.playable),mine=all.filter(x=>x.a===C.team||x.b===C.team);
+  const teams=[...new Set(all.flatMap(x=>[x.a,x.b]))],fmt=fx.fmt==='TEST'?'TEST':fx.fmt==='T20'?'T20':'ODI';
+  let o;
+  if(teams.length<=2){
+    const opp=fx.a===C.team?fx.b:fx.a,d=rankPtsOf(C.team,fmt)-rankPtsOf(opp,fmt),n=mine.length;
+    o=d>=12?{kind:'winSeries',text:n>1?`Win the series against ${teamName(opp)}`:`Beat ${teamName(opp)}`,w:1}
+      :d>-12?{kind:'notLose',text:n>1?`Don't lose the series to ${teamName(opp)}`:`Don't lose to ${teamName(opp)}`,w:.8}
+      :{kind:'winOne',text:`Win ${n>1?'at least one match':'the match'} against ${teamName(opp)}`,w:.6};
+  }else{
+    const order=teams.slice().sort((a,b)=>rankPtsOf(b,fmt)-rankPtsOf(a,fmt)),pos=order.indexOf(C.team)+1;
+    const E=fx.f?edition(fx.sid):null,hasKO=E&&E.ko.length;
+    if(hasKO&&pos<=2)o={kind:'reach',st:5,text:'Reach the final',w:1.2};
+    else if(hasKO&&pos<=4)o={kind:'reach',st:E.ko.length>=3?4:E.hasSuper?2:5,text:E.ko.length>=3?'Reach the semi-finals':'Reach the final',w:1};
+    else if(E&&E.hasSuper&&pos<=Math.ceil(teams.length/2))o={kind:'reach',st:2,text:`Reach the ${superName(E)}`,w:.9};
+    else{const k=Math.max(1,Math.round(mine.length/3));o={kind:'winN',n:k,text:`Win at least ${k} ${k===1?'match':'matches'}`,w:.7};}
+  }
+  C.objs.push({...o,sid:fx.sid,title:fx.title,status:'open',created:fx.date});
+  coachNews(`The board's target for ${fx.title}: ${o.text}.`);
+}
+function seriesRecord(sid,team){
+  const M=S.matches.filter(E=>E.sid===sid&&E.teams.includes(team));
+  let w=0,l=0,best=0;
+  for(const E of M){if(E.result.winner===team)w++;else if(E.result.winner)l++;best=Math.max(best,stageRank(E.fid?edition(E.sid)?.stageOf.get(E.fid):''));}
+  return{w,l,p:M.length,best};
+}
+function judgeObjectives(){
+  const C=S.coach;if(!C)return[];
+  const out=[];
+  for(const o of C.objs){
+    if(o.status!=='open'||!seriesDone(o.sid))continue;
+    const r=seriesRecord(o.sid,C.team);
+    const met=o.kind==='winSeries'?r.w>r.l:o.kind==='notLose'?r.w>=r.l:o.kind==='winOne'?r.w>=1:o.kind==='winN'?r.w>=o.n:o.kind==='reach'?r.best>=o.st:o.kind==='rank'?false:false;
+    if(o.kind==='rank')continue;
+    o.status=met?'met':'failed';o.rec=r;
+    const d=Math.round((met?14:-16)*o.w);C.conf=clamp(C.conf+d,0,100);
+    coachNews(`${o.title}: target ${met?'met':'missed'} (${o.text}). Board confidence ${d>0?'+':''}${d}.`,met?'good':'bad');
+    out.push(o);
+  }
+  return out;
+}
+// Year-end rankings target.
+function yearObjective(year){
+  const C=S.coach;if(!C||!C.team||C.objs.some(o=>o.kind==='rank'&&o.year===year))return;
+  const L=teamRanking('ODI');if(L.length<8)return;   // no table to judge by yet
+  const pos=L.findIndex(r=>r.team===C.team)+1||L.length,n=Math.max(1,Math.min(pos+1,L.length));
+  C.objs.push({kind:'rank',year,n,text:`Finish ${year} in the ODI top ${n}`,title:`${year} rankings`,status:'open',w:.8,created:year+'-01-01'});
+}
+function judgeYear(year){
+  const C=S.coach;if(!C)return;
+  for(const o of C.objs)if(o.kind==='rank'&&o.year===year&&o.status==='open'){
+    const pos=teamRanking('ODI').findIndex(r=>r.team===C.team)+1,met=pos>0&&pos<=o.n;
+    o.status=met?'met':'failed';const d=Math.round((met?12:-15)*o.w);C.conf=clamp(C.conf+d,0,100);
+    coachNews(`${year}: finished No.${pos||'-'} in the ODI rankings - target ${met?'met':'missed'}.`,met?'good':'bad');
+  }
+}
+function offersFor(kind){
+  const C=S.coach,prev=C.team||C.history.at(-1)?.team,L=teamRanking('ODI').map(r=>r.team);
+  const date=careerDate(),active=ALL_TEAMS.filter(t=>t!==prev&&!COMPOSITE.has(t)&&allFixtures().some(x=>(x.a===t||x.b===t)&&x.date>date&&x.date<addDays(date,365)));
+  const ix=t=>{const i=L.indexOf(t);return i<0?99:i;},me=ix(prev);
+  let pool=kind==='up'?active.filter(t=>ix(t)<me):kind==='any'?active.slice():active.filter(t=>ix(t)>=me-1);
+  if(!pool.length&&kind!=='up')pool=active.slice();
+  const picks=[];while(picks.length<(kind==='up'?1:3)&&pool.length){const t=pool.splice(Math.floor(rnd()*pool.length),1)[0];picks.push(t);}
+  return picks.map(t=>({team:t,expires:addDays(date,kind==='up'?30:90),kind}));
+}
+function leaveJob(why){
+  const C=S.coach;if(!C.team)return;
+  const r=S.matches.filter(E=>E.date>=C.start&&E.teams.includes(C.team));
+  C.history.push({team:C.team,from:C.start,to:careerDate(),p:r.length,w:r.filter(E=>E.result.winner===C.team).length,l:r.filter(E=>E.result.winner&&E.result.winner!==C.team).length,why});
+  for(const o of C.objs)if(o.status==='open')o.status='void';
+  C.team=0;S.settings.myTeam=0;
+}
+function takeJob(team){
+  const C=S.coach;if(C.team)leaveJob('moved on');
+  Object.assign(C,{team:+team,start:careerDate(),until:addDays(careerDate(),CONTRACT_DAYS),conf:C.history.length?55:60,offers:[],stop:null});
+  S.settings.myTeam=+team;S.settings.captain='manual';
+  coachNews(`You are the new coach of ${teamName(team)}.`,'good');
+}
+// After every match: confidence, targets, contract, the sack, offers. Returns news items for the UI.
+function coachAfter(E){
+  const C=S.coach;if(!C)return[];
+  const n0=C.news.length,y=+E.date.slice(0,4);
+  if(C.year!==y){if(C.year)judgeYear(C.year);C.year=y;yearObjective(y);}
+  C.offers=C.offers.filter(o=>o.expires>E.date);
+  if(C.team&&E.teams.includes(C.team)){
+    const opp=otherOf(E,C.team),gap=rankPtsOf(C.team,E.fmt==='TEST'?'TEST':'ODI')-rankPtsOf(opp,E.fmt==='TEST'?'TEST':'ODI');
+    if(E.result.winner===C.team)C.conf=clamp(C.conf+(gap<-15?4:2),0,100);
+    else if(E.result.winner)C.conf=clamp(C.conf-(gap>15?4:2),0,100);
+    C.conf=Math.round((C.conf+(55-C.conf)*.03)*10)/10;   // memories fade: drift back towards 55
+    for(const i of rollInjuries(E,C.team))coachNews(`${pName(i.pid)} is injured (${i.what}) - out for about ${plural(Math.round(i.days/7)||1,'week')}.`,'bad');
+  }
+  judgeObjectives();
+  if(C.team){
+    if(C.conf<COACH_SACK){coachNews(`Sacked. The board has lost confidence in you as coach of ${teamName(C.team)}.`,'bad');leaveJob('sacked');C.offers=offersFor('down');C.stop='sacked';}
+    else if(E.date>=C.until){
+      if(C.conf>=COACH_RENEW){C.until=addDays(C.until,CONTRACT_DAYS);coachNews(`Contract renewed until ${fmtDate(C.until)}.`,'good');}
+      else{coachNews('Your contract has not been renewed.','bad');leaveJob('contract not renewed');C.offers=offersFor('down');C.stop='contract';}
+    }else if(C.conf>=82&&!C.offers.length&&rnd()<.04){C.offers=offersFor('up');if(C.offers.length){coachNews(`${teamName(C.offers[0].team)} want you as their coach.`,'good');C.stop='offer';}}
+  }
+  // out of work: someone always needs a coach eventually
+  if(!C.team&&!C.offers.length&&rnd()<.08){C.offers=offersFor('any');if(C.offers.length){coachNews(`${C.offers.map(o=>teamName(o.team)).join(', ')} ${C.offers.length>1?'are':'is'} looking for a coach.`,'good');C.stop='offer';}}
+  const nx=nextFixture();
+  if(C.team&&nx)ensureObjectives(coachNext());
+  return C.news.slice(n0);
+}
+function coachNext(){const C=S.coach;return C&&C.team?allFixtures().find(x=>x.playable&&!S.done[x.key]&&(x.a===C.team||x.b===C.team))||null:null;}
+
 // ═══ UI SHELL — navigation, views, modal, shared widgets ═══
 const TEAM_COL={AUS:'#c9a400',IND:'#1f4fbf',ENG:'#1d3a8a',RSA:'#0f7a3e',PAK:'#0b6e2e',SL:'#173f8f',WI:'#7a1f2b',NZ:'#222',ZIM:'#b8341b',
   BAN:'#05683f',KEN:'#9c1b1b',IRE:'#169b62',NED:'#e8601c',SCO:'#1b3f94',CAN:'#c8102e',UAE:'#00732f',NAM:'#003580',USA:'#3c3b6e',NEP:'#dc143c',
@@ -1716,7 +1944,7 @@ const TEAM_COL={AUS:'#c9a400',IND:'#1f4fbf',ENG:'#1d3a8a',RSA:'#0f7a3e',PAK:'#0b
 const badge=t=>`<span class="tbadge" style="background:${TEAM_COL[teamShort(t)]||'#334155'}">${esc(teamShort(t))}</span>`;
 const tlabel=t=>`${badge(t)} ${esc(teamName(t))}`;
 const plink=pid=>`<span class="plink" data-pid="${pid}">${esc(pName(pid))}</span>`;
-const VIEWS=[['home','Dashboard'],['match','Match'],['fixtures','Fixtures'],['tour','Tournament Centre'],['rank','Rankings'],['records','Records'],['players','Players'],['history','Results'],['miles','Milestones'],['settings','Settings']];
+const VIEWS=[['home','Dashboard'],['match','Match'],['coach','Coach'],['fixtures','Fixtures'],['tour','Tournament Centre'],['rank','Rankings'],['records','Records'],['players','Players'],['history','Results'],['miles','Milestones'],['settings','Settings']];
 let VIEW='home',VIEW_ARG=null;
 const RENDER={};
 
@@ -1879,6 +2107,7 @@ function startFixture(key){
     if(!confirm('A match is in progress. Abandon it and start this one?'))return;
   }
   const fx=fixtureByKey(key);if(!fx)return;
+  if(S.coach&&S.coach.team)ensureObjectives(fx);
   LM=buildMatch(fx);
   LM.manual=S.settings.dice==='manual';
   if(S.settings.captain==='manual')LM.manualCaptain=captainOf(LM);
@@ -1907,8 +2136,9 @@ RENDER.match=(el)=>{
 // ---------- pre-match ----------
 const batChip=c=>`<span class="bchip b${c}" title="Falls to ${c==='B'?'BLUE wickets only':c==='G'?'BLUE or GREEN wickets':'any wicket'}">${c}</span>`;
 function xiTable(M,t){
-  const x=M.xi[t];
-  return`<table>${x.bat.map((p,i)=>{const a=pAttr(p,M.date);return`<tr><td class="muted">${i+1}</td><td>${batChip(batColour(M,p,i+1,otherTeam(M,t)))} ${plink(p)}${p===x.cap?' <span class="gold">(c)</span>':''}${p===x.wk?' <span class="cyan">†</span>':''}</td>
+  const x=M.xi[t],mine=t===managedTeam();
+  const notes=mine&&M.selNotes&&M.selNotes.length?`<div class="muted" style="font-size:12px;margin-bottom:6px">${M.selNotes.map(n=>`${esc(pName(n.inn))} in for ${esc(pName(n.out))} (${n.why})`).join(' · ')}</div>`:'';
+  return notes+`<table>${x.bat.map((p,i)=>{const a=pAttr(p,M.date),f=M.mods&&((M.mods.bat[p]||0)-(M.mods.bowl[p]||0));return`<tr><td class="muted">${i+1}</td><td>${batChip(batColour(M,p,i+1,otherTeam(M,t)))} ${plink(p)}${p===x.cap?' <span class="gold">(c)</span>':''}${p===x.wk?' <span class="cyan">†</span>':''}${f>0?' <span class="green" title="In form">▲</span>':f<0?' <span class="red" title="Out of form or tired">▼</span>':''}${mine?' '+fatigueTag(p,M.date):''}</td>
     <td class="r muted" style="font-size:12px">${a.style==='N'?'':STYLE_NAME[a.style]+' '+'●'.repeat(6-Math.min(a.rating,5))}</td><td class="r"><button class="btn sm" data-swap="${t}:${i}">Swap</button></td></tr>`;}).join('')}</table>`;
 }
 function renderPre(el,M){
@@ -1936,11 +2166,12 @@ function renderPre(el,M){
   $$('[data-swap]').forEach(b=>b.onclick=()=>{const[t,i]=b.dataset.swap.split(':').map(Number);openSwap(M,t,i);});
 }
 function openSwap(M,t,i){
-  const x=M.xi[t],cur=x.bat[i],pool=squadAround(t,M.date,500).filter(p=>!x.bat.includes(p)).slice(0,30);
-  openModal(`<h2>Replace ${esc(pName(cur))}</h2><p class="muted">Players who turned out for ${esc(teamName(t))} around this date.</p>
+  const mine=t===managedTeam();
+  const x=M.xi[t],cur=x.bat[i],pool=(mine?squadFor(M.sid,t,M.date):squadAround(t,M.date,500)).filter(p=>!x.bat.includes(p)&&!(mine&&isInjured(p,M.date))).slice(0,30);
+  openModal(`<h2>Replace ${esc(pName(cur))}</h2><p class="muted">${mine?'From your squad for this series (fit players only).':`Players who turned out for ${esc(teamName(t))} around this date.`}</p>
     <div class="grid g2">${pool.map(p=>{const a=pAttr(p,M.date);return`<button class="btn" data-rep="${p}" style="text-align:left">${esc(pName(p))} <span class="muted">${a.style==='N'?'':STYLE_NAME[a.style]+' r'+a.rating}</span></button>`;}).join('')||'<p class="muted">No one else available.</p>'}</div>
     <h3 style="margin-top:14px">Batting order</h3><div class="row"><button class="btn sm" id="sw-up">Move up</button><button class="btn sm" id="sw-dn">Move down</button><button class="btn sm" id="sw-wk">Make keeper</button><button class="btn sm" id="sw-cap">Make captain</button></div>`);
-  $$('[data-rep]').forEach(b=>b.onclick=()=>{const p=+b.dataset.rep;if(x.wk===cur)x.wk=p;if(x.cap===cur)x.cap=p;x.bat[i]=p;delete M.plans[t];closeModal();rerender();});
+  $$('[data-rep]').forEach(b=>b.onclick=()=>{const p=+b.dataset.rep;if(x.wk===cur)x.wk=p;if(x.cap===cur)x.cap=p;x.bat[i]=p;delete M.plans[t];M.mods=matchMods(M);closeModal();rerender();});
   const mv=d=>{const j=i+d;if(j<0||j>10)return;[x.bat[i],x.bat[j]]=[x.bat[j],x.bat[i]];closeModal();rerender();};
   $('#sw-up').onclick=()=>mv(-1);$('#sw-dn').onclick=()=>mv(1);
   $('#sw-wk').onclick=()=>{x.wk=cur;closeModal();rerender();};$('#sw-cap').onclick=()=>{x.cap=cur;closeModal();rerender();};
@@ -2180,7 +2411,11 @@ RENDER.home=(el)=>{
   }
   const tourn=n&&n.f&&n.fmt==='ODI'&&SERIES.get(n.sid)?.kind==='tournament'?miniTable(n.sid):'';
   const my=S.settings.myTeam,myT=my&&(S.teams.ODI[my]||S.teams.TEST[my]);
-  el.innerHTML=`<div class="grid g3" style="grid-template-columns:2fr 1fr">
+  const C=S.coach,cnx=C&&C.team?coachNext():null;
+  const coachCard=C?`<div class="card hi"><div class="spread"><div>${C.team?`<span class="sub">Coach of</span> <b>${tlabel(C.team)}</b>`:'<b>Out of work</b>'}
+      ${C.team?`<div style="width:220px;margin-top:6px">${confBar(C.conf)}</div><span class="muted" style="font-size:12px">Board confidence ${Math.round(C.conf)}</span>`:`<div class="muted">${plural(C.offers.length,'offer')} waiting</div>`}</div>
+      <div class="row">${cnx?(nextFixture()&&nextFixture().key===cnx.key?`<button class="btn pri" data-playkey="${cnx.key}">Play ${esc(teamShort(cnx.a))} v ${esc(teamShort(cnx.b))}</button>`:`<button class="btn pri" id="h-simto">Sim to my next match (${fmtDate(cnx.date)})</button>`):''}<button class="btn" data-go="coach">Coach</button></div></div></div>`:'';
+  el.innerHTML=coachCard+`<div class="grid g3" style="grid-template-columns:2fr 1fr${C?';margin-top:14px':''}">
     <div class="stack">
       ${live&&(!n||live.key!==n.key)?`<div class="card"><div class="spread"><div><span class="pill live">LIVE</span> <b>${esc(teamName(live.teams[0]))} v ${esc(teamName(live.teams[1]))}</b></div><button class="btn pri" data-go="match">Resume</button></div></div>`:''}
       ${nextCard}${tourn}
@@ -2204,6 +2439,8 @@ RENDER.home=(el)=>{
     $('#h-simn').onclick=openSimMore;
   }
   $('#h-test').onclick=()=>openTestCreator();
+  $('#h-simto')&&($('#h-simto').onclick=simToMyMatch);
+  $$('[data-playkey]').forEach(b=>b.onclick=()=>startFixture(b.dataset.playkey));
 };
 function driftCard(){
   if(!HAS_REAL||S.settings.history==='off')return'';
@@ -2230,6 +2467,7 @@ function simMany(list,what){
   if(!list.length){toast('Nothing to sim.');return;}
   if(S.live&&S.live.state!=='done'&&list.some(x=>x.key===S.live.key))S.live=null;
   SIM_STOP=false;SIM_NEWS.pos=0;SIM_NEWS.aw=[];
+  if(S.coach)S.coach.stop=null;   // only stop for what happens during this sim
   let i=0,ms0=S.ms.length;
   openModal(`<h2>Simulating ${esc(what)}</h2><div class="bar" style="margin:10px 0"><i id="sim-bar" style="width:0"></i></div><div id="sim-txt" class="sub">Starting…</div><div class="row" style="margin-top:12px"><button class="btn" id="sim-stop">Stop</button></div>`);
   $('#sim-stop').onclick=()=>{SIM_STOP=true;};
@@ -2239,9 +2477,11 @@ function simMany(list,what){
       const fx=fixtureByKey(list[i].key);
       if(fx&&!S.done[fx.key]){const M=simFixture(fx);$('#sim-txt')&&($('#sim-txt').textContent=`${fmtDate(fx.date)} - ${M.result.text}`);}
       i++;
+      if(S.coach&&S.coach.stop){SIM_STOP=true;}
     }
     $('#sim-bar')&&($('#sim-bar').style.width=(100*i/list.length)+'%');
     if(i<list.length&&!SIM_STOP)setTimeout(tick,0);
+    else if(S.coach&&S.coach.stop){const why=S.coach.stop;S.coach.stop=null;saveGame();closeModal();toast(why==='offer'?'A job offer has come in.':'Your job has ended.','warn');go('coach');}
     else{saveGame();closeModal();
       if(SIM_NEWS.aw.length)openModal(`<h2>Season review</h2><div class="stack">${honoursHTML(SIM_NEWS.aw)}</div>`);
       toast(`Simmed ${i} ${i===1?'match':'matches'}. ${S.ms.length-ms0} new milestones${SIM_NEWS.pos?`, ${SIM_NEWS.pos} players of the series`:''}.`);rerender();}
@@ -2594,6 +2834,82 @@ function fxDice(M){
   let n=0;const iv=setInterval(()=>{el.textContent=1+(C.roll*13+n*37)%100;if(++n>=9){clearInterval(iv);el.textContent=C.roll;box&&box.classList.remove('rolling');}},45);
 }
 
+// ═══ COACH & SQUAD SCREEN ═══
+const formIcon=(pid,fmt,col)=>{const f=formLevel(pid,fmt,col);return(f.bat>0||f.bowl>0?'<span class="green" title="In form">▲</span>':'')+(f.bat<0||f.bowl<0?'<span class="red" title="Out of form">▼</span>':'');};
+const fatigueTag=(pid,date)=>{const f=fatigueOf(pid,date);return f>=60?`<span class="pill loss" title="Tired: one rating weaker with the ball">tired ${f}</span>`:f>=35?`<span class="pill">${f}</span>`:'';};
+function confBar(c){const col=c>=60?'var(--green)':c>=35?'var(--gold)':'var(--red)';return`<div class="bar" style="height:10px"><i style="width:${c}%;background:${col}"></i></div>`;}
+function startCoach(team){
+  S.coach=newCoach(team,careerDate());S.settings.myTeam=+team;S.settings.captain='manual';
+  coachNews(`You are the new coach of ${teamName(team)}. Contract until ${fmtDate(S.coach.until)}.`,'good');
+  const nx=coachNext();if(nx)ensureObjectives(nx);
+  S.coach.year=+careerDate().slice(0,4);yearObjective(S.coach.year);
+  saveGame();
+}
+function simToMyMatch(){
+  const nx=coachNext();if(!nx){toast('No more matches for your side.');return;}
+  const list=allFixtures().filter(x=>x.playable&&!S.done[x.key]&&x.date<=nx.date&&x.key!==nx.key&&x.a!==S.coach.team&&x.b!==S.coach.team);
+  if(!list.length){startFixture(nx.key);return;}
+  simMany(list,'to your next match');
+}
+RENDER.coach=(el)=>{
+  const C=S.coach,my=managedTeam();
+  if(!C&&!my){
+    el.innerHTML=`<div class="card stack" style="max-width:640px"><h2>Coach a nation</h2>
+      <p class="sub">Take a job: the board sets you a target for every series and tournament, judges you on results, renews your contract or sacks you. You pick a 15-man squad for each series, watch fatigue and injuries, and captain the side.</p>
+      <div class="row"><select id="co-team">${[...TEAMS.values()].filter(t=>TEAM_GAMES.has(t.id)&&!COMPOSITE.has(t.id)).sort((a,b)=>a.name.localeCompare(b.name)).map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('')}</select>
+      <button class="btn pri" id="co-go">Take the job</button></div>
+      <p class="muted" style="font-size:12px">Or just pick squads for the team you follow: Settings → Selection → Me.</p></div>`;
+    $('#co-go').onclick=()=>{startCoach(+$('#co-team').value);rerender();};
+    return;
+  }
+  const nx=C&&C.team?coachNext():my?allFixtures().find(x=>x.playable&&!S.done[x.key]&&(x.a===my||x.b===my)):null;
+  const team=C?C.team:my;
+  const job=C?(C.team?`<div class="card hi"><div class="spread"><div><div class="sub">Coach of</div><h2 style="margin:2px 0">${tlabel(C.team)}</h2>
+      <div class="muted">Since ${fmtDate(C.start)} · contract until ${fmtDate(C.until)}</div></div>
+      <div style="min-width:220px"><div class="spread"><span class="sub">Board confidence</span><b class="num">${Math.round(C.conf)}</b></div>${confBar(C.conf)}
+      <div class="muted" style="font-size:12px;margin-top:4px">Below ${COACH_SACK} you're sacked; ${COACH_RENEW}+ when the contract ends and it's renewed.</div></div></div></div>`
+    :`<div class="card hi"><h2>Out of work</h2><p class="sub">${C.offers.length?'Offers on the table - take one, or sim on and wait for others.':'No offers yet. Sim on: sides lose coaches all the time.'}</p></div>`):'';
+  const offers=C&&C.offers.length?`<div class="card"><h3>Job offers</h3>${C.offers.map((o,i)=>`<div class="spread" style="margin-bottom:6px"><span>${tlabel(o.team)} <span class="muted">No.${teamRanking('ODI').findIndex(r=>r.team===o.team)+1||'-'} in the ODI rankings · offer open until ${fmtDate(o.expires)}</span></span>
+      <span class="row"><button class="btn pri sm" data-take="${o.team}">Accept</button><button class="btn sm" data-decline="${i}">Decline</button></span></div>`).join('')}</div>`:'';
+  const objs=C?C.objs.slice().reverse():[];
+  const open=objs.filter(o=>o.status==='open'),past=objs.filter(o=>o.status!=='open').slice(0,12);
+  const objHTML=C?`<div class="card"><h3>The board's targets</h3>${open.map(o=>`<div class="spread"><span>🎯 ${esc(o.text)} <span class="muted">${esc(o.title)}</span></span><span class="pill">open</span></div>`).join('')||'<p class="muted">None right now.</p>'}
+    ${past.length?`<h3 style="margin-top:12px">Past targets</h3>${past.map(o=>`<div class="spread"><span>${esc(o.text)} <span class="muted">${esc(o.title)}${o.rec?` · W${o.rec.w} L${o.rec.l}`:''}</span></span><span class="pill ${o.status==='met'?'win':o.status==='failed'?'loss':''}">${o.status==='void'?'left':o.status}</span></div>`).join('')}`:''}</div>`:'';
+  const next=nx?`<div class="card"><div class="spread"><div><div class="sub">Your next match</div><b>${tlabel(nx.a)} v ${tlabel(nx.b)}</b><div class="muted">${esc(nx.title)} · ${esc(nx.label)} · ${fmtDate(nx.date)}</div></div>
+      <div class="row">${nextFixture()&&nextFixture().key===nx.key?`<button class="btn pri" data-playkey="${nx.key}">Play</button>`:`<button class="btn pri" id="co-sim">Sim to my next match</button>`}</div></div></div>`:'';
+  // squad for the next series
+  let squad='';
+  if(nx&&team){
+    const sq=squadFor(nx.sid,team,nx.date),pool=[...new Set([...sq,...squadAround(team,nx.date,500)])].slice(0,40);
+    const fmt=nx.fmt;
+    squad=`<div class="card"><div class="spread"><h3 style="margin:0">Squad - ${esc(nx.title)}</h3><b class="num ${sq.length>SQUAD_SIZE?'red':''}">${sq.length}/${SQUAD_SIZE}</b></div>
+      <div class="muted" style="font-size:12px;margin:4px 0 8px">Your XI keeps the real XI where those men are in the squad and fit; gaps are filled from the squad like for like. ▲▼ form · tired bowlers lose a rating step.</div>
+      <div class="tbl-wrap"><table><tr><th></th><th>Player</th><th class="hide-sm">Bowling</th><th>Bat</th><th class="r">${FMT_NAME[fmt]} M</th><th class="r hide-sm">Runs</th><th class="r hide-sm">Wkts</th><th>Status</th></tr>
+      ${pool.map(p=>{const a=pAttr(p,nx.date),s=S.stats[fmt][p]||{},inj=isInjured(p,nx.date);
+        return`<tr><td><input type="checkbox" data-sq="${p}" ${sq.includes(p)?'checked':''} ${inj?'disabled':''}></td><td>${plink(p)} ${formIcon(p,fmt,a.bat?.length===2?a.bat[0]:a.bat||'G')}</td>
+        <td class="hide-sm muted" style="font-size:12px">${a.style==='N'?'-':STYLE_NAME[a.style]+' r'+Math.min(a.rating,5)}</td><td>${a.bat?batChip(a.bat[0]):''}</td>
+        <td class="r num">${s.m||0}</td><td class="r num hide-sm">${s.r||0}</td><td class="r num hide-sm">${s.bw||0}</td>
+        <td>${inj?`<span class="pill loss">injured to ${fmtDate(injuredUntil(p))}</span>`:fatigueTag(p,nx.date)}</td></tr>`;}).join('')}</table></div></div>`;
+  }
+  const injList=team&&S.inj?Object.entries(S.inj).filter(([p,x])=>x.until>careerDate()&&x.team===team):[];
+  const news=C?`<div class="card"><h3>News</h3>${C.news.slice(-12).reverse().map(n=>`<div style="margin-bottom:4px" class="${n.cls==='good'?'green':n.cls==='bad'?'red':''}"><span class="muted">${fmtDate(n.date)}</span> ${esc(n.text)}</div>`).join('')}</div>`:'';
+  const hist=C&&C.history.length?`<div class="card"><h3>Coaching career</h3><table class="num"><tr><th>Team</th><th>From</th><th>To</th><th class="r">P</th><th class="r">W</th><th class="r">L</th><th>Left</th></tr>
+    ${C.history.map(h=>`<tr><td>${tlabel(h.team)}</td><td>${fmtDate(h.from)}</td><td>${fmtDate(h.to)}</td><td class="r">${h.p}</td><td class="r">${h.w}</td><td class="r">${h.l}</td><td>${esc(h.why)}</td></tr>`).join('')}</table></div>`:'';
+  el.innerHTML=`<div class="stack">${job}${offers}${next}
+    <div class="grid g2" style="align-items:start"><div class="stack">${objHTML}${injList.length?`<div class="card"><h3>Injuries</h3>${injList.map(([p,x])=>`<div>🩹 ${plink(+p)} <span class="muted">${esc(x.what)}, back ${fmtDate(x.until)}</span></div>`).join('')}</div>`:''}${hist}</div>
+    <div class="stack">${news}</div></div>${squad}</div>`;
+  $$('[data-take]').forEach(b=>b.onclick=()=>{takeJob(+b.dataset.take);const nx2=coachNext();if(nx2)ensureObjectives(nx2);saveGame();rerender();});
+  $$('[data-decline]').forEach(b=>b.onclick=()=>{C.offers.splice(+b.dataset.decline,1);saveGame();rerender();});
+  $$('[data-playkey]').forEach(b=>b.onclick=()=>startFixture(b.dataset.playkey));
+  $('#co-sim')&&($('#co-sim').onclick=simToMyMatch);
+  $$('[data-sq]').forEach(b=>b.onchange=()=>{
+    const sq=squadFor(nx.sid,team,nx.date),p=+b.dataset.sq;
+    if(b.checked){if(sq.length>=SQUAD_SIZE){b.checked=false;toast(`A squad is ${SQUAD_SIZE} players - leave someone out first.`,'warn');return;}sq.push(p);}
+    else{if(sq.length<=11){b.checked=true;toast('You need at least 11 fit players.','warn');return;}sq.splice(sq.indexOf(p),1);}
+    saveGame();rerender();
+  });
+};
+
 // ═══ SETTINGS, SPLASH, LIVE HOOKS & INIT ═══
 const GUIDE=`<h2>How First XI works</h2>
 <p><b>Every over</b> the bowler's rating picks one of six run-rate cards - RR_3 (tight) up to RR_7 (carnage) - shifted by the match situation:
@@ -2625,6 +2941,8 @@ RENDER.settings=(el)=>{
     <div class="spread"><span>Dice</span>${seg('dice',[['auto','Automatic'],['manual','I roll']])}</div>
     <div class="spread"><span>Captaincy (bowling changes, batting order, attitude, declarations)</span>${seg('captain',[['auto','AI'],['manual','Me']])}</div>
     <div class="spread"><span>Ratings &amp; colours</span>${seg('ratings',[['era','By era (form)'],['career','Whole career']])}</div>
+    ${S.coach?'':`<div class="spread"><span>Pick squads for the team you follow</span>${seg('selection',[['auto','No (real XIs)'],['me','Yes']])}</div>`}
+    <div class="spread"><span>Form (hot and cold streaks change the cards)</span>${seg('form',[['on','On'],['off','Off']])}</div>
     <div class="spread"><span>Batting colours</span>${seg('batColours',[['player','Player'],['position','Classic (by position)']])}</div>
     <div class="spread"><span>Tournament knockouts</span>${seg('knockouts',[['timeline','My timeline'],['history','History']])}</div>
     ${HAS_REAL?`<div class="spread"><span>Real results (after you play a match)</span>${seg('history',[['after','Show'],['off','Hide']])}</div>`:''}
@@ -2661,11 +2979,14 @@ function showSplash(){
     <p class="sub">Every ODI from ${fmtDate(FIX[0].date)} to ${fmtDate(FIX[FIX.length-1].date)}, with the real XIs and bowling plans, played out with the First XI run-rate cards. Add Test series whenever you like.</p>
     <div class="stack"><div class="row"><input type="text" id="sp-name" placeholder="Career name" value="My career"><select id="sp-team"><option value="0">Follow a team (optional)</option>${[...TEAMS.values()].filter(t=>t.full).map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('')}</select>
       <button class="btn pri" id="sp-go">Start a new career</button></div>
+      <label class="row" style="gap:6px"><input type="checkbox" id="sp-coach"> Coach the team I follow (board targets, contracts, squads, the sack)</label>
       ${slots.some(Boolean)?`<h3 style="margin-top:10px">Or carry on</h3>${slots.map((d,i)=>d?`<div class="spread"><span>Slot ${i+1}: <b>${esc(d.name)}</b> <span class="muted">${d.matches.length} matches</span></span><button class="btn sm" data-sp="${i}">Load</button></div>`:'').join('')}`:''}
       <button class="btn" id="sp-guide">How it works</button></div></div>`;
   $('#sp-go').onclick=()=>{
     if(readSlot(SLOT)){const free=SLOT_KEYS.findIndex((_,i)=>!readSlot(i));if(free>=0)setSlot(free);else if(!confirm('All three slots are in use. Overwrite slot '+(SLOT+1)+'?'))return;}
-    S=newCareer({name:$('#sp-name').value.trim()||'My career',myTeam:+$('#sp-team').value});saveGame();go('home');
+    S=newCareer({name:$('#sp-name').value.trim()||'My career',myTeam:+$('#sp-team').value});
+    if($('#sp-coach').checked){if(!+$('#sp-team').value){toast('Pick the team to coach.','warn');S=null;return;}startCoach(+$('#sp-team').value);}
+    saveGame();go(S.coach?'coach':'home');
   };
   $$('[data-sp]').forEach(b=>b.onclick=()=>{if(loadSlot(+b.dataset.sp))go('home');});
   $('#sp-guide').onclick=openGuide;
@@ -2679,7 +3000,7 @@ uiMatchHook=(M,e,fast)=>{
   if(!shown&&e.t==='innsEnd'&&M.state==='live')toast(esc(evText(e)));
   if(fast)toast('🏆 '+esc(pName(fast.pid))+': '+esc(fast.text),'ms');
 };
-uiDoneHook=(M,E,ms,pos,aw)=>{
+uiDoneHook=(M,E,ms,pos,aw,cn)=>{
   REC_CACHE=null;
   if(M.sim){SIM_NEWS.pos+=pos?1:0;SIM_NEWS.aw.push(...(aw||[]).map(a=>a.year));return;}
   stopWatch();LM=M;
@@ -2693,6 +3014,7 @@ uiDoneHook=(M,E,ms,pos,aw)=>{
       ${realOf(E)?`<p class="sub">In history: <b>${esc(realText(realOf(E)))}</b> ${sameAsHistory(E)===false?'<span class="pill ko">history changed</span>':sameAsHistory(E)?'<span class="pill win">as it happened</span>':''}</p>`:''}
       ${pos?`<div class="banner" style="margin-top:10px">Player of the series (${esc(pos.title)}): <b>${plink(pos.pid)}</b></div>`:''}
       ${ms.length?`<h3 style="margin-top:12px">Milestones</h3>${ms.map(m=>`<div>🏅 ${plink(m.pid)} <span class="sub">${esc(m.text)}</span></div>`).join('')}`:''}
+      ${cn&&cn.length?`<h3 style="margin-top:12px">From the board room</h3>${cn.map(n=>`<div class="${n.cls==='good'?'green':n.cls==='bad'?'red':''}">${esc(n.text)}</div>`).join('')}`:''}
       ${aw&&aw.length?`<h3 style="margin-top:12px">Season review</h3><div class="stack">${honoursHTML(aw.map(a=>a.year))}</div>`:''}
       <div class="row" style="margin-top:14px"><button class="btn pri" id="r-next">Next fixture</button><button class="btn" id="r-card">Full scorecard</button></div>`);
     $('#r-next').onclick=()=>{closeModal();const n=nextFixture();LM=null;if(n)startFixture(n.key);else go('home');};

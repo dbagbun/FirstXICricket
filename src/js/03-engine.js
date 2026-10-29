@@ -179,12 +179,13 @@ const COL_RANK={B:0,G:1,R:2};
 function batColour(M,pid,pos,bowlTeam){
   const pc=posColour(pos);
   if(M.batMode==='position')return pc;
-  const a=pAttr(pid,M.date),c=a.bat;
-  if(!c)return pc;
+  const a=pAttr(pid,M.date),c=a.bat||pc;
   const vsFull=!!TEAMS.get(+bowlTeam)?.full;
   const own=c.length===2?c[vsFull?1:0]:c;
-  if(a.batSrc==='h'||a.batSrc==='e'||(c.length===2&&vsFull))return own;
-  return COL_RANK[pc]<COL_RANK[own]?'BGR'[COL_RANK[own]-1]:own;
+  let col=!a.bat||a.batSrc==='h'||a.batSrc==='e'||(c.length===2&&vsFull)?own:COL_RANK[pc]<COL_RANK[own]?'BGR'[COL_RANK[own]-1]:own;
+  const f=M.mods&&M.mods.bat[pid];   // form: hot +1 (GREEN plays BLUE), cold -1 (BLUE plays GREEN)
+  if(f)col='BGR'[clamp(COL_RANK[col]-f,0,2)];
+  return col;
 }
 const BOWLER_CREDIT={b:1,lbw:1,ct:1,ctof:1,ctwk:1,st:1,ro:0};
 
@@ -245,7 +246,8 @@ const SPELLS={
 };
 function bowlEngInit(M,I){
   const x=M.xi[I.bowl],B=[];let total=0;
-  const add=(pid,style,rating,max)=>{B.push({pid,style,rating,max,used:0,last:0,spell:0,spellMax:0,rest:0,active:false});total+=max;};
+  const mod=pid=>(M.mods&&M.mods.bowl[pid])||0;   // form and fatigue move a bowler's rating a step
+  const add=(pid,style,rating,max)=>{B.push({pid,style,rating:clamp(rating+mod(pid),1,6),max,used:0,last:0,spell:0,spellMax:0,rest:0,active:false});total+=max;};
   x.bat.forEach((pid,i)=>{
     const a=pAttr(pid,M.date);
     if(a.style!=='N'&&a.rating<=6&&a.max>0)add(pid,a.style,a.rating,M.fmt==='TEST'?999:Math.max(1,Math.round(a.max*perBowler(M)/10)));

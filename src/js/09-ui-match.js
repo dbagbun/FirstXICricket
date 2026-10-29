@@ -95,6 +95,7 @@ function startFixture(key){
     if(!confirm('A match is in progress. Abandon it and start this one?'))return;
   }
   const fx=fixtureByKey(key);if(!fx)return;
+  if(S.coach&&S.coach.team)ensureObjectives(fx);
   LM=buildMatch(fx);
   LM.manual=S.settings.dice==='manual';
   if(S.settings.captain==='manual')LM.manualCaptain=captainOf(LM);
@@ -123,8 +124,9 @@ RENDER.match=(el)=>{
 // ---------- pre-match ----------
 const batChip=c=>`<span class="bchip b${c}" title="Falls to ${c==='B'?'BLUE wickets only':c==='G'?'BLUE or GREEN wickets':'any wicket'}">${c}</span>`;
 function xiTable(M,t){
-  const x=M.xi[t];
-  return`<table>${x.bat.map((p,i)=>{const a=pAttr(p,M.date);return`<tr><td class="muted">${i+1}</td><td>${batChip(batColour(M,p,i+1,otherTeam(M,t)))} ${plink(p)}${p===x.cap?' <span class="gold">(c)</span>':''}${p===x.wk?' <span class="cyan">†</span>':''}</td>
+  const x=M.xi[t],mine=t===managedTeam();
+  const notes=mine&&M.selNotes&&M.selNotes.length?`<div class="muted" style="font-size:12px;margin-bottom:6px">${M.selNotes.map(n=>`${esc(pName(n.inn))} in for ${esc(pName(n.out))} (${n.why})`).join(' · ')}</div>`:'';
+  return notes+`<table>${x.bat.map((p,i)=>{const a=pAttr(p,M.date),f=M.mods&&((M.mods.bat[p]||0)-(M.mods.bowl[p]||0));return`<tr><td class="muted">${i+1}</td><td>${batChip(batColour(M,p,i+1,otherTeam(M,t)))} ${plink(p)}${p===x.cap?' <span class="gold">(c)</span>':''}${p===x.wk?' <span class="cyan">†</span>':''}${f>0?' <span class="green" title="In form">▲</span>':f<0?' <span class="red" title="Out of form or tired">▼</span>':''}${mine?' '+fatigueTag(p,M.date):''}</td>
     <td class="r muted" style="font-size:12px">${a.style==='N'?'':STYLE_NAME[a.style]+' '+'●'.repeat(6-Math.min(a.rating,5))}</td><td class="r"><button class="btn sm" data-swap="${t}:${i}">Swap</button></td></tr>`;}).join('')}</table>`;
 }
 function renderPre(el,M){
@@ -152,11 +154,12 @@ function renderPre(el,M){
   $$('[data-swap]').forEach(b=>b.onclick=()=>{const[t,i]=b.dataset.swap.split(':').map(Number);openSwap(M,t,i);});
 }
 function openSwap(M,t,i){
-  const x=M.xi[t],cur=x.bat[i],pool=squadAround(t,M.date,500).filter(p=>!x.bat.includes(p)).slice(0,30);
-  openModal(`<h2>Replace ${esc(pName(cur))}</h2><p class="muted">Players who turned out for ${esc(teamName(t))} around this date.</p>
+  const mine=t===managedTeam();
+  const x=M.xi[t],cur=x.bat[i],pool=(mine?squadFor(M.sid,t,M.date):squadAround(t,M.date,500)).filter(p=>!x.bat.includes(p)&&!(mine&&isInjured(p,M.date))).slice(0,30);
+  openModal(`<h2>Replace ${esc(pName(cur))}</h2><p class="muted">${mine?'From your squad for this series (fit players only).':`Players who turned out for ${esc(teamName(t))} around this date.`}</p>
     <div class="grid g2">${pool.map(p=>{const a=pAttr(p,M.date);return`<button class="btn" data-rep="${p}" style="text-align:left">${esc(pName(p))} <span class="muted">${a.style==='N'?'':STYLE_NAME[a.style]+' r'+a.rating}</span></button>`;}).join('')||'<p class="muted">No one else available.</p>'}</div>
     <h3 style="margin-top:14px">Batting order</h3><div class="row"><button class="btn sm" id="sw-up">Move up</button><button class="btn sm" id="sw-dn">Move down</button><button class="btn sm" id="sw-wk">Make keeper</button><button class="btn sm" id="sw-cap">Make captain</button></div>`);
-  $$('[data-rep]').forEach(b=>b.onclick=()=>{const p=+b.dataset.rep;if(x.wk===cur)x.wk=p;if(x.cap===cur)x.cap=p;x.bat[i]=p;delete M.plans[t];closeModal();rerender();});
+  $$('[data-rep]').forEach(b=>b.onclick=()=>{const p=+b.dataset.rep;if(x.wk===cur)x.wk=p;if(x.cap===cur)x.cap=p;x.bat[i]=p;delete M.plans[t];M.mods=matchMods(M);closeModal();rerender();});
   const mv=d=>{const j=i+d;if(j<0||j>10)return;[x.bat[i],x.bat[j]]=[x.bat[j],x.bat[i]];closeModal();rerender();};
   $('#sw-up').onclick=()=>mv(-1);$('#sw-dn').onclick=()=>mv(1);
   $('#sw-wk').onclick=()=>{x.wk=cur;closeModal();rerender();};$('#sw-cap').onclick=()=>{x.cap=cur;closeModal();rerender();};

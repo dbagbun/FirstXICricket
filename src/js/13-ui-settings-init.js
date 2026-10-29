@@ -29,6 +29,8 @@ RENDER.settings=(el)=>{
     <div class="spread"><span>Dice</span>${seg('dice',[['auto','Automatic'],['manual','I roll']])}</div>
     <div class="spread"><span>Captaincy (bowling changes, batting order, attitude, declarations)</span>${seg('captain',[['auto','AI'],['manual','Me']])}</div>
     <div class="spread"><span>Ratings &amp; colours</span>${seg('ratings',[['era','By era (form)'],['career','Whole career']])}</div>
+    ${S.coach?'':`<div class="spread"><span>Pick squads for the team you follow</span>${seg('selection',[['auto','No (real XIs)'],['me','Yes']])}</div>`}
+    <div class="spread"><span>Form (hot and cold streaks change the cards)</span>${seg('form',[['on','On'],['off','Off']])}</div>
     <div class="spread"><span>Batting colours</span>${seg('batColours',[['player','Player'],['position','Classic (by position)']])}</div>
     <div class="spread"><span>Tournament knockouts</span>${seg('knockouts',[['timeline','My timeline'],['history','History']])}</div>
     ${HAS_REAL?`<div class="spread"><span>Real results (after you play a match)</span>${seg('history',[['after','Show'],['off','Hide']])}</div>`:''}
@@ -65,11 +67,14 @@ function showSplash(){
     <p class="sub">Every ODI from ${fmtDate(FIX[0].date)} to ${fmtDate(FIX[FIX.length-1].date)}, with the real XIs and bowling plans, played out with the First XI run-rate cards. Add Test series whenever you like.</p>
     <div class="stack"><div class="row"><input type="text" id="sp-name" placeholder="Career name" value="My career"><select id="sp-team"><option value="0">Follow a team (optional)</option>${[...TEAMS.values()].filter(t=>t.full).map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('')}</select>
       <button class="btn pri" id="sp-go">Start a new career</button></div>
+      <label class="row" style="gap:6px"><input type="checkbox" id="sp-coach"> Coach the team I follow (board targets, contracts, squads, the sack)</label>
       ${slots.some(Boolean)?`<h3 style="margin-top:10px">Or carry on</h3>${slots.map((d,i)=>d?`<div class="spread"><span>Slot ${i+1}: <b>${esc(d.name)}</b> <span class="muted">${d.matches.length} matches</span></span><button class="btn sm" data-sp="${i}">Load</button></div>`:'').join('')}`:''}
       <button class="btn" id="sp-guide">How it works</button></div></div>`;
   $('#sp-go').onclick=()=>{
     if(readSlot(SLOT)){const free=SLOT_KEYS.findIndex((_,i)=>!readSlot(i));if(free>=0)setSlot(free);else if(!confirm('All three slots are in use. Overwrite slot '+(SLOT+1)+'?'))return;}
-    S=newCareer({name:$('#sp-name').value.trim()||'My career',myTeam:+$('#sp-team').value});saveGame();go('home');
+    S=newCareer({name:$('#sp-name').value.trim()||'My career',myTeam:+$('#sp-team').value});
+    if($('#sp-coach').checked){if(!+$('#sp-team').value){toast('Pick the team to coach.','warn');S=null;return;}startCoach(+$('#sp-team').value);}
+    saveGame();go(S.coach?'coach':'home');
   };
   $$('[data-sp]').forEach(b=>b.onclick=()=>{if(loadSlot(+b.dataset.sp))go('home');});
   $('#sp-guide').onclick=openGuide;
@@ -83,7 +88,7 @@ uiMatchHook=(M,e,fast)=>{
   if(!shown&&e.t==='innsEnd'&&M.state==='live')toast(esc(evText(e)));
   if(fast)toast('🏆 '+esc(pName(fast.pid))+': '+esc(fast.text),'ms');
 };
-uiDoneHook=(M,E,ms,pos,aw)=>{
+uiDoneHook=(M,E,ms,pos,aw,cn)=>{
   REC_CACHE=null;
   if(M.sim){SIM_NEWS.pos+=pos?1:0;SIM_NEWS.aw.push(...(aw||[]).map(a=>a.year));return;}
   stopWatch();LM=M;
@@ -97,6 +102,7 @@ uiDoneHook=(M,E,ms,pos,aw)=>{
       ${realOf(E)?`<p class="sub">In history: <b>${esc(realText(realOf(E)))}</b> ${sameAsHistory(E)===false?'<span class="pill ko">history changed</span>':sameAsHistory(E)?'<span class="pill win">as it happened</span>':''}</p>`:''}
       ${pos?`<div class="banner" style="margin-top:10px">Player of the series (${esc(pos.title)}): <b>${plink(pos.pid)}</b></div>`:''}
       ${ms.length?`<h3 style="margin-top:12px">Milestones</h3>${ms.map(m=>`<div>🏅 ${plink(m.pid)} <span class="sub">${esc(m.text)}</span></div>`).join('')}`:''}
+      ${cn&&cn.length?`<h3 style="margin-top:12px">From the board room</h3>${cn.map(n=>`<div class="${n.cls==='good'?'green':n.cls==='bad'?'red':''}">${esc(n.text)}</div>`).join('')}`:''}
       ${aw&&aw.length?`<h3 style="margin-top:12px">Season review</h3><div class="stack">${honoursHTML(aw.map(a=>a.year))}</div>`:''}
       <div class="row" style="margin-top:14px"><button class="btn pri" id="r-next">Next fixture</button><button class="btn" id="r-card">Full scorecard</button></div>`);
     $('#r-next').onclick=()=>{closeModal();const n=nextFixture();LM=null;if(n)startFixture(n.key);else go('home');};

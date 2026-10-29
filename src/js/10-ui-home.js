@@ -24,7 +24,11 @@ RENDER.home=(el)=>{
   }
   const tourn=n&&n.f&&n.fmt==='ODI'&&SERIES.get(n.sid)?.kind==='tournament'?miniTable(n.sid):'';
   const my=S.settings.myTeam,myT=my&&(S.teams.ODI[my]||S.teams.TEST[my]);
-  el.innerHTML=`<div class="grid g3" style="grid-template-columns:2fr 1fr">
+  const C=S.coach,cnx=C&&C.team?coachNext():null;
+  const coachCard=C?`<div class="card hi"><div class="spread"><div>${C.team?`<span class="sub">Coach of</span> <b>${tlabel(C.team)}</b>`:'<b>Out of work</b>'}
+      ${C.team?`<div style="width:220px;margin-top:6px">${confBar(C.conf)}</div><span class="muted" style="font-size:12px">Board confidence ${Math.round(C.conf)}</span>`:`<div class="muted">${plural(C.offers.length,'offer')} waiting</div>`}</div>
+      <div class="row">${cnx?(nextFixture()&&nextFixture().key===cnx.key?`<button class="btn pri" data-playkey="${cnx.key}">Play ${esc(teamShort(cnx.a))} v ${esc(teamShort(cnx.b))}</button>`:`<button class="btn pri" id="h-simto">Sim to my next match (${fmtDate(cnx.date)})</button>`):''}<button class="btn" data-go="coach">Coach</button></div></div></div>`:'';
+  el.innerHTML=coachCard+`<div class="grid g3" style="grid-template-columns:2fr 1fr${C?';margin-top:14px':''}">
     <div class="stack">
       ${live&&(!n||live.key!==n.key)?`<div class="card"><div class="spread"><div><span class="pill live">LIVE</span> <b>${esc(teamName(live.teams[0]))} v ${esc(teamName(live.teams[1]))}</b></div><button class="btn pri" data-go="match">Resume</button></div></div>`:''}
       ${nextCard}${tourn}
@@ -48,6 +52,8 @@ RENDER.home=(el)=>{
     $('#h-simn').onclick=openSimMore;
   }
   $('#h-test').onclick=()=>openTestCreator();
+  $('#h-simto')&&($('#h-simto').onclick=simToMyMatch);
+  $$('[data-playkey]').forEach(b=>b.onclick=()=>startFixture(b.dataset.playkey));
 };
 function driftCard(){
   if(!HAS_REAL||S.settings.history==='off')return'';
@@ -74,6 +80,7 @@ function simMany(list,what){
   if(!list.length){toast('Nothing to sim.');return;}
   if(S.live&&S.live.state!=='done'&&list.some(x=>x.key===S.live.key))S.live=null;
   SIM_STOP=false;SIM_NEWS.pos=0;SIM_NEWS.aw=[];
+  if(S.coach)S.coach.stop=null;   // only stop for what happens during this sim
   let i=0,ms0=S.ms.length;
   openModal(`<h2>Simulating ${esc(what)}</h2><div class="bar" style="margin:10px 0"><i id="sim-bar" style="width:0"></i></div><div id="sim-txt" class="sub">Starting…</div><div class="row" style="margin-top:12px"><button class="btn" id="sim-stop">Stop</button></div>`);
   $('#sim-stop').onclick=()=>{SIM_STOP=true;};
@@ -83,9 +90,11 @@ function simMany(list,what){
       const fx=fixtureByKey(list[i].key);
       if(fx&&!S.done[fx.key]){const M=simFixture(fx);$('#sim-txt')&&($('#sim-txt').textContent=`${fmtDate(fx.date)} - ${M.result.text}`);}
       i++;
+      if(S.coach&&S.coach.stop){SIM_STOP=true;}
     }
     $('#sim-bar')&&($('#sim-bar').style.width=(100*i/list.length)+'%');
     if(i<list.length&&!SIM_STOP)setTimeout(tick,0);
+    else if(S.coach&&S.coach.stop){const why=S.coach.stop;S.coach.stop=null;saveGame();closeModal();toast(why==='offer'?'A job offer has come in.':'Your job has ended.','warn');go('coach');}
     else{saveGame();closeModal();
       if(SIM_NEWS.aw.length)openModal(`<h2>Season review</h2><div class="stack">${honoursHTML(SIM_NEWS.aw)}</div>`);
       toast(`Simmed ${i} ${i===1?'match':'matches'}. ${S.ms.length-ms0} new milestones${SIM_NEWS.pos?`, ${SIM_NEWS.pos} players of the series`:''}.`);rerender();}

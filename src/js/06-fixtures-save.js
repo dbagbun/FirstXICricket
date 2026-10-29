@@ -70,6 +70,7 @@ function buildMatch(fx){
     const M=newMatch({fmt:fx.fmt,a:fx.a,b:fx.b,home,date:fx.date,venue:fx.venue,city:fx.city,sid:fx.sid,series:fx.title,stage:fx.stage||fx.label,
       xiA:fx.xiA||xi(fx.a),xiB:fx.xiB||xi(fx.b)});
     if(fx.superOver)M.superOverOn=true;
+    selectAndMods(M,fx);
     M.key=fx.key;M.batMode=S.settings.batColours;return M;
   }
   const f=fx.f,E=edition(f.sid);
@@ -81,7 +82,14 @@ function buildMatch(fx){
     stage:E?stageName(E.stageOf.get(f.no),E):'',xiA:xiFor(a),xiB:xiFor(b),home:VENUE_HOME.get(f.venue)||0});
   if(reseeded){M.reseeded={a:f.a,b:f.b};for(const t of M.teams)if(t!==f.a&&t!==f.b)delete M.plans[t];}
   M.key=fx.key;M.batMode=S.settings.batColours;
+  selectAndMods(M,fx);
   return M;
+}
+// Your side picks from its squad (injuries, squad choices); then form & fatigue become the engine's mods.
+function selectAndMods(M,fx){
+  const my=managedTeam();
+  if(my&&M.teams.includes(my)&&M.xi[my]){const r=pickXI(fx,my,M.xi[my]);M.xi[my]=r.xi;M.selNotes=r.notes;}
+  M.mods=matchMods(M);
 }
 
 // ---------- end of match ----------
@@ -100,10 +108,12 @@ function onMatchDone(M){
   const ids=Object.keys(S.logs);if(ids.length>LOG_KEEP)for(const id of ids.slice(0,ids.length-LOG_KEEP))delete S.logs[id];
   applyStats(E);
   applyRankings(E);
+  updateForm(E);
+  const cn=coachAfter(E);
   const ms=checkMilestones(E),pos=playerOfSeries(E.sid),aw=yearEnd(E);
   if(S.live&&S.live.id===M.id)S.live=null;
   if(!M.sim)saveGame();
-  if(uiDoneHook)uiDoneHook(M,E,ms,pos,aw);
+  if(uiDoneHook)uiDoneHook(M,E,ms,pos,aw,cn);
 }
 // Quick-sim a fixture with auto dice and AI captains.
 function simFixture(fx){

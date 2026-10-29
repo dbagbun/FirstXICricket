@@ -4,7 +4,7 @@ let S=null;
 function newCareer(opts={}){
   return{
     v:1,created:Date.now(),name:opts.name||'My career',
-    settings:{dice:'auto',captain:'auto',knockouts:'timeline',batColours:'player',ratings:'era',history:'after',myTeam:+opts.myTeam||0,ballDelay:250,sound:false,tv:true},
+    settings:{dice:'auto',captain:'auto',knockouts:'timeline',batColours:'player',ratings:'era',history:'after',selection:'auto',form:'on',myTeam:+opts.myTeam||0,ballDelay:250,sound:false,tv:true},
     done:{},          // fixture no / test id -> match id
     matches:[],       // archived scorecards (compact), oldest first
     logs:{},          // match id -> compact ball log, last LOG_KEEP matches only
@@ -103,7 +103,8 @@ function applyStats(E){
 }
 function rebuildStats(){
   S.stats=perFmt(()=>({}));S.teams=perFmt(()=>({}));
-  for(const E of S.matches)applyStats(E);
+  S.form=perFmt(()=>({}));
+  for(const E of S.matches){applyStats(E);updateForm(E);}
   rebuildRankings();
 }
 const batAvg=s=>s.inn-s.no>0?s.r/(s.inn-s.no):NaN;
