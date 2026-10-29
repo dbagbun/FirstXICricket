@@ -304,8 +304,7 @@ function drawMatchTab(M){
   const E=M.state==='done'?(S.matches.find(x=>x.id===M.id)||archiveMatch(M)):archiveMatch(M);
   if(MATCH_TAB==='card')el.innerHTML=scorecardHTML(E,M);
   else if(MATCH_TAB==='comm'){
-    const balls=M.inns.flatMap(I=>I.balls.map(b=>({...b,pos:I.order.indexOf(b.st)+1}))).slice(-150).reverse();
-    el.innerHTML=`<div class="commentary">${balls.map(ballText).join('')||'<span class="muted">No balls yet.</span>'}</div>`;
+    el.innerHTML=`<div class="commentary">${commentaryHTML(M)||'<span class="muted">No balls yet.</span>'}</div>`;
   }else if(MATCH_TAB==='charts')el.innerHTML=chartsHTML(E);
   else el.innerHTML=rrCardHTML(M);
 }
@@ -382,5 +381,9 @@ function openScorecard(mid){
   openModal(`<div class="sub">${esc(E.series)}${E.stage?' · '+esc(E.stage):''} · ${esc(E.venue)} · ${fmtDate(E.date)}</div>
     <h2 style="margin:6px 0">${tlabel(E.teams[0])} v ${tlabel(E.teams[1])}</h2><div class="result-big" style="margin-bottom:10px">${esc(E.result.text)}</div>
     <div class="muted" style="margin-bottom:10px">Toss: ${esc(teamName(E.toss[0]))}, chose to ${E.toss[1]}${E.pitch?' · '+PITCHES[E.pitch].name:''}${E.reseeded?' · re-seeded knockout':''}</div>
-    ${scorecardHTML(E)}<h3 style="margin-top:14px">Charts</h3>${chartsHTML(E)}`);
+    <div class="row" style="margin-bottom:10px"><button class="btn sm" id="sc-hl">▶ Highlights</button><button class="btn sm" id="sc-img">Save as image</button></div>
+    ${scorecardHTML(E)}<h3 style="margin-top:14px">Charts</h3>${chartsHTML(E)}
+    <details style="margin-top:12px"><summary class="muted" style="cursor:pointer">Key moments</summary>${highlightsListHTML(E)}</details>`);
+  $('#sc-hl').onclick=()=>{closeModal();playHighlights(E);};
+  $('#sc-img').onclick=()=>downloadCanvas(scorecardImage(E),`first-xi-${E.date}-${teamShort(E.teams[0])}-v-${teamShort(E.teams[1])}.png`);
 }

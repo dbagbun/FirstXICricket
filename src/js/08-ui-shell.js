@@ -26,6 +26,7 @@ document.addEventListener('click',e=>{
   const g=e.target.closest('[data-go]');if(g){go(g.dataset.go,g.dataset.arg);return;}
   const p=e.target.closest('[data-pid]');if(p&&!e.target.closest('button')){openPlayer(+p.dataset.pid);return;}
   const m=e.target.closest('[data-mid]');if(m&&!e.target.closest('button')){openScorecard(m.dataset.mid);return;}
+  const si=e.target.closest('[data-simg]');if(si){downloadCanvas(seasonImage(si.dataset.simg),`first-xi-${si.dataset.simg}-season.png`);return;}
   if(e.target.closest('.modal .x')||e.target.id==='modal')closeModal();
 });
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});

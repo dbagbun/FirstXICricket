@@ -35,6 +35,8 @@ The repo root holds a prebuilt `first-xi.html` (double-click to open). **After a
 
 - Stats lab (`07d-query.js`, UI `12e-ui-query.js`): `queryStats(q)` filters the archive by format, years, team, opponent, host (`VENUE_HOME`), batting position (index in `bt`), stage; `headToHead(batter, bowler, fmt)` reads per-innings matchups `inns[].mu` = `[batter, bowler, balls, runs, dismissals]` (added by `matchups(I)` in `archiveMatch`; older matches have none); `groundStats`. Player card: `nemesisHTML`.
 
+- Commentary & sharing (`12f-commentary.js`): `phrase(b, style)` picks from `COMM` by `hashBall` (never `Math.random`), `commentaryHTML(M)` with `overSummary` lines; `highlightsOf(E, M)` from a live match or `S.logs` (last `LOG_KEEP` matches), `playHighlights` via `tvBanner`; `scorecardImage`/`seasonImage` draw a PNG with canvas (`canvasCard`, `downloadCanvas` returns false without canvas).
+
 ## Layout
 - `src/template.html` - page shell with `/*@@CSS@@*/`, `/*@@DATA@@*/`, `/*@@JS@@*/`
 - `src/styles.css` - all CSS (Excel dark palette: navy `#0a0e1a`, panels `#0f172a`/`#1e293b`, cyan `#06b6d4`, gold `#ffd700`)

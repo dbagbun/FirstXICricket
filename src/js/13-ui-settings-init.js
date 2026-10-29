@@ -104,7 +104,8 @@ uiDoneHook=(M,E,ms,pos,aw,cn)=>{
       ${ms.length?`<h3 style="margin-top:12px">Milestones</h3>${ms.map(m=>`<div>🏅 ${plink(m.pid)} <span class="sub">${esc(m.text)}</span></div>`).join('')}`:''}
       ${cn&&cn.length?`<h3 style="margin-top:12px">From the board room</h3>${cn.map(n=>`<div class="${n.cls==='good'?'green':n.cls==='bad'?'red':''}">${esc(n.text)}</div>`).join('')}`:''}
       ${aw&&aw.length?`<h3 style="margin-top:12px">Season review</h3><div class="stack">${honoursHTML(aw.map(a=>a.year))}</div>`:''}
-      <div class="row" style="margin-top:14px"><button class="btn pri" id="r-next">Next fixture</button><button class="btn" id="r-card">Full scorecard</button></div>`);
+      <div class="row" style="margin-top:14px"><button class="btn pri" id="r-next">Next fixture</button><button class="btn" id="r-card">Full scorecard</button><button class="btn" id="r-img">Save as image</button></div>`);
+    $('#r-img').onclick=()=>downloadCanvas(scorecardImage(E),`first-xi-${E.date}-${teamShort(E.teams[0])}-v-${teamShort(E.teams[1])}.png`);
     $('#r-next').onclick=()=>{closeModal();const n=nextFixture();LM=null;if(n)startFixture(n.key);else go('home');};
     $('#r-card').onclick=()=>{closeModal();MATCH_TAB='card';go('match');};
   },50);
