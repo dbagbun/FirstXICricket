@@ -9,12 +9,19 @@ everyone else gets a rating derived from their real Cricsheet spells in BowlingX
 Batting colours (BLUE / GREEN / RED, the wicket colours that can get him out): the Players sheet's
 BatGroup wins; otherwise from where he usually bats, his caps, and his caps against full members
 (see bat_group). The workbook has no batting figures, so these are proxies.
+Era (players[pid][7] = [[year, rating, colour], ...], one entry per change): the rating for a year comes from his
+spells in the previous ERA_YEARS years, steadied by up to ERA_PRIOR_BALLS balls of his earlier record (a debutant:
+his first spells); nothing after his last season. The colour comes from his caps before that year
+(players already established when the data starts in 2002 are credited ERA_PRIOR_CAPS caps).
 """
+ERA_YEARS = 3
+ERA_PRIOR_BALLS = 300
+ERA_PRIOR_CAPS = 20
 BAT_BLUE_CAPS = int(__import__('os').environ.get('BAT_BLUE_CAPS', 20))       # full-member top-order batter with this many caps -> BLUE
-BAT_BLUE_VS_FULL = int(__import__('os').environ.get('BAT_BLUE_VS_FULL', 70))    # associate top-order batter with this many games against full members -> BLUE
+BAT_BLUE_VS_FULL = int(__import__('os').environ.get('BAT_BLUE_VS_FULL', 40))    # associate top-order batter with this many games against full members (to date) -> BLUE
 # A colour is one letter (B/G/R, against everyone) or two (against associates, against Test nations): an associate's
 # unproven top order is 'BG' - BLUE against associates, GREEN against Test nations. Tuned with tools/dev/strength.js
-# (full members beat associates ~87%, every other matchup scores as the classic rules do).
+# (era colours: full members beat associates ~86%, every other matchup scores as the classic rules do).
 import json, re, sys, collections
 import openpyxl
 
@@ -95,29 +102,43 @@ def main():
         cap = next((p for p in flagged_cap if p in eleven), eleven[0])
         xi[cid][tid] = eleven + [eleven.index(wk), eleven.index(cap)]
 
-    # ---- batting: usual position, caps, caps against full members ----
-    bat_pos, caps_vs_full, home = collections.defaultdict(list), collections.Counter(), collections.defaultdict(collections.Counter)
+    # ---- batting: usual position, caps, caps against full members (with dates, for the era colours) ----
+    cid_date = {f[7]: f[1] for f in fixtures}
+    start = min(cid_date.values())
+    apps = collections.defaultdict(list)          # pid -> [(date, position, vsFull, team)]
     for cid, sides in xi.items():
         for tid, lst in sides.items():
             opp = next((t for t in sides if t != tid), None)
             for i, p in enumerate(lst[:11]):
-                bat_pos[p].append(i + 1); home[p][tid] += 1
-                if opp in FULL:
-                    caps_vs_full[p] += 1
+                apps[p].append((cid_date.get(cid, start), i + 1, opp in FULL, tid))
+    for p in apps:
+        apps[p].sort()
 
-    def bat_group(pid):
-        pos = sorted(bat_pos[pid])
-        if not pos:   # only ever 12th man: no colour, the position rule applies
+    def bat_group(pid, before=None):
+        """Colour from his appearances; with `before` (a date), caps count only games before it."""
+        A = apps.get(pid)
+        if not A:   # only ever 12th man: no colour, the position rule applies
             return ''
-        med = pos[len(pos) // 2]
+        upto = [a for a in A if before is None or a[0] < before[:4] + '-12-31'] or A[:5]
+        pos = sorted(a[1] for a in upto); med = pos[len(pos) // 2]
         if med >= 10:
             return 'R'
-        full = home[pid].most_common(1)[0][0] in FULL
         if med >= 7:
             return 'G'
+        prev = [a for a in A if before is None or a[0] < before]
+        prior = ERA_PRIOR_CAPS if before is not None and established(pid) else 0
+        full = collections.Counter(a[3] for a in A).most_common(1)[0][0] in FULL
         if full:
-            return 'B' if len(pos) >= BAT_BLUE_CAPS else 'G'
-        return 'B' if caps_vs_full[pid] >= BAT_BLUE_VS_FULL else 'BG'
+            return 'B' if len(prev) + prior >= BAT_BLUE_CAPS else 'G'
+        return 'B' if sum(1 for a in prev if a[2]) >= BAT_BLUE_VS_FULL else 'BG'
+
+    def established(pid):
+        """Already a regular when the data starts: 10+ games in its first 12 months."""
+        A = apps[pid]
+        if A[0][0] >= start[:4] + '-12-31':
+            return False
+        limit = str(int(start[:4]) + 1) + start[4:]
+        return sum(1 for a in A if a[0] < limit) >= 10
 
     # ---- bowling plans + real figures ----
     team_of = {}
@@ -126,6 +147,7 @@ def main():
             for p in lst[:11]:
                 team_of[(cid, p)] = tid
     plans = collections.defaultdict(dict)
+    spells = collections.defaultdict(list)
     stats = collections.defaultdict(lambda: {'full': [0, 0, 0, 0], 'all': [0, 0, 0, 0], 'ov': collections.Counter(), 'mt': 0})
     for r in rows(wb['BowlingXI']):
         cid, inn, pid = str(r[0]).strip(), num(r[1]), num(r[3])
@@ -144,6 +166,7 @@ def main():
         balls = len(overs) * 6
         runs, wk = num(r[7]), num(r[8])
         p['fig'].append([pid, len(overs), num(r[6]), runs, wk])
+        spells[pid].append((cid_date.get(cid, start), balls, runs, wk, opp in FULL))
         s = stats[pid]
         for key in (['all', 'full'] if opp in FULL else ['all']):
             s[key][0] += balls; s[key][1] += runs; s[key][2] += wk; s[key][3] += 1
@@ -168,6 +191,45 @@ def main():
     def pct(v):
         lo = sum(1 for x in pool if x < v)
         return lo / max(1, len(pool))
+
+    # ---- era ratings: percentile against every (player, year) window, same scale as the career rating ----
+    years = list(range(int(start[:4]), int(max(cid_date.values())[:4]) + 1))
+    def window(pid, y):
+        sp = sorted(spells.get(pid, []))
+        lo, hi = '%d-01-01' % (y - ERA_YEARS), '%d-01-01' % y
+        w = [x for x in sp if lo <= x[0] < hi]
+        hist = [x for x in sp if x[0] < hi]
+        if not hist or sum(x[1] for x in w) < 120 and sum(x[1] for x in hist) < 240:
+            w, hist, n = [], [], 0            # no record yet: judge him on his first spells
+            for x in sp:
+                w.append(x); n += x[1]
+                if n >= 240:
+                    break
+        def tot(xs, only_full):
+            return [sum(x[i] for x in xs if x[4] or not only_full) for i in (1, 2, 3)]
+        def blend(only_full):
+            a, h = tot(w, only_full), tot(hist, only_full)
+            k = min(1.0, ERA_PRIOR_BALLS / h[0]) if h[0] else 0
+            return [a[i] + k * h[i] for i in range(3)]
+        return blend(True), blend(False)
+    era_pool = []
+    for pid in spells:
+        for y in years:
+            f, _ = window(pid, y)
+            if f[0] >= 360:
+                era_pool.append(value(f + [0]))
+    era_pool.sort()
+    def era_rating(pid, y):
+        f, a = window(pid, y)
+        if a[0] < 30:
+            return None
+        use, penal = (f, 0) if f[0] >= 180 else (a, 1)
+        pc = sum(1 for x in era_pool if x < value(use + [0])) / max(1, len(era_pool))
+        r = 1 if pc < .10 else 2 if pc < .30 else 3 if pc < .60 else 4 if pc < .85 else 5
+        r = min(5, r + penal)
+        if a[0] < 240:
+            r = max(r, 5 if a[0] < 120 else 4)
+        return r
 
     players = {}
     for pid, pname in names.items():
@@ -197,7 +259,17 @@ def main():
             else:
                 style, rating, mx = hs[0], hr or 3, hm or 10
             src = 'h'
-        players[pid] = [pname, style, rating, mx, src, bat, bsrc]
+        era, last = [], None
+        first = int(apps[pid][0][0][:4]) if apps.get(pid) else years[0]
+        lastyr = int(apps[pid][-1][0][:4]) if apps.get(pid) else years[-1]
+        for y in years:
+            if y < first or y > lastyr:
+                continue
+            er = rating if (src == 'h' or style == 'N') else (era_rating(pid, y) or rating)
+            ec = bat if bsrc == 'h' else bat_group(pid, '%d-01-01' % y)
+            if (er, ec) != last:
+                era.append([y, er, ec]); last = (er, ec)
+        players[pid] = [pname, style, rating, mx, src, bat, bsrc, era]
 
     world = {
         'source': SRC.split('/')[-1],
@@ -213,7 +285,8 @@ def main():
     print('wrote', OUT, 'fixtures', len(fixtures), 'xis', len(xi), 'plans', len(plans), 'players', len(players),
           'hand-rated', sum(1 for p in players.values() if p[4] == 'h'))
     print('ratings', collections.Counter(p[2] for p in players.values()), 'styles', collections.Counter(p[1] for p in players.values()),
-          'bat colours', collections.Counter(p[5] for p in players.values()))
+          'bat colours', collections.Counter(p[5] for p in players.values()),
+          'era entries', sum(len(p[7]) for p in players.values()))
 
 
 if __name__ == '__main__':

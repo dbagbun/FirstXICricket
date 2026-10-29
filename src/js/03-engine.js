@@ -79,7 +79,7 @@ const COL_RANK={B:0,G:1,R:2};
 function batColour(M,pid,pos,bowlTeam){
   const pc=posColour(pos);
   if(M.batMode==='position')return pc;
-  const a=pAttr(pid),c=a.bat;
+  const a=pAttr(pid,M.date),c=a.bat;
   if(!c)return pc;
   const vsFull=!!TEAMS.get(+bowlTeam)?.full;
   const own=c.length===2?c[vsFull?1:0]:c;
@@ -142,7 +142,7 @@ function bowlEngInit(M,I){
   const x=M.xi[I.bowl],B=[];let total=0;
   const add=(pid,style,rating,max)=>{B.push({pid,style,rating,max,used:0,last:0,spell:0,spellMax:0,rest:0,active:false});total+=max;};
   x.bat.forEach((pid,i)=>{
-    const a=pAttr(pid);
+    const a=pAttr(pid,M.date);
     if(a.style!=='N'&&a.rating<=6&&a.max>0)add(pid,a.style,a.rating,M.fmt==='TEST'?999:a.max);
   });
   // Safety net: not enough overs (or bowlers) -> top-order part-timers, weak.
@@ -161,7 +161,7 @@ function bowlEngInit(M,I){
       const pid=+p;if(!x.bat.includes(pid))continue;
       const b=B.find(b=>b.pid===pid);
       if(b)b.max=Math.max(b.max,cnt[p]);
-      else{const a=pAttr(pid);add(pid,a.style==='N'?'M':a.style,a.style==='N'?4:a.rating,Math.max(cnt[p],a.max||0));}
+      else{const a=pAttr(pid,M.date);add(pid,a.style==='N'?'M':a.style,a.style==='N'?4:a.rating,Math.max(cnt[p],a.max||0));}
     }
   }
   return{B,lastIdx:-1,plan:plan||null,newBallAt:1};

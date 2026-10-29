@@ -88,7 +88,7 @@ RENDER.match=(el)=>{
 const batChip=c=>`<span class="bchip b${c}" title="Falls to ${c==='B'?'BLUE wickets only':c==='G'?'BLUE or GREEN wickets':'any wicket'}">${c}</span>`;
 function xiTable(M,t){
   const x=M.xi[t];
-  return`<table>${x.bat.map((p,i)=>{const a=pAttr(p);return`<tr><td class="muted">${i+1}</td><td>${batChip(batColour(M,p,i+1,otherTeam(M,t)))} ${plink(p)}${p===x.cap?' <span class="gold">(c)</span>':''}${p===x.wk?' <span class="cyan">†</span>':''}</td>
+  return`<table>${x.bat.map((p,i)=>{const a=pAttr(p,M.date);return`<tr><td class="muted">${i+1}</td><td>${batChip(batColour(M,p,i+1,otherTeam(M,t)))} ${plink(p)}${p===x.cap?' <span class="gold">(c)</span>':''}${p===x.wk?' <span class="cyan">†</span>':''}</td>
     <td class="r muted" style="font-size:12px">${a.style==='N'?'':STYLE_NAME[a.style]+' '+'●'.repeat(6-Math.min(a.rating,5))}</td><td class="r"><button class="btn sm" data-swap="${t}:${i}">Swap</button></td></tr>`;}).join('')}</table>`;
 }
 function renderPre(el,M){
@@ -118,7 +118,7 @@ function renderPre(el,M){
 function openSwap(M,t,i){
   const x=M.xi[t],cur=x.bat[i],pool=squadAround(t,M.date,500).filter(p=>!x.bat.includes(p)).slice(0,30);
   openModal(`<h2>Replace ${esc(pName(cur))}</h2><p class="muted">Players who turned out for ${esc(teamName(t))} around this date.</p>
-    <div class="grid g2">${pool.map(p=>{const a=pAttr(p);return`<button class="btn" data-rep="${p}" style="text-align:left">${esc(pName(p))} <span class="muted">${a.style==='N'?'':STYLE_NAME[a.style]+' r'+a.rating}</span></button>`;}).join('')||'<p class="muted">No one else available.</p>'}</div>
+    <div class="grid g2">${pool.map(p=>{const a=pAttr(p,M.date);return`<button class="btn" data-rep="${p}" style="text-align:left">${esc(pName(p))} <span class="muted">${a.style==='N'?'':STYLE_NAME[a.style]+' r'+a.rating}</span></button>`;}).join('')||'<p class="muted">No one else available.</p>'}</div>
     <h3 style="margin-top:14px">Batting order</h3><div class="row"><button class="btn sm" id="sw-up">Move up</button><button class="btn sm" id="sw-dn">Move down</button><button class="btn sm" id="sw-wk">Make keeper</button><button class="btn sm" id="sw-cap">Make captain</button></div>`);
   $$('[data-rep]').forEach(b=>b.onclick=()=>{const p=+b.dataset.rep;if(x.wk===cur)x.wk=p;if(x.cap===cur)x.cap=p;x.bat[i]=p;delete M.plans[t];closeModal();rerender();});
   const mv=d=>{const j=i+d;if(j<0||j>10)return;[x.bat[i],x.bat[j]]=[x.bat[j],x.bat[i]];closeModal();rerender();};
@@ -162,7 +162,7 @@ function renderLive(el,M){
     <div class="card"><h3>At the crease</h3>
       ${[I.st,I.ns].filter(p=>bt[p]&&!bt[p].out).map(p=>`<div class="bat-line ${p===I.st?'on':''}"><span class="nm">${plink(p)}</span><b class="num">${bt[p].r}</b><span class="muted num">(${bt[p].b})</span><span class="muted num" style="font-size:12px">${bt[p].f4}×4 ${bt[p].f6}×6</span></div>`).join('')}
       ${P?`<div class="muted" style="margin-top:6px">Partnership ${P.r} (${P.bl})</div>`:''}
-      ${W?`<h3 style="margin-top:12px">Bowling</h3><div class="bat-line"><span>${plink(bowlerId)}</span><b class="num">${W.w}-${W.r}</b><span class="muted num">${oversTxt(W.b)} ov</span><span class="muted" style="font-size:12px">${STYLE_NAME[pAttr(bowlerId).style]||''}</span></div>`:''}
+      ${W?`<h3 style="margin-top:12px">Bowling</h3><div class="bat-line"><span>${plink(bowlerId)}</span><b class="num">${W.w}-${W.r}</b><span class="muted num">${oversTxt(W.b)} ov</span><span class="muted" style="font-size:12px">${STYLE_NAME[pAttr(bowlerId,M.date).style]||''}</span></div>`:''}
     </div>
     <div class="card"><h3>This over</h3>
       <div class="ticker">${thisOver.length?thisOver.map(ballChip).join(''):'<span class="muted">New over</span>'}</div>
@@ -191,7 +191,7 @@ function renderLive(el,M){
 function diceBlock(M,C){
   const row=WORLD.cards[C.card][(C.roll||1)-1];
   return`<div class="row" style="margin-top:10px"><span class="dice">RR_${C.card} <span class="muted">roll</span> <b>${C.roll||'?'}</b></span>
-    <span class="muted" style="font-size:12px">${esc(pName(C.bowler))} (rating ${Math.min(pAttr(C.bowler).rating,5)})</span></div>
+    <span class="muted" style="font-size:12px">${esc(pName(C.bowler))} (rating ${Math.min(curInn(M).eng.B[C.bi].rating,5)})</span></div>
     ${C.roll?`<div class="cardgrid" style="margin-top:8px">${row.map((t,i)=>`<span class="${i+1===C.col?'cur':i+1<C.col?'used':''}" title="${esc(t)}">${esc(t.replace(/^W_/,'W ').replace(/_/g,' '))}</span>`).join('')}</div>`:''}`;
 }
 function doneBlock(M){

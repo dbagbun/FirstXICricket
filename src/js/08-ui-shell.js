@@ -43,6 +43,7 @@ function matchLine(E){
 // ---------- player profile ----------
 function openPlayer(pid){
   const a=pAttr(pid),rows=['ODI','TEST'].map(f=>[f,S.stats[f][pid]]).filter(x=>x[1]);
+  const era=(WORLD.players[pid]||[])[7]||[],bowls=a.style!=='N';
   const recent=S.matches.filter(E=>E.teams.some(t=>E.xi[t].slice(0,11).includes(pid))).slice(-8).reverse();
   const ms=S.ms.filter(m=>m.pid===pid).slice(-10).reverse();
   const line=(E)=>{const parts=[];for(const I of E.inns){const b=I.bt.find(r=>r[0]===pid);if(b)parts.push(b[1]+(b[5]?'':'*'));const w=I.bw.find(r=>r[0]===pid);if(w)parts.push(w[4]+'/'+w[3]);}return parts.join(', ')||'dnb';};
@@ -52,6 +53,7 @@ function openPlayer(pid){
     <span>Bowling: ${a.style==='N'?'does not bowl':`${STYLE_NAME[a.style]}, rating ${a.rating}${a.rating>=5?' (part-timer)':a.rating===1?' (elite)':''}`}
     <span class="pill">${a.src==='h'?'from your Excel ratings':a.src==='e'?'edited':'from real spells'}</span></span>
     <button class="btn sm" id="pa-edit">Edit</button></div>
+  ${era.length>1&&!S.attrEdits[pid]?`<div class="muted" style="font-size:12px;margin:-4px 0 10px">By season: ${era.map(e=>`${e[0]} ${bowls&&(WORLD.players[pid][4]!=='h')?'r'+e[1]+' ':''}${e[2]?batChip(e[2].length===2?e[2][0]:e[2]):''}`).join(' · ')}${a.era?' (as of '+fmtDate(careerDate()).slice(-4)+')':''}</div>`:''}
   <div id="pa-form" class="hidden card" style="margin-bottom:10px"><div class="row">
     <label>Style <select id="pa-style">${['P','S','M','N'].map(s=>`<option value="${s}" ${a.style===s?'selected':''}>${s==='N'?'Does not bowl':STYLE_NAME[s]}</option>`).join('')}</select></label>
     <label>Rating <select id="pa-rating">${[1,2,3,4,5].map(r=>`<option ${a.rating===r?'selected':''}>${r}</option>`).join('')}</select></label>

@@ -7,13 +7,24 @@ const pName=pid=>(WORLD.players[pid]||['#'+pid])[0];
 // Player attributes: WORLD.players[pid] = [name, style P/S/M/N, rating 1-5 (7 = does not bowl), max overs, src,
 // batting colour: B/G/R against everyone, or two letters = against associates + against Test nations
 // ('BG': BLUE v associates, GREEN v Test nations; '' = by position), batSrc].
+// era: [[year, rating, colour], ...] - his rating and colour as of that year (see tools/extract.py).
+// pAttr(pid, date): as of `date` (default: your career date), unless Settings -> Ratings is 'career'.
 // Edits in S.attrEdits win (bowling fields and/or bat).
-function pAttr(pid){
-  const e=typeof S!=='undefined'&&S&&S.attrEdits&&S.attrEdits[pid];
+function eraEntry(p,date){
+  const E=p[7];if(!E||!E.length||!date)return null;
+  const y=+date.slice(0,4);let e=E[0];
+  for(const x of E){if(x[0]<=y)e=x;else break;}
+  return e;
+}
+function pAttr(pid,date){
+  const hasS=typeof S!=='undefined'&&S;
+  const e=hasS&&S.attrEdits&&S.attrEdits[pid];
   const p=WORLD.players[pid]||['?','N',7,0,'d','','d'];
-  const bw=e&&e.style?e:{style:p[1],rating:p[2],max:p[3]};
-  const bat=e&&e.bat!==undefined?e.bat:(p[5]||'');
-  return{style:bw.style,rating:bw.rating,max:bw.max,src:e&&e.style?'e':p[4],bat,batSrc:e&&e.bat!==undefined?'e':(p[6]||'d')};
+  if(date===undefined&&hasS&&typeof careerDate==='function')date=careerDate();
+  const era=(!hasS||S.settings.ratings!=='career')?eraEntry(p,date):null;
+  const bw=e&&e.style?e:{style:p[1],rating:era&&p[1]!=='N'?era[1]:p[2],max:p[3]};
+  const bat=e&&e.bat!==undefined?e.bat:(era?era[2]:(p[5]||''));
+  return{style:bw.style,rating:bw.rating,max:bw.max,src:e&&e.style?'e':p[4],bat,batSrc:e&&e.bat!==undefined?'e':(p[6]||'d'),era:!!era};
 }
 const STYLE_NAME={P:'Pace',S:'Spin',M:'Medium',N:'-'};
 const BAT_NAME={B:'BLUE',G:'GREEN',R:'RED',BG:'BLUE (GREEN v Test nations)',GR:'GREEN (RED v Test nations)',BR:'BLUE (RED v Test nations)'};

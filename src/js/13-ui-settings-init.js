@@ -22,6 +22,7 @@ RENDER.settings=(el)=>{
   <div class="card stack"><h3>Game</h3>
     <div class="spread"><span>Dice</span>${seg('dice',[['auto','Automatic'],['manual','I roll']])}</div>
     <div class="spread"><span>Test captaincy (declarations, follow-on)</span>${seg('captain',[['auto','AI'],['manual','Me']])}</div>
+    <div class="spread"><span>Ratings &amp; colours</span>${seg('ratings',[['era','By era (form)'],['career','Whole career']])}</div>
     <div class="spread"><span>Batting colours</span>${seg('batColours',[['player','Player'],['position','Classic (by position)']])}</div>
     <div class="spread"><span>Tournament knockouts</span>${seg('knockouts',[['timeline','My timeline'],['history','History']])}</div>
     <div class="spread"><span>Watch speed</span>${seg('ballDelay',[[600,'Slow'],[250,'Normal'],[60,'Fast']])}</div>
