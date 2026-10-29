@@ -45,6 +45,8 @@ function evText(e){
     case'5w':return`${pName(e.pid)} - five wickets (${e.w}/${e.r})`;
     case'hat':return`${pName(e.pid)} - HAT-TRICK!`;
     case'rain':return`Rain: ${e.lost} overs lost on day ${e.day}`;
+    case'rainlo':return`Rain! ${plural(e.lost,'over')} lost - ${e.inn===1?'the match is':'the chase is'} cut to ${e.overs} overs a side`;
+    case'dl':return`D/L: revised target ${e.target} from ${e.overs} overs`;
     case'followon':return`${teamName(e.team)} enforce the follow-on`;
     case'innsEnd':return`End of innings: ${teamName(e.bat)} ${e.runs}${e.wkts<10?'/'+e.wkts:''} (${e.why})`;
     case'result':return e.text;
@@ -132,7 +134,7 @@ function renderPre(el,M){
   el.innerHTML=`<div class="card hi stack">
     <div class="spread"><div><div class="sub">${esc(M.series)}${M.stage?' · <span class="gold">'+esc(M.stage)+'</span>':''}</div>
       <h2 style="margin:4px 0">${tlabel(M.teams[0])} <span class="muted">v</span> ${tlabel(M.teams[1])}</h2>
-      <div class="muted">${esc(M.venue)}${M.city&&!M.venue.includes(M.city)?', '+esc(M.city):''} · ${fmtDate(M.date)} · ${M.fmt==='TEST'?'Test match (5 days)':M.maxOv+'-over ODI'}</div></div>
+      <div class="muted">${esc(M.venue)}${M.city&&!M.venue.includes(M.city)?', '+esc(M.city):''} · ${fmtDate(M.date)} · ${M.fmt==='TEST'?'Test match (5 days)':M.maxOv+'-over '+(M.fmt==='T20'?'T20':'ODI')}</div></div>
       <span class="pill ${M.fmt==='TEST'?'test':''}">${M.fmt==='TEST'?'TEST':'ODI'}</span></div>
     ${reseed}
     ${P?`<div class="card"><b>Pitch report:</b> ${P.name}. <span class="sub">${P.desc}</span></div>`:''}
@@ -163,9 +165,10 @@ function openSwap(M,t,i){
 // ---------- live ----------
 function statusLine(M,I){
   if(M.fmt==='ODI'){
-    if(I.no===2){const need=I.target-I.runs,left=M.maxOv*6-I.lb;
-      return need>0?`<b>${teamName(I.bat)} need ${plural(need,'run')} from ${plural(left,'ball')}</b> · RRR ${f2(need/(left/6))}`:'';}
-    return`Run rate ${f2(I.lb?I.runs/(I.lb/6):0)} · Projected ${I.lb?Math.round(I.runs/(I.lb/6)*M.maxOv):'-'}`;
+    const cut=I.maxOv<M.maxOv?` · <span class="gold">reduced to ${I.maxOv} overs</span>`:'';
+    if(I.no===2){const need=I.target-I.runs,left=I.maxOv*6-I.lb;
+      return need>0?`<b>${teamName(I.bat)} need ${plural(need,'run')} from ${plural(left,'ball')}</b>${M.dl&&M.dl.target?' (D/L target '+I.target+')':''} · RRR ${f2(need/(left/6))}${cut}`:'';}
+    return`Run rate ${f2(I.lb?I.runs/(I.lb/6):0)} · Projected ${I.lb?Math.round(I.runs/(I.lb/6)*I.maxOv):'-'}${cut}`;
   }
   const lead=testTotals(M,I.bat)-testTotals(M,I.bowl);
   const ld=I.no===1?'':lead>0?`${teamName(I.bat)} lead by ${lead}`:lead<0?`${teamName(I.bat)} trail by ${-lead}`:'Scores level';
@@ -324,7 +327,13 @@ function scorecardHTML(E,M){
     ${I.parts.length?`<details style="margin-top:6px"><summary class="muted" style="cursor:pointer">Partnerships</summary><table class="num">${I.parts.map(p=>`<tr><td>${ordinal(p[4])} wkt</td><td>${esc(pName(p[0]))} &amp; ${esc(pName(p[1]))}</td><td class="r"><b>${p[2]}</b>${p[5]?'':'*'}</td><td class="r muted">(${p[3]} balls)</td></tr>`).join('')}</table></details>`:''}
     </div>`;
   }).join('')+(E.inns.length?'':'<div class="muted">No play yet.</div>')+(E.result&&E.motm&&(!M||M.state==='done')?`<div class="banner">Man of the Match: <b>${plink(E.motm)}</b></div>`:'')
+  +superOverHTML(E)+(E.dl?`<div class="muted" style="margin-top:6px">Rain: target revised by the D/L method to ${E.dl.target} from ${E.dl.overs} overs.</div>`:'')
   +(!M||M.state==='done'?realHTML(E)+realBlock(E):'');   // no spoilers mid-match
+}
+function superOverHTML(E){
+  if(!E.so)return'';
+  return`<div class="banner" style="margin-top:10px"><b>Super over</b>${E.so.r.map((rd,k)=>`<div style="margin-top:4px">${E.so.r.length>1?'Round '+(k+1)+': ':''}${rd.map(x=>`${badge(x[0])} ${x[1]}/${x[2]} <span class="muted mono" style="font-size:12px">${esc(x[4])} (${esc(pName(x[3]))})</span>`).join(' &nbsp; ')}</div>`).join('')}
+    <div style="margin-top:4px">${esc(teamName(E.so.w))} won${E.so.b?' on boundary count':''}</div></div>`;
 }
 // "What really happened": the real bowling figures for a historical ODI.
 function realBlock(E){

@@ -105,7 +105,7 @@ function pointsTable(sid,teamFilter,fixFilter){
       else if(res.winner===t){r.w++;r.pts+=PTS_WIN;}else r.l++;
     }
     for(const I of E.inns){
-      const q=(E.fmt==='ODI'?50:0)*6,balls=I.wkts>=10&&q?q:I.lb;
+      const q=E.fmt==='TEST'?0:(I.mo||E.maxOv||50)*6,balls=I.wkts>=10&&q?q:I.lb;
       row(I.bat).rf+=I.runs;row(I.bat).bf+=balls;row(I.bowl).ra+=I.runs;row(I.bowl).ba+=balls;
     }
   }

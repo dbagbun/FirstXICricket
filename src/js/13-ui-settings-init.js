@@ -9,6 +9,7 @@ death overs and steep chases push towards the faster cards, a long tail pulls ba
 except that associate batters not yet proven against Test nations are GREEN against them. Settings → Batting colours → Classic plays the original position-only rule.</p>
 <p><b>Bowlers</b> follow the real bowling plan of the match where Cricsheet has it, then a spell engine (pace with the new ball and at the death, spin through the middle).
 Ratings 1 (elite) to 5 (part-timer) come from your Excel ratings where you set them, otherwise from each bowler's real spells. Edit any of them on a player's card.</p>
+<p><b>Rain in ODIs:</b> some matches lose overs. Targets are revised with a Duckworth-Lewis-style resource model (overs left and wickets down; an approximation of the published table), and if fewer than 20 overs are possible for the chasing side it's a no result. A tied knockout goes to a <b>super over</b>.</p>
 <p><b>Tests</b> use their own card weights (RR_3 most overs, RR_7 as the wicket card), five days of 90 overs, weather, pitches that wear, follow-ons at 200 and declarations.</p>
 <p><b>Your dice:</b> switch Settings → Dice to "I roll" and enter each roll yourself.</p>
 <p><b>Captain:</b> Settings → Captaincy → Me, and you captain the team you follow (or both sides): choose who bowls each over (the real bowler of that over is marked),
@@ -75,7 +76,7 @@ function showSplash(){
 uiMatchHook=(M,e,fast)=>{
   if(M.sim||VIEW!=='match')return;
   const shown=fxEvent(M,e);
-  if(!shown&&['50','100','200','5w','hat','rain','followon'].includes(e.t))toast((e.t==='rain'?'🌧 ':e.t==='followon'?'':'🏏 ')+esc(evText(e)),e.t==='rain'?'warn':'ms');
+  if(!shown&&['50','100','200','5w','hat','rain','rainlo','dl','followon'].includes(e.t))toast((/rain|dl/.test(e.t)?'🌧 ':e.t==='followon'?'':'🏏 ')+esc(evText(e)),/rain|dl/.test(e.t)?'warn':'ms');
   if(!shown&&e.t==='innsEnd'&&M.state==='live')toast(esc(evText(e)));
   if(fast)toast('🏆 '+esc(pName(fast.pid))+': '+esc(fast.text),'ms');
 };

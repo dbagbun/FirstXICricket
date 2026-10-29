@@ -23,6 +23,8 @@ The repo root holds a prebuilt `first-xi.html` (double-click to open). **After a
 
 - Presentation (`12c-fx.js`): `FX.allow` is set by `step()` (true for a single ball / one over / watch, false for 5 overs, innings, sim) - graphics (`tvBanner` via `fxEvent`, from `uiMatchHook`; Settings → TV graphics) and sound (`SFX`, WebAudio synthesised, `fxBall`; off by default, 🔇 button on the match screen) only play then. `fxDice` tumbles a new over's roll (fixed sequence, not `Math.random`, so seeded tests stay repeatable). Engine fires a `w` event per wicket. `prefers-reduced-motion` respected.
 
+- Rain & D/L (limited overs, `03-engine.js`): `rollRain` at the toss (`RAIN_P` by region) sets `M.rainAt {inn, over, lost}`; `applyRain` at the end of that over cuts `I.maxOv` (per-innings overs; everything limited-overs reads `I.maxOv`, not `M.maxOv`), keeps `M.dl {r1, r2, max2, target}` with resources from `dlRes(u,w)` (a fitted approximation of the D/L table, `DL_B`/`DL_F`), and `dlTarget` revises the target (G50 when the chasing side has more). Under 20 overs possible (5 in a T20) → `M.abandoned`, no result. Knockout ties (`stage` final/semi/quarter/play-off, or `M.superOverOn`) → `superOver` (one over each, two wickets, three rounds, then boundary count), result type `'so'` with a winner. Archive: `E.maxOv`, `inns[].mo`, `E.dl`, `E.so`, `E.abandoned`.
+
 ## Layout
 - `src/template.html` - page shell with `/*@@CSS@@*/`, `/*@@DATA@@*/`, `/*@@JS@@*/`
 - `src/styles.css` - all CSS (Excel dark palette: navy `#0a0e1a`, panels `#0f172a`/`#1e293b`, cyan `#06b6d4`, gold `#ffd700`)

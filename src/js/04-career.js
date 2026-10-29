@@ -21,8 +21,10 @@ const HOW_TXT={b:'b',lbw:'lbw',ct:'c',ctof:'c',ctwk:'c',st:'st',ro:'run out'};
 function archiveMatch(M){
   const E={id:M.id,fmt:M.fmt,fid:M.fid,sid:M.sid,series:M.series,stage:M.stage,date:M.date,venue:M.venue,city:M.city,
     teams:M.teams,toss:[M.toss.w,M.toss.choice],result:M.result,followOn:M.followOn||false,pitch:M.pitch||'',wx:M.wx||null,
+    maxOv:M.maxOv,dl:M.dl&&M.dl.target?{target:M.dl.target,overs:M.inns[1]&&M.inns[1].maxOv}:null,abandoned:M.abandoned||false,
+    so:M.superOver?{w:M.superOver.winner,b:M.superOver.byBoundaries,r:M.superOver.rounds.map(rd=>rd.map(x=>[x.bat,x.runs,x.wkts,x.bowler,x.balls.join(' ')]))}:null,
     xi:Object.fromEntries(M.teams.map(t=>[t,[...M.xi[t].bat,M.xi[t].wk,M.xi[t].cap]])),reseeded:M.reseeded||false,
-    inns:M.inns.map(I=>({bat:I.bat,bowl:I.bowl,runs:I.runs,wkts:I.wkts,lb:I.lb,why:I.why,target:I.target,
+    inns:M.inns.map(I=>({bat:I.bat,bowl:I.bowl,runs:I.runs,wkts:I.wkts,lb:I.lb,why:I.why,target:I.target,mo:I.maxOv,
       ex:[I.ex.b,I.ex.lb,I.ex.wd,I.ex.nb],
       bt:Object.entries(I.bt).sort((a,b)=>a[1].idx-b[1].idx).map(([p,B])=>[+p,B.r,B.b,B.f4,B.f6,B.out?B.out.how:'',B.out?B.out.bowler:0,B.out?B.out.fielder:0,B.fifty||0,B.hundred||0]),
       bw:I.bwOrder.map(p=>{const W=I.bw[p];return[p,W.b,W.md,W.r,W.w,W.wd,W.nb];}),

@@ -71,7 +71,7 @@ function recordsData(fmt){
     const r=E.result;
     if(r.type==='runs')winr.push({v:r.margin,txt:r.margin+' runs',label:teamName(r.winner),mid:E.id,date:E.date,vs:teamShort(otherOf(E,r.winner))});
     if(r.type==='inns')winr.push({v:r.margin+1000,txt:'Inns & '+r.margin,label:teamName(r.winner),mid:E.id,date:E.date,vs:teamShort(otherOf(E,r.winner))});
-    if(r.type==='wkts'){const I=E.inns[E.inns.length-1],left=fmt==='ODI'?300-I.lb:0;winw.push({v:r.margin*1000+left,txt:r.margin+' wkts'+(left?` (${left} balls left)`:''),label:teamName(r.winner),mid:E.id,date:E.date,vs:teamShort(otherOf(E,r.winner))});}
+    if(r.type==='wkts'){const I=E.inns[E.inns.length-1],left=fmt==='TEST'?0:(I.mo||50)*6-I.lb;winw.push({v:r.margin*1000+left,txt:r.margin+' wkts'+(left?` (${left} balls left)`:''),label:teamName(r.winner),mid:E.id,date:E.date,vs:teamShort(otherOf(E,r.winner))});}
   }
   const t10=(a,dir=-1)=>a.sort((x,y)=>dir*(x.v-y.v)).slice(0,10);
   const pteam=pid=>ST[pid]?team(ST[pid]):'';

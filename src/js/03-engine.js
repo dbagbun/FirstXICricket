@@ -33,6 +33,84 @@ function rollPitch(home){
   return'normal';
 }
 const TEST_OVERS=450,TEST_CHANGEOVER=2,FOLLOW_ON=200,NEW_BALL=80;
+const LIMITED=M=>M.fmt!=='TEST';
+const perBowler=M=>Math.max(1,Math.round(M.maxOv/5));   // 10 overs a bowler in an ODI, 4 in a T20
+
+// ---------- rain & the Duckworth-Lewis method (limited overs) ----------
+// Resources (% of a full 50-over innings) with u overs left and w wickets down: R = F(w)(1 - e^(-b u / F(w))),
+// b fitted to the published D/L table (10/20/30/40 overs, no wicket down: 32.1/56.6/75.1/89.3%) and F(w) solved so
+// the 50-over row matches the table. Revised target = S x R2/R1 (or S + G50 x (R2-R1) when the side batting second has more).
+const DL_B=.028,DL_G50=245,DL_ROW50=[100,93.4,85.1,74.9,62.7,49,34.9,22,11.9,4.7];
+function dlR0(u,F){return 100*F*(1-Math.exp(-DL_B*u/F))/(1-Math.exp(-DL_B*50));}
+const DL_F=DL_ROW50.map(t=>{let lo=.001,hi=1;for(let i=0;i<60;i++){const m=(lo+hi)/2;if(dlR0(50,m)<t)lo=m;else hi=m;}return(lo+hi)/2;});
+function dlRes(u,w){return w>=10||u<=0?0:dlR0(Math.min(50,u),DL_F[w]);}
+function dlTarget(M,S){
+  const R1=M.dl.r1,R2=M.dl.r2,G=DL_G50*M.maxOv/50;
+  return Math.floor(R2<R1?S*R2/R1:S+G*(R2-R1)/100)+1;
+}
+const RAIN_P={eng:.2,asia:.1,aus:.08,wi:.12};
+function rollRain(M){
+  if(!LIMITED(M)||M.noWeather)return;
+  if(rnd()>=(RAIN_P[PITCH_REGION[M.home]]??.1))return;
+  const mx=M.maxOv;
+  M.rainAt={inn:rnd()<.5?1:2,over:rndInt(Math.round(mx*.2),Math.round(mx*.9)),lost:rndInt(Math.max(1,Math.round(mx*.08)),Math.round(mx*.65))};
+}
+// Rain arrives at the end of an over: overs are cut, D/L sets (or resets) the target, or the match is abandoned.
+function applyRain(M,I){
+  M.rainDone=true;
+  const done=I.lb/6,L=M.rainAt.lost,newMax=Math.max(Math.ceil(done),I.maxOv-L),minOv=M.maxOv>=50?20:5;
+  M.dl=M.dl||{r1:dlRes(M.maxOv,0),r2:null,max2:null};
+  const lostRes=dlRes(I.maxOv-done,I.wkts)-dlRes(newMax-done,I.wkts);
+  fire(M,null,{t:'rainlo',lost:I.maxOv-newMax,inn:I.no,overs:newMax});
+  if(I.no===1){
+    M.dl.r1-=lostRes;M.dl.max2=newMax;I.maxOv=newMax;
+    if(newMax<minOv){M.abandoned=true;closeInnings(M,I,'rain');return;}
+    if(I.lb>=newMax*6)closeInnings(M,I,'rain');
+  }else{
+    if(M.dl.r2==null)M.dl.r2=dlRes(I.maxOv,0);
+    M.dl.r2-=lostRes;I.maxOv=newMax;
+    if(newMax<minOv){M.abandoned=true;closeInnings(M,I,'rain');return;}
+    I.target=dlTarget(M,M.inns[0].runs);M.dl.target=I.target;
+    fire(M,null,{t:'dl',target:I.target,overs:newMax});
+    const end=checkInningsEnd(M,I);if(end)closeInnings(M,I,end);else if(I.lb>=newMax*6)closeInnings(M,I,'rain');
+  }
+}
+
+// ---------- super over (a knockout tie): one over each, two wickets, then boundary count after three ----------
+function superOver(M){
+  const rounds=[];let winner=0;
+  const order=[M.inns[1].bat,M.inns[0].bat];
+  for(let k=0;k<3&&!winner;k++){
+    const r=order.map(bat=>soInnings(M,bat));rounds.push(r);
+    if(r[0].runs!==r[1].runs)winner=r[0].runs>r[1].runs?order[0]:order[1];
+  }
+  let byBoundaries=false;
+  if(!winner){
+    const bnd=t=>sum(M.inns.filter(I=>I.bat===t).flatMap(I=>Object.values(I.bt)).map(b=>b.f4+b.f6));
+    const[a,b]=order.map(bnd);winner=a>=b?order[0]:order[1];byBoundaries=true;
+  }
+  M.superOver={rounds,winner,byBoundaries};
+  return winner;
+}
+function soInnings(M,bat){
+  const bowl=otherTeam(M,bat),x=M.xi[bat];
+  const I0=M.inns.find(i=>i.bat===bat);
+  const batters=Object.entries(I0.bt).sort((a,b)=>b[1].r-a[1].r).map(e=>+e[0]).slice(0,3);
+  const Ib=M.inns.find(i=>i.bowl===bowl),bw=Ib.eng.B.slice().sort((a,b)=>a.rating-b.rating)[0];
+  const card=pickCard(applyShift(baseWeights(M.fmt,bw.rating),2));
+  let roll=roll100(),col=1,legal=0,runs=0,wk=0,st=0,ns=1;const balls=[];
+  while(legal<6&&wk<2){
+    const r=col<=6?roll:roll100(),c=col<=6?col:1;col++;
+    const t=parseToken(WORLD.cards[card][r-1][c-1]);
+    const pid=batters[st],pos=x.bat.indexOf(pid)+1;
+    if(t.w&&!wicketCounts(batColour(M,pid,pos,bowl),t.color))Object.assign(t,{w:false,bat:0,ex:0,exType:''});
+    runs+=t.bat+t.ex;balls.push(t.w?'W':t.exType?t.exType:String(t.bat));
+    if(t.exType==='wd'||t.exType==='nb'){roll=roll100();col=1;continue;}
+    legal++;
+    if(t.w){wk++;st=2;}else if((t.bat+t.ex)%2)[st,ns]=[ns,st];
+  }
+  return{bat,runs,wkts:wk,balls,bowler:bw.pid,card};
+}
 
 function baseWeights(fmt,rating){return CARD_WEIGHTS[fmt][clamp(rating|0||3,1,5)].slice();}
 // Port of ApplyShift: slide the weights right (faster cards) or left; what falls off is lost and the
@@ -96,7 +174,7 @@ function newMatch(o){
     id:o.id||('m'+Date.now().toString(36)+(MATCH_SEQ++)),fmt:o.fmt||'ODI',fid:o.fid||null,cid:o.cid||null,sid:o.sid||null,
     series:o.series||'',stage:o.stage||'',date:o.date,venue:o.venue||'',city:o.city||'',teams:[+o.a,+o.b],
     xi:{[o.a]:o.xiA,[o.b]:o.xiB},plans:{},toss:null,inns:[],state:'pre',result:null,
-    maxOv:o.maxOv||50,events:[],pending:null,followOn:false,cur:null,home:o.home||0,batMode:o.batMode||'player',
+    maxOv:o.maxOv||(o.fmt==='T20'?20:50),events:[],pending:null,followOn:false,cur:null,home:o.home||0,batMode:o.batMode||'player',
   };
   if(M.fmt==='TEST')M.pitch=o.pitch||rollPitch(M.home);
   // Historical bowling plans (ODIs): the real bowler of each over, by player id.
@@ -112,6 +190,7 @@ function doToss(M,winner,choice){
   const other=M.teams[0]===winner?M.teams[1]:M.teams[0];
   M.toss={w:winner,choice,bat:choice==='bat'?winner:other};
   M.state='live';
+  rollRain(M);
   startInnings(M,M.toss.bat);
   testWeather(M);
 }
@@ -122,10 +201,13 @@ function startInnings(M,bat){
   const bowl=otherTeam(M,bat),x=M.xi[bat];
   const I={no:M.inns.length+1,bat,bowl,runs:0,wkts:0,lb:0,ex:{b:0,lb:0,wd:0,nb:0},order:x.bat.slice(),
     st:x.bat[0],ns:x.bat[1],bt:{},bw:{},bwOrder:[],fow:[],parts:[],part:null,closed:false,why:'',target:0,
-    overs:[],balls:[],hat:{},eng:null,ms:{}};
+    overs:[],balls:[],hat:{},eng:null,ms:{},maxOv:M.maxOv};
   I.bt[I.st]=newBat(0);I.bt[I.ns]=newBat(1);
   I.part={a:I.st,b:I.ns,r:0,bl:0,ra:0,rb:0,w:1};
-  if(M.fmt==='ODI'&&I.no===2)I.target=M.inns[0].runs+1;
+  if(LIMITED(M)&&I.no===2){
+    if(M.dl){I.maxOv=M.dl.max2??M.maxOv;M.dl.r2=dlRes(I.maxOv,0);I.target=dlTarget(M,M.inns[0].runs);M.dl.target=I.target;}
+    else I.target=M.inns[0].runs+1;
+  }
   if(M.fmt==='TEST'&&I.no===4)I.target=testTotals(M,bowl)-testTotals(M,bat)+1;
   I.eng=bowlEngInit(M,I);
   M.inns.push(I);M.cur=null;
@@ -144,15 +226,15 @@ function bowlEngInit(M,I){
   const add=(pid,style,rating,max)=>{B.push({pid,style,rating,max,used:0,last:0,spell:0,spellMax:0,rest:0,active:false});total+=max;};
   x.bat.forEach((pid,i)=>{
     const a=pAttr(pid,M.date);
-    if(a.style!=='N'&&a.rating<=6&&a.max>0)add(pid,a.style,a.rating,M.fmt==='TEST'?999:a.max);
+    if(a.style!=='N'&&a.rating<=6&&a.max>0)add(pid,a.style,a.rating,M.fmt==='TEST'?999:Math.max(1,Math.round(a.max*perBowler(M)/10)));
   });
   // Safety net: not enough overs (or bowlers) -> top-order part-timers, weak.
-  const need=M.fmt==='TEST'?5:50;
+  const need=M.fmt==='TEST'?5:M.maxOv;
   const enough=()=>M.fmt==='TEST'?B.length>=need:total>=need;
   for(let pass=0;pass<2&&!enough();pass++)for(let i=0;i<11&&!enough();i++){
     const pid=x.bat[pass?10-i:i];
     if(B.some(b=>b.pid===pid)||pid===x.wk)continue;
-    add(pid,'M',6,M.fmt==='TEST'?999:3);
+    add(pid,'M',6,M.fmt==='TEST'?999:Math.max(1,Math.round(perBowler(M)*.3)));
   }
   // Bowlers from the real plan who aren't in the list yet bowl what they really bowled.
   const plan=M.plans[I.bowl];
@@ -168,7 +250,8 @@ function bowlEngInit(M,I){
   return{B,lastIdx:-1,plan:plan||null,newBallAt:1};
 }
 function phaseBonus(M,I,style,over){
-  if(M.fmt==='ODI'){
+  if(LIMITED(M)){
+    over=Math.ceil(over*50/I.maxOv);   // a T20 over in 50-over terms
     if(style==='P')return over<=10?15:over<=15?8:over<=35?-5:over<=44?5:15;
     if(style==='S')return over<=10?-5:over<=15?5:over<=35?15:over<=44?5:-5;
     if(style==='M')return over<=10?0:over<=35?5:-3;
@@ -185,7 +268,7 @@ function chooseBowler(M,I,over){
   if(M.fmt==='TEST'&&over>1&&(over-E.newBallAt)>=NEW_BALL)E.newBallAt=over;
   if(E.plan&&E.plan[over-1]){
     const i=B.findIndex(b=>b.pid===E.plan[over-1]);
-    if(i>=0&&i!==E.lastIdx&&(M.fmt!=='ODI'||B[i].used<10)){
+    if(i>=0&&i!==E.lastIdx&&(!LIMITED(M)||B[i].used<perBowler(M))){
       if(!B[i].active){B[i].active=true;B[i].spell=0;B[i].spellMax=99;}
       return i;
     }
@@ -195,7 +278,7 @@ function chooseBowler(M,I,over){
     if(b.used>=b.max||i===E.lastIdx||over<b.rest)return;
     let s=0;
     if(b.active&&b.spell<b.spellMax)s+=30;
-    s+=M.fmt==='ODI'?(b.max-b.used)*2:-b.used*0.4;
+    s+=LIMITED(M)?(b.max-b.used)*2*10/perBowler(M):-b.used*0.4;
     s+=phaseBonus(M,I,b.style,over);
     s+=(6-Math.min(b.rating,5))*3;
     s+=rnd()*15;
@@ -221,13 +304,13 @@ function bowlEngEndOver(M,I,idx,over){
 }
 
 // ---------- your captaincy: bowler for the next over, next batter in ----------
-// Bowlers you can call on: anyone in the XI but the keeper, not the last over's bowler, max 10 overs in an ODI.
+// Bowlers you can call on: anyone in the XI but the keeper, not the last over's bowler, max 10 overs in an ODI (4 in a T20).
 function bowlerOptions(M){
   const I=curInn(M),x=M.xi[I.bowl],E=I.eng,last=E.lastIdx>=0?E.B[E.lastIdx].pid:0,over=Math.floor(I.lb/6)+1;
   const real=E.plan&&E.plan[over-1]||0;
   return x.bat.filter(p=>p!==x.wk).map(pid=>{
     const b=E.B.find(b=>b.pid===pid),W=I.bw[pid]||{b:0,r:0,w:0,md:0},a=pAttr(pid,M.date);
-    const used=b?b.used:0,why=pid===last?'bowled the last over':M.fmt==='ODI'&&used>=10?'bowled out':'';
+    const used=b?b.used:0,why=pid===last?'bowled the last over':LIMITED(M)&&used>=perBowler(M)?'bowled out':'';
     return{pid,used,W,style:b?b.style:a.style==='N'?'M':a.style,rating:b?b.rating:a.style==='N'?6:a.rating,ok:!why,why,real:pid===real,regular:!!b};
   });
 }
@@ -237,7 +320,7 @@ function captainBowler(M,I,over){
   const opt=bowlerOptions(M).find(o=>o.pid===pid);
   if(!opt||!opt.ok)return null;
   const E=I.eng;let i=E.B.findIndex(b=>b.pid===pid);
-  if(i<0){E.B.push({pid,style:opt.style,rating:opt.rating,max:M.fmt==='TEST'?999:10,used:0,last:0,spell:0,spellMax:0,rest:0,active:false});i=E.B.length-1;}
+  if(i<0){E.B.push({pid,style:opt.style,rating:opt.rating,max:M.fmt==='TEST'?999:perBowler(M),used:0,last:0,spell:0,spellMax:0,rest:0,active:false});i=E.B.length-1;}
   const b=E.B[i];
   if(!b.active){b.active=true;b.spell=0;const sp=SPELLS[M.fmt][b.style]||[2,4,2,3];b.spellMax=rndInt(sp[0],sp[1]);}
   return i;
@@ -252,11 +335,12 @@ function setNextBatter(M,pid){
 // ---------- situation shift (port of CalcSituationShift, plus Test match situations) ----------
 function situationShift(M,I,over){
   let s=0;
-  if(M.fmt==='ODI'){
-    if(over>=M.maxOv-5)s+=2;else if(over>=M.maxOv-15)s+=1;
+  if(LIMITED(M)){
+    const mx=I.maxOv,k=M.maxOv/50;
+    if(over>mx-5*k)s+=2;else if(over>mx-15*k)s+=1;
     if(I.no===2&&I.target>0){
-      const left=M.maxOv-over+1,need=I.target-I.runs;
-      if(left>0&&need>0){const rrr=need/left;s+=rrr>10?3:rrr>8?2:rrr>6.5?1:0;}
+      const left=mx-over+1,need=I.target-I.runs;
+      if(left>0&&need>0){const rrr=need/left,q=M.fmt==='T20'?1.35:1;s+=rrr>10*q?3:rrr>8*q?2:rrr>6.5*q?1:0;}
     }
   }else{
     const left=testOversLeft(M);
@@ -372,6 +456,7 @@ function bowlBall(M,manualRoll){
     if(C.legal===6&&C.runs===0)W.md++;
     endOverRecord(M,I);
   }
+  if(!inningsOver&&!M.cur&&M.rainAt&&!M.rainDone&&I.no===M.rainAt.inn&&I.lb/6>=M.rainAt.over){applyRain(M,I);return ball;}
   if(!inningsOver&&!M.cur)testWeather(M);
   if(inningsOver)closeInnings(M,I,inningsOver);
   else if(!M.cur&&M.fmt==='TEST'&&!M.manualCaptain?.[I.bat]&&aiShouldDeclare(M,I))closeInnings(M,I,'declared');
@@ -412,7 +497,7 @@ function checkBatMilestones(M,I,pid,ball){
 function checkInningsEnd(M,I){
   if(I.wkts>=10)return'all out';
   if(I.target&&I.runs>=I.target)return'target';
-  if(M.fmt==='ODI'&&I.lb>=M.maxOv*6)return'overs';
+  if(LIMITED(M)&&I.lb>=I.maxOv*6)return'overs';
   if(M.fmt==='TEST'&&testOversLeft(M)<=0)return'time';
   return'';
 }
@@ -428,8 +513,8 @@ function closeInnings(M,I,why){
 }
 function nextPhase(M){
   const n=M.inns.length,I=curInn(M);
-  if(M.fmt==='ODI'){
-    if(n===1)return startInnings(M,I.bowl);
+  if(LIMITED(M)){
+    if(n===1&&!M.abandoned)return startInnings(M,I.bowl);
     return finishMatch(M);
   }
   if(I.why==='time')return finishMatch(M);
@@ -479,13 +564,16 @@ function finishMatch(M){
   M.state='done';M.cur=null;
   const r={winner:0,type:'',margin:0,text:''};
   const nm=t=>teamName(t);
-  if(M.fmt==='ODI'){
-    const [i1,i2]=M.inns;
-    if(!i2){r.type='nr';r.text='No result';}
+  if(LIMITED(M)){
+    const [i1,i2]=M.inns,dl=M.dl&&i2&&M.dl.target?' (D/L method)':'';
+    if(!i2||M.abandoned){r.type='nr';r.text=M.abandoned?'No result (rain)':'No result';}
     else if(i2.runs>=i2.target){r.winner=i2.bat;r.type='wkts';r.margin=10-i2.wkts;
-      const left=M.maxOv*6-i2.lb;r.text=`${nm(i2.bat)} won by ${plural(r.margin,'wicket')}`+(left>0?` (${plural(left,'ball')} left)`:'');}
-    else if(i2.runs===i1.runs){r.type='tie';r.text='Match tied';}
-    else{r.winner=i1.bat;r.type='runs';r.margin=i1.runs-i2.runs;r.text=`${nm(i1.bat)} won by ${plural(r.margin,'run')}`;}
+      const left=i2.maxOv*6-i2.lb;r.text=`${nm(i2.bat)} won by ${plural(r.margin,'wicket')}`+(left>0?` (${plural(left,'ball')} left)`:'')+dl;}
+    else if(i2.runs===i2.target-1){r.type='tie';r.text='Match tied'+dl;}
+    else{r.winner=i1.bat;r.type='runs';r.margin=i2.target-1-i2.runs;r.text=`${nm(i1.bat)} won by ${plural(r.margin,'run')}`+dl;}
+    if(r.type==='tie'&&(M.superOverOn||/final|semi|quarter|play-off/i.test(M.stage||''))){
+      const w=superOver(M);r.type='so';r.winner=w;r.text=`Match tied - ${nm(w)} won the super over${M.superOver.byBoundaries?' (on boundaries)':''}`;
+    }
   }else{
     const n=M.inns.length,I=curInn(M);
     if(n===3&&I.closed&&I.why!=='time'&&testTotals(M,I.bat)<testTotals(M,I.bowl)){
