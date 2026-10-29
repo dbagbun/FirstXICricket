@@ -37,6 +37,9 @@ RENDER.settings=(el)=>{
     ${HAS_REAL?`<div class="spread"><span>Real results (after you play a match)</span>${seg('history',[['after','Show'],['off','Hide']])}</div>`:''}
     <div class="spread"><span>App font</span>${seg('font',APP_FONTS)}</div>
     <div class="spread"><span>Broadcast style</span>${seg('broadcast',BROADCASTS)}</div>
+    ${SPEECH?`<div class="spread"><span>Commentator voice</span>${seg('voice',[['false','Off'],['true','On']])}</div>
+    ${st.voice?`<div class="spread"><select id="st-voice">${voices().map(v=>`<option ${v.name===st.voiceName?'selected':''}>${esc(v.name)}</option>`).join('')||'<option>Default voice</option>'}</select>
+      <label class="row" style="gap:6px">Speed <input type="range" id="st-rate" min="0.8" max="1.4" step="0.05" value="${st.voiceRate||1.05}"></label><button class="btn sm" id="st-say">Test</button></div>`:''}`:''}
     <div class="spread"><span>Sound</span>${seg('sound',[['false','Off'],['true','On']])}</div>
     <div class="spread"><span>TV graphics for wickets &amp; milestones</span>${seg('tv',[['true','On'],['false','Off']])}</div>
     <div class="spread"><span>Watch speed</span>${seg('ballDelay',[[600,'Slow'],[250,'Normal'],[60,'Fast']])}</div>
@@ -56,6 +59,10 @@ RENDER.settings=(el)=>{
     if(k==='broadcast'||k==='font')applyBroadcast();
     saveGame();rerender();});
   $('#st-team').onchange=e=>{st.myTeam=+e.target.value;saveGame();};
+  $('#st-voice')&&($('#st-voice').onchange=e=>{st.voiceName=e.target.value;saveGame();voiceTest();});
+  $('#st-rate')&&($('#st-rate').onchange=e=>{st.voiceRate=+e.target.value;saveGame();voiceTest();});
+  $('#st-say')&&($('#st-say').onclick=()=>{if(!voiceTest())toast('No voice available in this browser.','warn');});
+  if(SPEECH&&!voices().length&&!RENDER.settings.waited){RENDER.settings.waited=1;SPEECH.onvoiceschanged=()=>{if(VIEW==='settings')rerender();};}
   $('#st-guide').onclick=openGuide;
   $$('[data-load]').forEach(b=>b.onclick=()=>{saveGame();if(loadSlot(+b.dataset.load)){LM=null;toast('Loaded.');go('home');}});
   $$('[data-new]').forEach(b=>b.onclick=()=>{saveGame();setSlot(+b.dataset.new);S=null;LM=null;showSplash();});
@@ -91,7 +98,7 @@ function showSplash(){
 // live match events -> toasts; end of match -> result
 uiMatchHook=(M,e,fast)=>{
   if(M.sim||VIEW!=='match')return;
-  const shown=fxEvent(M,e);
+  const shown=fxEvent(M,e);voiceEvent(M,e);
   if(!shown&&['50','100','200','5w','hat','rain','rainlo','dl','followon'].includes(e.t))toast((/rain|dl/.test(e.t)?'🌧 ':e.t==='followon'?'':'🏏 ')+esc(evText(e)),/rain|dl/.test(e.t)?'warn':'ms');
   if(!shown&&e.t==='innsEnd'&&M.state==='live')toast(esc(evText(e)));
   if(fast)toast('🏆 '+esc(pName(fast.pid))+': '+esc(fast.text),'ms');

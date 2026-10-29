@@ -1,0 +1,32 @@
+// e2e18: the commentator's voice - with a stand-in speech engine: wickets, boundaries and milestones are
+// spoken ball by ball, nothing while simming, voice and speed settings; harmless with no speech engine.
+const {JSDOM}=require('jsdom'),fs=require('fs');
+const html=fs.readFileSync(process.argv[2]||'dist/first-xi.html','utf8');
+let fail=0;const ok=(c,m)=>{if(!c){fail++;console.log('FAIL',m);}};
+const spoken=[];
+const w=new JSDOM(html,{runScripts:'dangerously',pretendToBeVisual:true,url:'http://localhost/',beforeParse(w){w.confirm=()=>true;w.scrollTo=()=>{};
+  w.SpeechSynthesisUtterance=class{constructor(t){this.text=t;}};
+  w.speechSynthesis={speaking:false,pending:false,speak(u){spoken.push(u);},cancel(){},getVoices(){return[{name:'Daniel',lang:'en-GB'},{name:'Karen',lang:'en-AU'},{name:'Amelie',lang:'fr-FR'}];}};
+  w.addEventListener('error',e=>{fail++;console.log('PAGE ERROR',e.message);});}}).window;
+const G=k=>w.eval(k),$=s=>w.document.querySelector(s),click=s=>$(s).click();
+click('#sp-go');
+ok(G('voices().map(v=>v.name).join()')==='Daniel,Karen','English voices only');
+w.go('settings');$('[data-set="voice"][data-val="true"]').click();
+ok(G('S.settings.voice')===true&&$('#st-voice'),'voice switched on, voice picker shown');
+$('#st-voice').value='Karen';$('#st-voice').dispatchEvent(new w.Event('change'));
+ok(G('S.settings.voiceName')==='Karen'&&spoken.length===1&&spoken[0].voice.name==='Karen','voice chosen and tested');
+w.startFixture(G('nextFixture().key'));click('#toss-go');
+const n0=spoken.length;let g=0;
+while(G('curInn(LM).wkts')===0&&g++<400)click('#c-ball');
+const lines=spoken.slice(n0).map(u=>u.text);
+ok(lines.some(t=>/For \d+\./.test(t)),'the wicket is called with his score: '+lines.filter(t=>/For/.test(t))[0]);
+ok(lines.length>=1&&lines.every(t=>t.length>5),'lines are spoken');
+const n1=spoken.length;
+G('S.settings.ballDelay=60');click('#c-5');
+ok(spoken.length===n1,'nothing spoken while jumping five overs');
+click('#c-sim');
+ok(spoken.length===n1,'nothing spoken while simming');
+G(`S.settings.voice=false`);
+ok(G(`say('test',true)`)===false,'off means silent');
+console.log(fail?`e2e18: ${fail} failing`:'e2e18 ok');
+process.exit(fail?1:0);

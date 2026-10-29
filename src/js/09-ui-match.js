@@ -267,7 +267,7 @@ function step(M,kind){
     const r=bowlBall(M,M.rollIn);M.rollIn=null;
     if(r&&r.need){M.needRoll=r.need;break;}
     M.needRoll=null;
-    if(kind==='ball'){fxBall(M,r);break;}
+    if(kind==='ball'){fxBall(M,r);voiceBall(M,r);break;}
     if(!M.cur&&target){overs++;if(overs>=target)break;}
     if(kind==='inn'&&M.inns.length!==n0)break;
   }
@@ -292,7 +292,7 @@ function toggleWatch(M){
   if(M.manual){toast('Watch mode needs automatic dice (Settings).','warn');return;}
   const tick=()=>{
     if(VIEW!=='match'||M.state!=='live'||M.pending){stopWatch();rerender();return;}
-    FX.allow=true;fxBall(M,bowlBall(M));rerender();
+    FX.allow=true;const b=bowlBall(M);fxBall(M,b);voiceBall(M,b);rerender();
     WATCH=setTimeout(tick,S.settings.ballDelay);
   };
   WATCH=setTimeout(tick,10);rerender();

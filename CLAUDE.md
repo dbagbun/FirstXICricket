@@ -43,6 +43,8 @@ The repo root holds a prebuilt `first-xi.html` (double-click to open). **After a
 
 - Fonts: `fonts/*.woff2` (latin subsets from @fontsource, SIL OFL, licences beside them) are embedded by `tools/build.js` as @font-face data URIs, so the page stays one offline file. UI: `--font` Barlow, `--head` Barlow Condensed; Settings → App font (`body[data-font]`: barlow/montserrat/oswald/saira/system). Broadcast styles use their own: Classic Oswald, Modern Saira Condensed, World event Montserrat. To add a weight, drop `<family>-latin-<weight>-normal.woff2` in `fonts/`.
 
+- Commentator voice (`12i-voice.js`): `say(text, big)` via `speechSynthesis` (English voices from the device, `S.settings.voice/voiceName/voiceRate`), only when `FX.allow`; `voiceBall` (4s, 6s) from `step`/watch, `voiceEvent` (wickets with score, milestones, innings, result, rain) from `uiMatchHook`. No-op without a speech engine.
+
 ## Layout
 - `src/template.html` - page shell with `/*@@CSS@@*/`, `/*@@DATA@@*/`, `/*@@JS@@*/`
 - `src/styles.css` - all CSS (Excel dark palette: navy `#0a0e1a`, panels `#0f172a`/`#1e293b`, cyan `#06b6d4`, gold `#ffd700`)
