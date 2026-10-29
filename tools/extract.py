@@ -11,10 +11,10 @@ BatGroup wins; otherwise from where he usually bats, his caps, and his caps agai
 (see bat_group). The workbook has no batting figures, so these are proxies.
 """
 BAT_BLUE_CAPS = int(__import__('os').environ.get('BAT_BLUE_CAPS', 20))       # full-member top-order batter with this many caps -> BLUE
-BAT_BLUE_VS_FULL = int(__import__('os').environ.get('BAT_BLUE_VS_FULL', 45))    # associate top-order batter with this many games against full members -> BLUE
+BAT_BLUE_VS_FULL = int(__import__('os').environ.get('BAT_BLUE_VS_FULL', 70))    # associate top-order batter with this many games against full members -> BLUE
 # A colour is one letter (B/G/R, against everyone) or two (against associates, against Test nations): an associate's
 # unproven top order is 'BG' - BLUE against associates, GREEN against Test nations. Tuned with tools/dev/strength.js
-# (full members beat associates ~80%, every other matchup scores as the classic rules do).
+# (full members beat associates ~87%, every other matchup scores as the classic rules do).
 import json, re, sys, collections
 import openpyxl
 

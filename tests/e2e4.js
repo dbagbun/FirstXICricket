@@ -47,7 +47,7 @@ const r=G(`(()=>{const full=new Set(WORLD.teams.filter(t=>t.full).map(t=>t.id));
   for(const fx of allFixtures()){if(fx.fmt!=='ODI'||!fx.playable||S.done[fx.key]||full.has(fx.a)===full.has(fx.b))continue;
     const M=simFixture(fx);n++;if(full.has(M.result.winner))wn++;}return{n,p:wn/n};})()`);
 console.log(`full members beat associates ${(100*r.p).toFixed(0)}% of ${r.n}`);
-ok(r.p>=.7&&r.p<=.92,'full members win 70-92% against associates');
+ok(r.p>=.8&&r.p<=.94,'full members win 80-94% against associates');
 const sc=G(`(()=>{const full=new Set(WORLD.teams.filter(t=>t.full).map(t=>t.id));const a=S.matches.filter(E=>E.fmt==='ODI'&&!full.has(E.inns[0].bat)&&full.has(E.inns[0].bowl)).map(E=>E.inns[0].runs);return a.reduce((x,y)=>x+y,0)/a.length;})()`);
 ok(sc>140&&sc<220,'associates batting first v Test nations average '+sc.toFixed(0));
 console.log(fail?`e2e4: ${fail} failing`:'e2e4 ok');
