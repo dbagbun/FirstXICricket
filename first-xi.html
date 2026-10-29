@@ -1010,11 +1010,22 @@ function archiveMatch(M){
       bw:I.bwOrder.map(p=>{const W=I.bw[p];return[p,W.b,W.md,W.r,W.w,W.wd,W.nb];}),
       fow:I.fow.map(f=>[f.w,f.r,f.pid,f.ov]),
       parts:I.parts.map(p=>[p.a,p.b,p.r,p.bl,p.w,p.broken?1:0,p.ra,p.rb]),
-      ov:I.overs.map(o=>[o.runs,o.w])})),
+      ov:I.overs.map(o=>[o.runs,o.w]),
+      mu:matchups(I)})),
     ev:M.events.filter(e=>['50','100','200','5w','hat'].includes(e.t)).map(e=>[e.t,e.pid,e.inn,e.balls||e.w||0]),
   };
   E.motm=pickMOTM(E);
   return E;
+}
+// Batter v bowler in an innings: [[batter, bowler, balls faced, runs, dismissed by him]]
+function matchups(I){
+  const m=new Map();
+  for(const b of I.balls){
+    const k=b.st+':'+b.bowler,x=m.get(k)||[b.st,b.bowler,0,0,0];
+    if(b.exType!=='wd')x[2]++;x[3]+=b.bat;if(b.w&&BOWLER_CREDIT[b.how])x[4]++;
+    m.set(k,x);
+  }
+  return[...m.values()];
 }
 function packBalls(M){return M.inns.map(I=>I.balls.map(b=>[b.over,b.legal,b.card,b.roll,b.col,b.tok,b.st,b.bowler,b.runs,b.wkts,b.w?b.how:'',b.voided?1:0]));}
 
@@ -2054,6 +2065,67 @@ function coachAfter(E){
 }
 function coachNext(){const C=S.coach;return C&&C.team?allFixtures().find(x=>x.playable&&!S.done[x.key]&&(x.a===C.team||x.b===C.team))||null:null;}
 
+// ═══ STATS LAB — filtered career tables, batter v bowler, grounds (all computed from the archive) ═══
+// q = {fmt, from, to (years), team, opp, host (venue's home side), venue, pos ('' | 'top' 1-3 | 'mid' 4-7 | 'tail' 8-11 | n),
+//      stage ('' | 'ko' | 'league' | 'final')}
+const hostOf=E=>VENUE_HOME.get(E.venue)||0;
+function matchPasses(E,q){
+  if(q.fmt&&E.fmt!==q.fmt)return false;
+  const y=+E.date.slice(0,4);if(q.from&&y<q.from)return false;if(q.to&&y>q.to)return false;
+  if(q.team&&!E.teams.includes(+q.team))return false;
+  if(q.opp&&!E.teams.includes(+q.opp))return false;
+  if(q.host&&hostOf(E)!==+q.host)return false;
+  if(q.venue&&E.venue!==q.venue)return false;
+  if(q.stage){const st=E.stage||'',ko=/final|semi|quarter|play-off|round of/i.test(st);
+    if(q.stage==='ko'&&!ko)return false;if(q.stage==='league'&&ko)return false;if(q.stage==='final'&&!/^final/i.test(st))return false;}
+  return true;
+}
+const posOk=(i,p)=>!p||(p==='top'?i<3:p==='mid'?i>=3&&i<7:p==='tail'?i>=7:i===+p-1);
+function queryStats(q){
+  const bat=new Map(),bowl=new Map();
+  for(const E of S.matches){
+    if(!matchPasses(E,q))continue;
+    for(const I of E.inns){
+      if((!q.team||I.bat===+q.team)&&(!q.opp||I.bowl===+q.opp))I.bt.forEach((r,i)=>{
+        if(!posOk(i,q.pos))return;
+        const x=bat.get(r[0])||{pid:r[0],m:new Set(),inn:0,no:0,r:0,b:0,hs:0,hsNo:0,c100:0,c50:0,f6:0};
+        x.m.add(E.id);x.inn++;x.r+=r[1];x.b+=r[2];x.f6+=r[4];if(!r[5])x.no++;
+        if(r[1]>x.hs||(r[1]===x.hs&&!r[5])){x.hs=r[1];x.hsNo=r[5]?0:1;}
+        if(r[1]>=100)x.c100++;else if(r[1]>=50)x.c50++;bat.set(r[0],x);
+      });
+      if((!q.team||I.bowl===+q.team)&&(!q.opp||I.bat===+q.opp))for(const w of I.bw){
+        const x=bowl.get(w[0])||{pid:w[0],m:new Set(),bb:0,br:0,bw:0,md:0,best:[0,0],w5:0};
+        x.m.add(E.id);x.bb+=w[1];x.br+=w[3];x.bw+=w[4];x.md+=w[2];if(w[4]>=5)x.w5++;
+        if(w[4]>x.best[0]||(w[4]===x.best[0]&&w[3]<x.best[1]))x.best=[w[4],w[3]];bowl.set(w[0],x);
+      }
+    }
+  }
+  const B=[...bat.values()].map(x=>({...x,m:x.m.size,avg:x.inn-x.no?x.r/(x.inn-x.no):NaN,sr:x.b?100*x.r/x.b:NaN}));
+  const W=[...bowl.values()].map(x=>({...x,m:x.m.size,avg:x.bw?x.br/x.bw:NaN,econ:x.bb?x.br/(x.bb/6):NaN,sr:x.bw?x.bb/x.bw:NaN}));
+  return{bat:B.sort((a,b)=>b.r-a.r),bowl:W.sort((a,b)=>b.bw-a.bw||a.br-b.br)};
+}
+// Head to head: one batter against one bowler (or everyone), from the per-innings matchups
+function headToHead(batter,bowler,fmt){
+  const out=new Map();
+  for(const E of S.matches){if(fmt&&E.fmt!==fmt)continue;
+    for(const I of E.inns)for(const u of I.mu||[]){
+      if(batter&&u[0]!==+batter)continue;if(bowler&&u[1]!==+bowler)continue;
+      const k=batter?u[1]:u[0],x=out.get(k)||{pid:k,b:0,r:0,o:0,inn:0};
+      x.b+=u[2];x.r+=u[3];x.o+=u[4];x.inn++;out.set(k,x);
+    }}
+  return[...out.values()];
+}
+function groundStats(fmt){
+  const V=new Map();
+  for(const E of S.matches){if(fmt&&E.fmt!==fmt)continue;if(!E.venue||!E.inns.length)continue;
+    const v=V.get(E.venue)||{venue:E.venue,city:E.city,m:0,first:[],hi:null,lo:null,batFirstWins:0,decided:0};
+    v.m++;v.first.push(E.inns[0].runs);
+    for(const I of E.inns){if(!v.hi||I.runs>v.hi.r)v.hi={r:I.runs,w:I.wkts,t:I.bat,mid:E.id};if(I.why==='all out'&&(!v.lo||I.runs<v.lo.r))v.lo={r:I.runs,t:I.bat,mid:E.id};}
+    if(E.result.winner){v.decided++;if(E.result.winner===E.inns[0].bat)v.batFirstWins++;}
+    V.set(E.venue,v);}
+  return[...V.values()].map(v=>({...v,avg1:v.first.reduce((a,b)=>a+b,0)/v.first.length})).sort((a,b)=>b.m-a.m);
+}
+
 // ═══ UI SHELL — navigation, views, modal, shared widgets ═══
 const TEAM_COL={AUS:'#c9a400',IND:'#1f4fbf',ENG:'#1d3a8a',RSA:'#0f7a3e',PAK:'#0b6e2e',SL:'#173f8f',WI:'#7a1f2b',NZ:'#222',ZIM:'#b8341b',
   BAN:'#05683f',KEN:'#9c1b1b',IRE:'#169b62',NED:'#e8601c',SCO:'#1b3f94',CAN:'#c8102e',UAE:'#00732f',NAM:'#003580',USA:'#3c3b6e',NEP:'#dc143c',
@@ -2061,7 +2133,7 @@ const TEAM_COL={AUS:'#c9a400',IND:'#1f4fbf',ENG:'#1d3a8a',RSA:'#0f7a3e',PAK:'#0b
 const badge=t=>`<span class="tbadge" style="background:${TEAM_COL[teamShort(t)]||'#334155'}">${esc(teamShort(t))}</span>`;
 const tlabel=t=>`${badge(t)} ${esc(teamName(t))}`;
 const plink=pid=>`<span class="plink" data-pid="${pid}">${esc(pName(pid))}</span>`;
-const VIEWS=[['home','Dashboard'],['match','Match'],['coach','Coach'],['fixtures','Fixtures'],['tour','Tournament Centre'],['rank','Rankings'],['records','Records'],['players','Players'],['history','Results'],['miles','Milestones'],['settings','Settings']];
+const VIEWS=[['home','Dashboard'],['match','Match'],['coach','Coach'],['fixtures','Fixtures'],['tour','Tournament Centre'],['rank','Rankings'],['records','Records'],['query','Stats lab'],['players','Players'],['history','Results'],['miles','Milestones'],['settings','Settings']];
 let VIEW='home',VIEW_ARG=null;
 const RENDER={};
 
@@ -2121,6 +2193,7 @@ function openPlayer(pid){
     <tr><td>${s.m}</td><td>${s.inn}</td><td>${s.no}</td><td>${s.r}</td><td>${s.hs}${s.hsNo?'*':''}</td><td>${f2(batAvg(s))}</td><td>${f1(batSR(s))}</td><td>${s.c100}</td><td>${s.c50}</td><td>${s.bw}</td><td>${s.best[0]}/${s.best[1]}</td><td>${f2(bowlAvg(s))}</td><td>${f2(bowlEcon(s))}</td><td>${s.w5}</td><td>${s.ct}</td><td>${s.st}</td><td>${s.motm}</td></tr></table></div>`).join(''):'<p class="muted">Hasn\'t played in this career yet.</p>'}
   ${recent.length?`<h3>Recent matches</h3><table>${recent.map(E=>`<tr data-mid="${E.id}" style="cursor:pointer"><td>${fmtDate(E.date)}</td><td>${E.fmt}</td><td>v ${badge(otherOf(E,E.teams.find(t=>E.xi[t].slice(0,11).includes(pid))))}</td><td class="r num">${line(E)}</td></tr>`).join('')}</table>`:''}
   ${(()=>{const h=playerHonours(pid);return h.ranks.length||h.awards.length?`<h3>Rankings &amp; honours</h3>${h.ranks.map(x=>`<span class="pill" style="margin:0 4px 4px 0">${esc(x)}</span>`).join('')}${h.awards.map(x=>`<div>🏆 ${esc(x)}</div>`).join('')}`:'';})()}
+  ${nemesisHTML(pid)}
   ${ms.length?`<h3>Milestones</h3>${ms.map(m=>`<div>🏅 ${esc(m.text)} <span class="muted">${fmtDate(m.date)} · ${m.fmt}</span></div>`).join('')}`:''}`);
   $('#pa-edit').onclick=()=>$('#pa-form').classList.toggle('hidden');
   $('#pa-save').onclick=()=>{S.attrEdits[pid]={style:$('#pa-style').value,rating:+$('#pa-rating').value,max:clamp(+$('#pa-max').value,0,10),bat:$('#pa-bat').value};if(S.attrEdits[pid].style==='N')Object.assign(S.attrEdits[pid],{rating:7,max:0});saveGame();openPlayer(pid);};
@@ -3121,6 +3194,64 @@ RENDER.coach=(el)=>{
     saveGame();rerender();
   });
 };
+
+// ═══ STATS LAB SCREEN ═══
+let Q_F={mode:'bat',fmt:'ODI',from:'',to:'',team:'',opp:'',host:'',venue:'',pos:'',stage:'',min:5,b1:'',b2:''};
+function playerOptions(){
+  const seen=new Set();let h='';
+  for(const f of FORMATS)for(const pid in S.stats[f])if(!seen.has(pid)){seen.add(pid);h+=`<option value="${esc(pName(+pid))}">`;}
+  return h;
+}
+const pidByName=n=>{if(!n)return 0;for(const f of FORMATS)for(const pid in S.stats[f])if(pName(+pid)===n)return+pid;return 0;};
+RENDER.query=(el)=>{
+  const q=Q_F,teams=[...TEAMS.values()].filter(t=>TEAM_GAMES.has(t.id)).sort((a,b)=>a.name.localeCompare(b.name));
+  const tsel=(id,v,lab)=>`<select id="${id}"><option value="">${lab}</option>${teams.map(t=>`<option value="${t.id}" ${+v===t.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select>`;
+  const years=[...new Set(S.matches.map(E=>E.date.slice(0,4)))];
+  const ysel=(id,v,lab)=>`<select id="${id}"><option value="">${lab}</option>${years.map(y=>`<option ${+v===+y?'selected':''}>${y}</option>`).join('')}</select>`;
+  const filters=q.mode==='h2h'?`<div class="row"><input list="q-pl" id="q-b1" placeholder="Batter" value="${esc(q.b1)}"><span class="muted">v</span><input list="q-pl" id="q-b2" placeholder="Bowler" value="${esc(q.b2)}"><button class="btn pri sm" id="q-go">Look up</button><datalist id="q-pl">${playerOptions()}</datalist></div>`
+    :q.mode==='ground'?'':`<div class="row">${ysel('q-from',q.from,'From')}${ysel('q-to',q.to,'To')}${tsel('q-team',q.team,'For any team')}${tsel('q-opp',q.opp,'Against anyone')}${tsel('q-host',q.host,'In any country')}
+      ${q.mode==='bat'?`<select id="q-pos">${[['','Any position'],['top','Openers & No.3'],['mid','Nos. 4-7'],['tail','Nos. 8-11'],...[1,2,3,4,5,6,7,8,9,10,11].map(n=>[n,'No. '+n])].map(([v,n])=>`<option value="${v}" ${String(q.pos)===String(v)?'selected':''}>${n}</option>`).join('')}</select>`:''}
+      <select id="q-stage">${[['','Any stage'],['league','League/group games'],['ko','Knockouts'],['final','Finals']].map(([v,n])=>`<option value="${v}" ${q.stage===v?'selected':''}>${n}</option>`).join('')}</select>
+      <label class="row" style="gap:4px">min <input type="number" id="q-min" value="${q.min}" min="0" style="width:60px"> ${q.mode==='bat'?'inns':'wkts'}</label></div>`;
+  let body='';
+  if(q.mode==='bat'||q.mode==='bowl'){
+    const R=queryStats(q);
+    if(q.mode==='bat'){const L=R.bat.filter(x=>x.inn>=q.min).slice(0,60);
+      body=L.length?`<table class="num"><tr><th>Player</th><th class="r">M</th><th class="r">Inn</th><th class="r">Runs</th><th class="r">HS</th><th class="r">Avg</th><th class="r">SR</th><th class="r hide-sm">100</th><th class="r hide-sm">50</th><th class="r hide-sm">6s</th></tr>
+        ${L.map(x=>`<tr><td>${plink(x.pid)}</td><td class="r">${x.m}</td><td class="r">${x.inn}</td><td class="r"><b>${x.r}</b></td><td class="r">${x.hs}${x.hsNo?'*':''}</td><td class="r">${f2(x.avg)}</td><td class="r">${f1(x.sr)}</td><td class="r hide-sm">${x.c100}</td><td class="r hide-sm">${x.c50}</td><td class="r hide-sm">${x.f6}</td></tr>`).join('')}</table>`:'<div class="empty">Nothing matches.</div>';}
+    else{const L=R.bowl.filter(x=>x.bw>=q.min).slice(0,60);
+      body=L.length?`<table class="num"><tr><th>Player</th><th class="r">M</th><th class="r">Wkts</th><th class="r">BB</th><th class="r">Avg</th><th class="r">Econ</th><th class="r">SR</th><th class="r hide-sm">5w</th></tr>
+        ${L.map(x=>`<tr><td>${plink(x.pid)}</td><td class="r">${x.m}</td><td class="r"><b>${x.bw}</b></td><td class="r">${x.best[0]}/${x.best[1]}</td><td class="r">${f2(x.avg)}</td><td class="r">${f2(x.econ)}</td><td class="r">${f1(x.sr)}</td><td class="r hide-sm">${x.w5}</td></tr>`).join('')}</table>`:'<div class="empty">Nothing matches.</div>';}
+  }else if(q.mode==='h2h'){
+    const a=pidByName(q.b1),b=pidByName(q.b2);
+    if(!a&&!b)body='<div class="empty">Pick a batter, a bowler, or both.</div>';
+    else{
+      const L=headToHead(a,b,q.fmt).sort((x,y)=>y.o-x.o||y.b-x.b).slice(0,40);
+      body=a&&b?(L[0]?`<div class="card"><h3>${esc(q.b1)} v ${esc(q.b2)}</h3><div class="grid g4 num"><div><div class="sub">Balls</div><b>${L[0].b}</b></div><div><div class="sub">Runs</div><b>${L[0].r}</b></div><div><div class="sub">Dismissals</div><b>${L[0].o}</b></div><div><div class="sub">Strike rate</div><b>${f1(100*L[0].r/Math.max(1,L[0].b))}</b></div></div></div>`:'<div class="empty">They have never met in this career.</div>')
+        :`<table class="num"><tr><th>${a?'Bowler':'Batter'}</th><th class="r">Innings</th><th class="r">Balls</th><th class="r">Runs</th><th class="r">Out</th><th class="r">SR</th></tr>${L.map(x=>`<tr><td>${plink(x.pid)}</td><td class="r">${x.inn}</td><td class="r">${x.b}</td><td class="r">${x.r}</td><td class="r"><b>${x.o}</b></td><td class="r">${f1(100*x.r/Math.max(1,x.b))}</td></tr>`).join('')}</table>`;
+    }
+  }else{
+    const L=groundStats(q.fmt).slice(0,60);
+    body=L.length?`<table class="num"><tr><th>Ground</th><th class="r">M</th><th class="r">Avg 1st inns</th><th class="r hide-sm">Bat 1st wins</th><th class="r">Highest</th><th class="r hide-sm">Lowest</th></tr>
+      ${L.map(v=>`<tr><td>${esc(v.venue)}</td><td class="r">${v.m}</td><td class="r">${Math.round(v.avg1)}</td><td class="r hide-sm">${v.decided?Math.round(100*v.batFirstWins/v.decided)+'%':'-'}</td>
+        <td class="r" data-mid="${v.hi.mid}" style="cursor:pointer">${v.hi.r}${v.hi.w<10?'/'+v.hi.w:''} ${badge(v.hi.t)}</td><td class="r hide-sm">${v.lo?`${v.lo.r} ${badge(v.lo.t)}`:'-'}</td></tr>`).join('')}</table>`:'<div class="empty">No matches yet.</div>';
+  }
+  el.innerHTML=`<div class="card stack"><div class="row"><div class="seg">${[['bat','Batting'],['bowl','Bowling'],['h2h','Batter v bowler'],['ground','Grounds']].map(([k,n])=>`<button data-qm="${k}" class="${q.mode===k?'on':''}">${n}</button>`).join('')}</div>
+    <div class="seg">${FORMATS.map(f=>`<button data-qf="${f}" class="${q.fmt===f?'on':''}">${FMT_PLURAL[f]}</button>`).join('')}</div></div>${filters}</div>
+    <div class="card tbl-wrap" style="margin-top:14px">${body}</div>`;
+  $$('[data-qm]').forEach(b=>b.onclick=()=>{q.mode=b.dataset.qm;rerender();});
+  $$('[data-qf]').forEach(b=>b.onclick=()=>{q.fmt=b.dataset.qf;rerender();});
+  for(const[id,k]of[['q-from','from'],['q-to','to'],['q-team','team'],['q-opp','opp'],['q-host','host'],['q-pos','pos'],['q-stage','stage'],['q-min','min']]){const e=$('#'+id);if(e)e.onchange=()=>{q[k]=k==='min'?+e.value:e.value;rerender();};}
+  if($('#q-go'))$('#q-go').onclick=()=>{q.b1=$('#q-b1').value;q.b2=$('#q-b2').value;rerender();};
+};
+// for the player card: who gets him out, and whom he gets out
+function nemesisHTML(pid){
+  const vs=headToHead(pid,0,'').filter(x=>x.o>0).sort((a,b)=>b.o-a.o||a.r-b.r).slice(0,3);
+  const bun=headToHead(0,pid,'').filter(x=>x.o>0).sort((a,b)=>b.o-a.o||a.r-b.r).slice(0,3);
+  if(!vs.length&&!bun.length)return'';
+  return`<h3>Head to head</h3><div class="grid g2">${vs.length?`<div><div class="sub">His nemesis</div>${vs.map(x=>`<div>${plink(x.pid)} <span class="muted">${plural(x.o,'dismissal')} in ${x.b} balls</span></div>`).join('')}</div>`:''}
+    ${bun.length?`<div><div class="sub">His bunny</div>${bun.map(x=>`<div>${plink(x.pid)} <span class="muted">dismissed ${x.o}×, ${x.r} runs off him</span></div>`).join('')}</div>`:''}</div>`;
+}
 
 // ═══ SETTINGS, SPLASH, LIVE HOOKS & INIT ═══
 const GUIDE=`<h2>How First XI works</h2>

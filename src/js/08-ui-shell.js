@@ -5,7 +5,7 @@ const TEAM_COL={AUS:'#c9a400',IND:'#1f4fbf',ENG:'#1d3a8a',RSA:'#0f7a3e',PAK:'#0b
 const badge=t=>`<span class="tbadge" style="background:${TEAM_COL[teamShort(t)]||'#334155'}">${esc(teamShort(t))}</span>`;
 const tlabel=t=>`${badge(t)} ${esc(teamName(t))}`;
 const plink=pid=>`<span class="plink" data-pid="${pid}">${esc(pName(pid))}</span>`;
-const VIEWS=[['home','Dashboard'],['match','Match'],['coach','Coach'],['fixtures','Fixtures'],['tour','Tournament Centre'],['rank','Rankings'],['records','Records'],['players','Players'],['history','Results'],['miles','Milestones'],['settings','Settings']];
+const VIEWS=[['home','Dashboard'],['match','Match'],['coach','Coach'],['fixtures','Fixtures'],['tour','Tournament Centre'],['rank','Rankings'],['records','Records'],['query','Stats lab'],['players','Players'],['history','Results'],['miles','Milestones'],['settings','Settings']];
 let VIEW='home',VIEW_ARG=null;
 const RENDER={};
 
@@ -65,6 +65,7 @@ function openPlayer(pid){
     <tr><td>${s.m}</td><td>${s.inn}</td><td>${s.no}</td><td>${s.r}</td><td>${s.hs}${s.hsNo?'*':''}</td><td>${f2(batAvg(s))}</td><td>${f1(batSR(s))}</td><td>${s.c100}</td><td>${s.c50}</td><td>${s.bw}</td><td>${s.best[0]}/${s.best[1]}</td><td>${f2(bowlAvg(s))}</td><td>${f2(bowlEcon(s))}</td><td>${s.w5}</td><td>${s.ct}</td><td>${s.st}</td><td>${s.motm}</td></tr></table></div>`).join(''):'<p class="muted">Hasn\'t played in this career yet.</p>'}
   ${recent.length?`<h3>Recent matches</h3><table>${recent.map(E=>`<tr data-mid="${E.id}" style="cursor:pointer"><td>${fmtDate(E.date)}</td><td>${E.fmt}</td><td>v ${badge(otherOf(E,E.teams.find(t=>E.xi[t].slice(0,11).includes(pid))))}</td><td class="r num">${line(E)}</td></tr>`).join('')}</table>`:''}
   ${(()=>{const h=playerHonours(pid);return h.ranks.length||h.awards.length?`<h3>Rankings &amp; honours</h3>${h.ranks.map(x=>`<span class="pill" style="margin:0 4px 4px 0">${esc(x)}</span>`).join('')}${h.awards.map(x=>`<div>🏆 ${esc(x)}</div>`).join('')}`:'';})()}
+  ${nemesisHTML(pid)}
   ${ms.length?`<h3>Milestones</h3>${ms.map(m=>`<div>🏅 ${esc(m.text)} <span class="muted">${fmtDate(m.date)} · ${m.fmt}</span></div>`).join('')}`:''}`);
   $('#pa-edit').onclick=()=>$('#pa-form').classList.toggle('hidden');
   $('#pa-save').onclick=()=>{S.attrEdits[pid]={style:$('#pa-style').value,rating:+$('#pa-rating').value,max:clamp(+$('#pa-max').value,0,10),bat:$('#pa-bat').value};if(S.attrEdits[pid].style==='N')Object.assign(S.attrEdits[pid],{rating:7,max:0});saveGame();openPlayer(pid);};

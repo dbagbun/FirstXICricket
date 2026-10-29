@@ -30,11 +30,22 @@ function archiveMatch(M){
       bw:I.bwOrder.map(p=>{const W=I.bw[p];return[p,W.b,W.md,W.r,W.w,W.wd,W.nb];}),
       fow:I.fow.map(f=>[f.w,f.r,f.pid,f.ov]),
       parts:I.parts.map(p=>[p.a,p.b,p.r,p.bl,p.w,p.broken?1:0,p.ra,p.rb]),
-      ov:I.overs.map(o=>[o.runs,o.w])})),
+      ov:I.overs.map(o=>[o.runs,o.w]),
+      mu:matchups(I)})),
     ev:M.events.filter(e=>['50','100','200','5w','hat'].includes(e.t)).map(e=>[e.t,e.pid,e.inn,e.balls||e.w||0]),
   };
   E.motm=pickMOTM(E);
   return E;
+}
+// Batter v bowler in an innings: [[batter, bowler, balls faced, runs, dismissed by him]]
+function matchups(I){
+  const m=new Map();
+  for(const b of I.balls){
+    const k=b.st+':'+b.bowler,x=m.get(k)||[b.st,b.bowler,0,0,0];
+    if(b.exType!=='wd')x[2]++;x[3]+=b.bat;if(b.w&&BOWLER_CREDIT[b.how])x[4]++;
+    m.set(k,x);
+  }
+  return[...m.values()];
 }
 function packBalls(M){return M.inns.map(I=>I.balls.map(b=>[b.over,b.legal,b.card,b.roll,b.col,b.tok,b.st,b.bowler,b.runs,b.wkts,b.w?b.how:'',b.voided?1:0]));}
 
