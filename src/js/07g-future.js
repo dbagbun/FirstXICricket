@@ -46,27 +46,29 @@ function genName(team){
 }
 function squadAroundReal(team){const L=TEAM_GAMES.get(+team)||[];const last=L.slice(-25);const s=new Set();for(const f of last)for(const p of fixtureXI(f.cid,team).bat)s.add(p);return[...s];}
 // ---------- the pool ----------
+function genStore(){if(!S.gen)S.gen={on:true,years:{},players:{},next:GEN_ID0};return S.gen;}
 function initFuture(){
-  if(S.gen&&S.gen.players&&Object.keys(S.gen.players).length)return;
-  S.gen=Object.assign({on:true,years:{},players:{},next:GEN_ID0},S.gen||{});
+  if(S.gen&&S.gen.init)return;
+  genStore();S.gen.init=true;
   const cut=addDays(LAST_REAL,-730);
   for(const[t,games]of TEAM_GAMES){
     if(COMPOSITE.has(t))continue;
     const pos={},wk=new Set();
     for(const f of games){if(f.date<cut)continue;const x=fixtureXI(f.cid,t);x.bat.forEach((p,i)=>(pos[p]=pos[p]||[]).push(i+1));wk.add(x.wk);}
     for(const p in pos){
+      if(S.gen.players[p])continue;
       const P=WORLD.players[p],d=DEBUT.get(+p)||CAREER_START,ps=pos[p].sort((a,b)=>a-b),med=ps[ps.length>>1];
       const born=d<='2002-12-31'?2002-rndInt(25,31):+d.slice(0,4)-rndInt(20,24);
       S.gen.players[p]={real:true,n:P[0],t:+t,born,st:P[1],pot:P[2]>5?5:P[2],wk:wk.has(+p),role:med<=5?'top':med<=8?'mid':'tail',debut:d};
     }
   }
 }
-function newYoungster(team,year){
+function newYoungster(team,year,domestic){
   const full=TEAMS.get(team)?.full,role=pick(['top','top','top','mid','mid','tail','tail','tail']);
   const st=role==='tail'?pick(['P','P','S','M']):role==='mid'?pick(['M','S','P','N']):(rnd()<.8?'N':pick(['S','M']));
   const r=rnd(),pot=full?(r<.08?1:r<.25?2:r<.6?3:r<.88?4:5):(r<.02?1:r<.1?2:r<.35?3:r<.7?4:5);
   const pid=S.gen.next++;
-  S.gen.players[pid]={real:false,n:genName(team),t:team,born:year-rndInt(18,22),st,pot,wk:role!=='tail'&&rnd()<.12,role,debut:null};
+  S.gen.players[pid]={real:false,n:genName(team),t:team,born:year-(domestic?rndInt(20,31):rndInt(18,22)),st,pot:domestic?Math.max(pot,3):pot,wk:role!=='tail'&&rnd()<.12,role,debut:null,domestic:!!domestic};
   return pid;
 }
 const activePool=(team,date)=>Object.entries(S.gen.players).filter(([,g])=>g.t===team&&!(g.ret&&g.ret<=date)&&ageOf(g,date)>=17).map(([p])=>+p);
@@ -113,14 +115,14 @@ function generateYear(year){
   // ICC events
   const k=year-2026;
   if(year%2===0){const host=FUTURE_HOSTS[k%FUTURE_HOSTS.length],pool=[host,...rankedTeams('T20',[...full,...assoc]).filter(t=>t!==host)].slice(0,16);
-    const s=year+'-06-02';createCup({name:`ICC T20 World Cup ${year}`,fmt:'T20',format:'groups4',host,start:s,teams:pool});book(pool,s,year+'-07-10');}
+    const s=year+'-06-02';createCup({name:`ICC T20 World Cup ${year}`,fmt:'T20',format:'groups4',host,start:s,teams:pool,quiet:true});book(pool,s,year+'-07-10');}
   if(year%4===3){const host=FUTURE_HOSTS[(k+3)%FUTURE_HOSTS.length],pool=[host,...rankedTeams('ODI',[...full,...assoc]).filter(t=>t!==host)].slice(0,10);
-    const s=year+'-10-05';createCup({name:`ICC Cricket World Cup ${year}`,fmt:'ODI',format:'rr',host,start:s,teams:pool});book(pool,s,year+'-11-30');}
+    const s=year+'-10-05';createCup({name:`ICC Cricket World Cup ${year}`,fmt:'ODI',format:'rr',host,start:s,teams:pool,quiet:true});book(pool,s,year+'-11-30');}
   if(year%4===1){const host=FUTURE_HOSTS[(k+5)%FUTURE_HOSTS.length],pool=[host,...rankedTeams('ODI',full).filter(t=>t!==host)].slice(0,8);
-    const s=year+'-02-18';createCup({name:`ICC Champions Trophy ${year}`,fmt:'ODI',format:'groups2',host,start:s,teams:pool});book(pool,s,year+'-03-12');}
+    const s=year+'-02-18';createCup({name:`ICC Champions Trophy ${year}`,fmt:'ODI',format:'groups2',host,start:s,teams:pool,quiet:true});book(pool,s,year+'-03-12');}
   // associates' own event
   if(assoc.length>=4){const pool=rankedTeams('T20',assoc).slice(0,6),host=pool[0],s=year+'-04-08';
-    if(pool.every(t=>free(t,s,addDays(s,20)))){createCup({name:`Associates Cup ${year}`,fmt:pool.length>=4?'T20':'ODI',format:'rr',host,start:s,teams:pool});book(pool,s,addDays(s,20));}}
+    if(pool.every(t=>free(t,s,addDays(s,20)))){createCup({name:`Associates Cup ${year}`,fmt:pool.length>=4?'T20':'ODI',format:'rr',host,start:s,teams:pool,quiet:true});book(pool,s,addDays(s,20));}}
   // tours: rotate host/visitor pairs between Test nations, about two home and two away each a year
   const pairs=[];for(const h of full)for(const v of full)if(h!==v)pairs.push([h,v]);
   const off=(k*17)%pairs.length,todo=[...pairs.slice(off),...pairs.slice(0,off)].slice(0,18);

@@ -19,7 +19,7 @@ const LOG_KEEP=25;
 // ---------- archive ----------
 const HOW_TXT={b:'b',lbw:'lbw',ct:'c',ctof:'c',ctwk:'c',st:'st',ro:'run out'};
 function archiveMatch(M){
-  const E={id:M.id,fmt:M.fmt,fid:M.fid,sid:M.sid,series:M.series,stage:M.stage,date:M.date,venue:M.venue,city:M.city,
+  const E={id:M.id,fmt:M.statFmt||M.fmt,fid:M.fid,sid:M.sid,series:M.series,stage:M.stage,date:M.date,venue:M.venue,city:M.city,
     teams:M.teams,toss:[M.toss.w,M.toss.choice],result:M.result,followOn:M.followOn||false,pitch:M.pitch||'',wx:M.wx||null,
     maxOv:M.maxOv,dl:M.dl&&M.dl.target?{target:M.dl.target,overs:M.inns[1]&&M.inns[1].maxOv}:null,abandoned:M.abandoned||false,
     so:M.superOver?{w:M.superOver.winner,b:M.superOver.byBoundaries,r:M.superOver.rounds.map(rd=>rd.map(x=>[x.bat,x.runs,x.wkts,x.bowler,x.balls.join(' ')]))}:null,

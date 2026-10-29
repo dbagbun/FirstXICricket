@@ -293,7 +293,9 @@ const WORLD={"source":"FirstXI_Excel_MVP_Template_version_4.xlsm","teams":[{"id"
 'use strict';
 const rnd=()=>Math.random();
 // Formats: ODI, Test, T20. perFmt(f) builds {ODI:f(),TEST:f(),T20:f()}.
-const FORMATS=['ODI','TEST','T20'],FMT_NAME={ODI:'ODI',TEST:'Test',T20:'T20'},FMT_PLURAL={ODI:'ODIs',TEST:'Tests',T20:'T20s'};
+// LEAGUE = franchise T20s: played as T20s, kept apart in the stats, records and rankings.
+const FORMATS=['ODI','TEST','T20','LEAGUE'],FMT_NAME={ODI:'ODI',TEST:'Test',T20:'T20',LEAGUE:'League'},FMT_PLURAL={ODI:'ODIs',TEST:'Tests',T20:'T20s',LEAGUE:'League'};
+const INTL=['ODI','TEST','T20'];   // what you can schedule or build; LEAGUE only comes from the franchise league
 const perFmt=f=>Object.fromEntries(FORMATS.map(k=>[k,f(k)]));
 const roll100=()=>Math.floor(rnd()*100)+1;
 const rndInt=(a,b)=>Math.floor(rnd()*(b-a+1))+a;
@@ -444,6 +446,7 @@ for(const f of FIX)for(const t of[f.a,f.b])if(WORLD.xi[f.cid]&&WORLD.xi[f.cid][t
 const DEBUT=new Map();
 for(const f of FIX)if(WORLD.xi[f.cid])for(const t in WORLD.xi[f.cid])for(const p of WORLD.xi[f.cid][t].slice(0,11))if(!DEBUT.has(p))DEBUT.set(p,f.date);
 function nearestXI(tid,date,opts={}){
+  if(isFranchise(tid))return leagueXI(+tid,date);
   if(typeof S!=='undefined'&&S&&S.gen&&isFuture(date)){const x=genXI(+tid,date);if(x)return x;}
   const games=TEAM_GAMES.get(+tid)||[];
   let best=null,bd=1e9;
@@ -1114,7 +1117,7 @@ const LOG_KEEP=25;
 // ---------- archive ----------
 const HOW_TXT={b:'b',lbw:'lbw',ct:'c',ctof:'c',ctwk:'c',st:'st',ro:'run out'};
 function archiveMatch(M){
-  const E={id:M.id,fmt:M.fmt,fid:M.fid,sid:M.sid,series:M.series,stage:M.stage,date:M.date,venue:M.venue,city:M.city,
+  const E={id:M.id,fmt:M.statFmt||M.fmt,fid:M.fid,sid:M.sid,series:M.series,stage:M.stage,date:M.date,venue:M.venue,city:M.city,
     teams:M.teams,toss:[M.toss.w,M.toss.choice],result:M.result,followOn:M.followOn||false,pitch:M.pitch||'',wx:M.wx||null,
     maxOv:M.maxOv,dl:M.dl&&M.dl.target?{target:M.dl.target,overs:M.inns[1]&&M.inns[1].maxOv}:null,abandoned:M.abandoned||false,
     so:M.superOver?{w:M.superOver.winner,b:M.superOver.byBoundaries,r:M.superOver.rounds.map(rd=>rd.map(x=>[x.bat,x.runs,x.wkts,x.bowler,x.balls.join(' ')]))}:null,
@@ -1497,7 +1500,7 @@ const KO_ORDER={4:[1,4,2,3],8:[1,8,4,5,2,7,3,6],16:[1,16,8,9,4,13,5,12,2,15,7,10
 function rrPairs(list){const out=[];for(let i=0;i<list.length;i++)for(let j=i+1;j<list.length;j++)out.push([list[i],list[j]]);
   // spread each team's games: order by the later of the two indices, then the earlier
   return out.sort((x,y)=>(Math.max(list.indexOf(x[0]),list.indexOf(x[1]))-Math.max(list.indexOf(y[0]),list.indexOf(y[1])))||list.indexOf(x[0])-list.indexOf(y[0]));}
-function createCup({name,fmt='ODI',format='rr',host,start,teams}){
+function createCup({name,fmt='ODI',format='rr',host,start,teams,quiet}){
   const fk=fmt==='TEST'?'TEST':fmt;
   teams=[...new Set(teams.map(Number))].sort((a,b)=>rankPtsOf(b,fk)-rankPtsOf(a,fk));
   if(fmt==='TEST')format='rr';
@@ -1537,7 +1540,7 @@ function createCup({name,fmt='ODI',format='rr',host,start,teams}){
       round=next;}
   }
   (S.cups=S.cups||[]).push(cup);fxDirty();
-  if(!S.sandbox&&typeof achieve==='function')achieve('cupBuilt');
+  if(!S.sandbox&&!quiet&&typeof achieve==='function')achieve('cupBuilt');
   return cup;
 }
 const cupById=id=>(S.cups||[]).find(c=>c.id===id);
@@ -1657,6 +1660,7 @@ function fixtureByKey(key){
   return null;
 }
 function nextFixture(){
+  if(typeof ensureLeague==='function')ensureLeague();
   let n=allFixtures().find(x=>x.playable&&!S.done[x.key])||null;
   for(let i=0;!n&&i<3&&ensureFuture();i++)n=allFixtures().find(x=>x.playable&&!S.done[x.key])||null;   // the future: next year's calendar
   return n;
@@ -1671,6 +1675,7 @@ function buildMatch(fx){
     const M=newMatch({fmt:fx.fmt,a:fx.a,b:fx.b,home,date:fx.date,venue:fx.venue,city:fx.city,sid:fx.sid,series:fx.title,stage:fx.stage||fx.label,
       xiA:fx.xiA||xi(fx.a),xiB:fx.xiB||xi(fx.b)});
     if(fx.superOver)M.superOverOn=true;
+    if(fx.cup&&cupById(fx.sid)?.league){M.statFmt='LEAGUE';M.league=true;}
     selectAndMods(M,fx);
     M.key=fx.key;M.batMode=S.settings.batColours;return M;
   }
@@ -1780,7 +1785,7 @@ function exportCareer(){return JSON.stringify(S);}
 function importCareer(text){const d=parseSave(text);if(!d)return false;S=d;saveGame();return true;}
 
 // ═══ RECORDS — computed from career stats and the match archive (top 10 per record) ═══
-const REC_MIN={ODI:{inn:20,balls:500,wkts:30,bb:600,cap:10},TEST:{inn:15,balls:1000,wkts:30,bb:1500,cap:8},T20:{inn:12,balls:250,wkts:20,bb:300,cap:8}};
+const REC_MIN={ODI:{inn:20,balls:500,wkts:30,bb:600,cap:10},TEST:{inn:15,balls:1000,wkts:30,bb:1500,cap:8},T20:{inn:12,balls:250,wkts:20,bb:300,cap:8},LEAGUE:{inn:12,balls:250,wkts:20,bb:300,cap:8}};
 const REC_GROUPS=[
   ['Batting',['runs','hs','avg','sr','c100','c50','f6','f4','fast50','fast100','ducks']],
   ['Bowling',['wkts','bbi','bbm','bavg','econ','bsr','w5','md']],
@@ -1872,7 +1877,7 @@ const otherOf=(E,t)=>E.teams[0]===t?E.teams[1]:E.teams[0];
 // Team ratings are Elo underneath (full members start 1500, Zimbabwe/Bangladesh 1400, associates 1250) and are
 // shown ICC-style: points = (Elo - 1000) / 5. Player rankings are an exponential average of match performances,
 // scaled by the opposition's rating, so form counts more than history.
-const RANK_K={ODI:24,TEST:32,T20:20},RANK_ALPHA=.12,RANK_ACTIVE_DAYS=420,AWARD_MIN_MATCHES=15;
+const RANK_K={ODI:24,TEST:32,T20:20,LEAGUE:20},RANK_ALPHA=.12,RANK_ACTIVE_DAYS=420,AWARD_MIN_MATCHES=15;
 const eloStart=t=>{const T=TEAMS.get(+t);return T&&T.full?([10,11].includes(+t)?1400:1500):1250;};
 const rankPts=elo=>Math.round((elo-1000)/5);
 function blankRankings(){const e=()=>({});return{team:perFmt(e),yr:perFmt(e),bat:perFmt(e),bowl:perFmt(e),pos:{},awards:{},awardYear:0};}
@@ -1901,11 +1906,11 @@ function applyRankings(E){
   const k=RANK_K[E.fmt]*(E.stage&&/final|semi|quarter/i.test(E.stage)?1.25:1);
   const d=k*(sa-ea);T[a]+=d;T[b]-=d;
   // players
-  const base={ODI:4.8,TEST:3.2,T20:7.5}[E.fmt],L=playerMatchLines(E);
+  const base={ODI:4.8,TEST:3.2,T20:7.5,LEAGUE:7.5}[E.fmt],L=playerMatchLines(E);
   for(const pid in L){
     const l=L[pid],opp=otherOf(E,l.team),f=(T[opp]||1500)/1500;
     if(l.bat){
-      const sr=E.fmt!=='TEST'&&l.b?(l.r/l.b*100-(E.fmt==='T20'?120:80))/400:0;
+      const sr=E.fmt!=='TEST'&&l.b?(l.r/l.b*100-(E.fmt==='ODI'?80:120))/400:0;
       const perf=(l.r+(l.r*sr))*f;
       upd(R.bat[E.fmt],pid,perf,E.date);
     }
@@ -1916,7 +1921,7 @@ function applyRankings(E){
   }
 }
 function upd(tab,pid,perf,date){const x=tab[pid]||(tab[pid]={p:0,n:0,d:date});x.p=x.p*(1-RANK_ALPHA)+perf*RANK_ALPHA;x.n++;x.d=date;}
-const PLAYER_SCALE={bat:{ODI:16,TEST:10,T20:24},bowl:{ODI:14,TEST:12,T20:16}};
+const PLAYER_SCALE={bat:{ODI:16,TEST:10,T20:24,LEAGUE:24},bowl:{ODI:14,TEST:12,T20:16,LEAGUE:16}};
 const COMPOSITE=new Set(WORLD.teams.filter(t=>/ XI$/.test(t.name)).map(t=>t.id));   // Africa XI, Asia XI, ICC World XI
 function playerRanking(fmt,kind,n=20){
   const R=R_(),now=careerDate(),tab=R[kind==='ar'?'bat':kind][fmt];
@@ -1996,7 +2001,7 @@ const AWARD_NAMES=[['coty','Cricketer of the Year'],['odiBat','ODI Batter of the
 // plays BLUE; a bowler's rating moves a step at FORM_BOWL. The tail (RED) is never touched.
 // Fatigue and injuries apply to the side you manage (coach mode or Settings -> Selection -> Me).
 // The engine only sees M.mods {bat:{pid:+1|-1}, bowl:{pid:+1|-1}}, built by matchMods() in buildMatch.
-const FORM_N=5,FORM_COLD={ODI:11,TEST:13,T20:7},FORM_HOT={ODI:16,TEST:20,T20:11},FORM_BOWL={cold:5,hot:46};
+const FORM_N=5,FORM_COLD={ODI:11,TEST:13,T20:7,LEAGUE:7},FORM_HOT={ODI:16,TEST:20,T20:11,LEAGUE:11},FORM_BOWL={cold:5,hot:46};
 function formOf(pid,fmt){
   const F=S&&S.form&&S.form[fmt]&&S.form[fmt][pid];if(!F)return{bat:null,bowl:null};
   const avg=a=>a.length>=3?a.reduce((x,y)=>x+y,0)/a.length:null;
@@ -2011,7 +2016,7 @@ function formLevel(pid,fmt,col){
 }
 function updateForm(E){
   if(!S.form)S.form=perFmt(()=>({}));
-  const F=S.form[E.fmt]=S.form[E.fmt]||{},base={ODI:4.8,TEST:3.2,T20:7.5}[E.fmt];
+  const F=S.form[E.fmt]=S.form[E.fmt]||{},base={ODI:4.8,TEST:3.2,T20:7.5,LEAGUE:7.5}[E.fmt];
   if(S.gen)for(const t of E.teams)for(const p of E.xi[t].slice(0,11)){const g=S.gen.players[p];if(g&&!g.real&&!g.debut)g.debut=E.date;}
   const push=(pid,k,v)=>{const x=F[pid]=F[pid]||{bat:[],bowl:[]};x[k].push(Math.round(v));if(x[k].length>FORM_N)x[k].shift();};
   for(const I of E.inns){
@@ -2051,7 +2056,7 @@ function matchMods(M){
     const opp=otherTeam(M,t),own=pAttr(pid,M.date).bat;
     // an associate's GREEN against a Test nation is the opposition rule, not form: never lift it
     const col=own&&own.length===2&&TEAMS.get(opp)?.full?'X':batColour({batMode:M.batMode,date:M.date},pid,i+1,opp);
-    const f=formLevel(pid,M.fmt,col);
+    const f=formLevel(pid,M.statFmt||M.fmt,col);
     if(f.bat)mods.bat[pid]=f.bat;
     if(f.bowl)mods.bowl[pid]=-f.bowl;
   });
@@ -2437,6 +2442,7 @@ const ACHIEVEMENTS=[
   ['draw','🛡️','Rain-soaked stalemate','A drawn Test.'],['inns','🧱','Innings and plenty','An innings victory.'],
   ['assocWC','😲','Giant-killers','An associate nation wins a World Cup final.'],['no1','🥇','Top of the world','The team you follow goes No.1 in the ODI rankings.'],
   ['awards','🎤','Awards night','Reach an end-of-year awards ceremony.'],
+  ['league','💼','Owner','Found a franchise league.'],['leagueWin','🏆','Franchise champions','Win the Franchise League with your franchise.'],
   ['coach1','📋','The job','Take a coaching job.'],['target10','🎯','Delivering','Meet 10 board targets.'],['sacked','📦','Clear your desk','Get sacked.'],
   ['nations3','✈️','Journeyman','Coach three different nations.'],['coachWC','🏆','World champion coach','Win a World Cup final as coach.'],
   ['challenge1','🧩','Up for it','Complete a challenge.'],['challenge3','⭐','Three stars','Three-star a challenge.'],
@@ -2526,27 +2532,29 @@ function genName(team){
 }
 function squadAroundReal(team){const L=TEAM_GAMES.get(+team)||[];const last=L.slice(-25);const s=new Set();for(const f of last)for(const p of fixtureXI(f.cid,team).bat)s.add(p);return[...s];}
 // ---------- the pool ----------
+function genStore(){if(!S.gen)S.gen={on:true,years:{},players:{},next:GEN_ID0};return S.gen;}
 function initFuture(){
-  if(S.gen&&S.gen.players&&Object.keys(S.gen.players).length)return;
-  S.gen=Object.assign({on:true,years:{},players:{},next:GEN_ID0},S.gen||{});
+  if(S.gen&&S.gen.init)return;
+  genStore();S.gen.init=true;
   const cut=addDays(LAST_REAL,-730);
   for(const[t,games]of TEAM_GAMES){
     if(COMPOSITE.has(t))continue;
     const pos={},wk=new Set();
     for(const f of games){if(f.date<cut)continue;const x=fixtureXI(f.cid,t);x.bat.forEach((p,i)=>(pos[p]=pos[p]||[]).push(i+1));wk.add(x.wk);}
     for(const p in pos){
+      if(S.gen.players[p])continue;
       const P=WORLD.players[p],d=DEBUT.get(+p)||CAREER_START,ps=pos[p].sort((a,b)=>a-b),med=ps[ps.length>>1];
       const born=d<='2002-12-31'?2002-rndInt(25,31):+d.slice(0,4)-rndInt(20,24);
       S.gen.players[p]={real:true,n:P[0],t:+t,born,st:P[1],pot:P[2]>5?5:P[2],wk:wk.has(+p),role:med<=5?'top':med<=8?'mid':'tail',debut:d};
     }
   }
 }
-function newYoungster(team,year){
+function newYoungster(team,year,domestic){
   const full=TEAMS.get(team)?.full,role=pick(['top','top','top','mid','mid','tail','tail','tail']);
   const st=role==='tail'?pick(['P','P','S','M']):role==='mid'?pick(['M','S','P','N']):(rnd()<.8?'N':pick(['S','M']));
   const r=rnd(),pot=full?(r<.08?1:r<.25?2:r<.6?3:r<.88?4:5):(r<.02?1:r<.1?2:r<.35?3:r<.7?4:5);
   const pid=S.gen.next++;
-  S.gen.players[pid]={real:false,n:genName(team),t:team,born:year-rndInt(18,22),st,pot,wk:role!=='tail'&&rnd()<.12,role,debut:null};
+  S.gen.players[pid]={real:false,n:genName(team),t:team,born:year-(domestic?rndInt(20,31):rndInt(18,22)),st,pot:domestic?Math.max(pot,3):pot,wk:role!=='tail'&&rnd()<.12,role,debut:null,domestic:!!domestic};
   return pid;
 }
 const activePool=(team,date)=>Object.entries(S.gen.players).filter(([,g])=>g.t===team&&!(g.ret&&g.ret<=date)&&ageOf(g,date)>=17).map(([p])=>+p);
@@ -2593,14 +2601,14 @@ function generateYear(year){
   // ICC events
   const k=year-2026;
   if(year%2===0){const host=FUTURE_HOSTS[k%FUTURE_HOSTS.length],pool=[host,...rankedTeams('T20',[...full,...assoc]).filter(t=>t!==host)].slice(0,16);
-    const s=year+'-06-02';createCup({name:`ICC T20 World Cup ${year}`,fmt:'T20',format:'groups4',host,start:s,teams:pool});book(pool,s,year+'-07-10');}
+    const s=year+'-06-02';createCup({name:`ICC T20 World Cup ${year}`,fmt:'T20',format:'groups4',host,start:s,teams:pool,quiet:true});book(pool,s,year+'-07-10');}
   if(year%4===3){const host=FUTURE_HOSTS[(k+3)%FUTURE_HOSTS.length],pool=[host,...rankedTeams('ODI',[...full,...assoc]).filter(t=>t!==host)].slice(0,10);
-    const s=year+'-10-05';createCup({name:`ICC Cricket World Cup ${year}`,fmt:'ODI',format:'rr',host,start:s,teams:pool});book(pool,s,year+'-11-30');}
+    const s=year+'-10-05';createCup({name:`ICC Cricket World Cup ${year}`,fmt:'ODI',format:'rr',host,start:s,teams:pool,quiet:true});book(pool,s,year+'-11-30');}
   if(year%4===1){const host=FUTURE_HOSTS[(k+5)%FUTURE_HOSTS.length],pool=[host,...rankedTeams('ODI',full).filter(t=>t!==host)].slice(0,8);
-    const s=year+'-02-18';createCup({name:`ICC Champions Trophy ${year}`,fmt:'ODI',format:'groups2',host,start:s,teams:pool});book(pool,s,year+'-03-12');}
+    const s=year+'-02-18';createCup({name:`ICC Champions Trophy ${year}`,fmt:'ODI',format:'groups2',host,start:s,teams:pool,quiet:true});book(pool,s,year+'-03-12');}
   // associates' own event
   if(assoc.length>=4){const pool=rankedTeams('T20',assoc).slice(0,6),host=pool[0],s=year+'-04-08';
-    if(pool.every(t=>free(t,s,addDays(s,20)))){createCup({name:`Associates Cup ${year}`,fmt:pool.length>=4?'T20':'ODI',format:'rr',host,start:s,teams:pool});book(pool,s,addDays(s,20));}}
+    if(pool.every(t=>free(t,s,addDays(s,20)))){createCup({name:`Associates Cup ${year}`,fmt:pool.length>=4?'T20':'ODI',format:'rr',host,start:s,teams:pool,quiet:true});book(pool,s,addDays(s,20));}}
   // tours: rotate host/visitor pairs between Test nations, about two home and two away each a year
   const pairs=[];for(const h of full)for(const v of full)if(h!==v)pairs.push([h,v]);
   const off=(k*17)%pairs.length,todo=[...pairs.slice(off),...pairs.slice(0,off)].slice(0,18);
@@ -2708,14 +2716,165 @@ function storyOf(pid){
   return out.sort((a,b)=>a[0]<b[0]?-1:1);
 }
 
+// ═══ FRANCHISE T20 LEAGUE — eight invented franchises, an auction, a season every April ═══
+// S.league = {host, mine, founded, teams:{id:{id,name,short,col,purse,squad:[pids],titles:[]}}, seasons:{Y:{cup,champ}},
+//   auction:{year, pool, i, lot:{pid,bid,lead,passed}, log:[]}|null}. Franchise ids 101-108 join TEAMS at load.
+// Matches are T20s on the pitch (M.fmt) but archived as format 'LEAGUE', so international stats and records stay clean.
+const FRANCHISES=[[101,'Bay Breakers','BAY','#0ea5e9'],[102,'Capital Crowns','CAP','#a16207'],[103,'Delta Dragons','DEL','#dc2626'],[104,'Highland Hawks','HIG','#15803d'],
+  [105,'Metro Monarchs','MET','#7c3aed'],[106,'Port Pirates','POR','#0d9488'],[107,'Summit Strikers','SUM','#ea580c'],[108,'Valley Vipers','VAL','#65a30d']];
+for(const[id,name,short]of FRANCHISES)TEAMS.set(id,{id,name,short,full:true,franchise:true});   // colours: 08-ui-shell
+const isFranchise=t=>+t>=101&&+t<=108;
+const LG_PURSE=100,LG_SQUAD=15,LG_OVERSEAS=6,LG_XI_OVERSEAS=4,LG_RETAIN=[12,9,7,5],LG_MONTH='-04-01';
+function league(){return S&&S.league||null;}
+// ---------- valuing a player on a date ----------
+// a player's country: the generated pool, else the side he has played most for in the data
+let NATION=null,KEEPERS=null;
+function nationMaps(){if(NATION)return;NATION=new Map();KEEPERS=new Set();const cnt=new Map();
+  for(const[cid,sides]of Object.entries(WORLD.xi))for(const[t,x]of Object.entries(sides)){KEEPERS.add(x[x[11]]);for(const p of x.slice(0,11)){const k=p+':'+t;cnt.set(k,(cnt.get(k)||0)+1);}}
+  const best=new Map();for(const[k,n]of cnt){const[p,t]=k.split(':').map(Number);if(!best.has(p)||n>best.get(p)[1])best.set(p,[t,n]);}
+  for(const[p,[t]]of best)NATION.set(p,t);}
+function nationOf(pid){const g=genP(pid);if(g)return g.t;nationMaps();return NATION.get(+pid)||0;}
+const isKeeper=pid=>{nationMaps();return!!(genP(pid)?.wk||KEEPERS.has(+pid));};
+function playerValue(pid,date){
+  const a=pAttr(pid,date),bat={B:5,BG:3.5,G:2.5,GR:1.5,R:.5}[a.bat]??2,bowl=a.style!=='N'&&a.rating<=5?(6-a.rating)*1.2:0;
+  let runs=0,inn=0,wk=0,m=0;for(const f of['T20','ODI']){const s=S.stats[f][pid];if(s){runs+=s.r;inn+=s.inn;wk+=s.bw;m+=s.m;}}
+  const h=((+pid)*2654435761>>>0)%100/100-.5;   // a fixed personal quirk, so valuations are stable
+  return Math.max(.5,bat+bowl+(inn?Math.min(2,runs/inn/20):0)+(m?Math.min(2,wk/m):0)+Math.min(1.5,capsOf(pid)/80)+h);
+}
+// price on a 100 purse: a top star ~18, a solid player ~5, a squad man ~1.5 (8 x 100 for ~120 players)
+const fairPrice=v=>Math.round((.3+Math.pow(Math.min(v,13)/12,2)*18)*10)/10;
+function auctionPool(date){
+  const from=addDays(date,-730),ps=new Set();
+  for(let i=S.matches.length-1;i>=0;i--){const E=S.matches[i];if(E.date<from)break;if(E.fmt==='LEAGUE')continue;for(const t of E.teams)if(!isFranchise(t))E.xi[t].slice(0,11).forEach(p=>ps.add(p));}
+  if(ps.size<200)for(const[t]of TEAM_GAMES)if(!COMPOSITE.has(t))(nearestXI(t,date)||{bat:[]}).bat.forEach(p=>ps.add(p));
+  if(S.gen)for(const p of Object.keys(S.gen.players)){const g=S.gen.players[p];if((!g.ret||g.ret>date)&&(capsOf(+p)>0||g.domestic))ps.add(+p);}
+  const owned=new Set(Object.values(league().teams).flatMap(t=>t.squad));
+  return[...ps].filter(p=>!owned.has(p)&&!(S.gen&&S.gen.players[p]&&S.gen.players[p].ret&&S.gen.players[p].ret<=date)).map(p=>[p,playerValue(p,date)]).sort((a,b)=>b[1]-a[1]).slice(0,180).map(x=>x[0]);
+}
+// ---------- founding ----------
+function foundLeague({host,mine,year}){
+  const L={host:+host,mine:+mine,founded:+year,teams:{},seasons:{},auction:null,log:[]};
+  for(const[id,name,short,col]of FRANCHISES)L.teams[id]={id,name,short,col,purse:LG_PURSE,squad:[],titles:[]};
+  S.league=L;if(typeof achieve==='function')achieve('league');startAuction(+year);
+  return L;
+}
+const overseas=(t,pid)=>nationOf(pid)!==league().host;
+const squadNeeds=T=>LG_SQUAD-T.squad.length;
+const overseasCount=T=>T.squad.filter(p=>overseas(T.id,p)).length;
+function canBuy(T,pid,price){if(T.squad.length>=LG_SQUAD||price>T.purse-(squadNeeds(T)-1)*.5)return false;if(overseas(T.id,pid)&&overseasCount(T)>=LG_OVERSEAS)return false;return true;}
+// AI valuation: fair price x how badly they need the player x a mood
+function aiValue(T,pid,date){
+  const v=playerValue(pid,date),a=pAttr(pid,date),bowlers=T.squad.filter(p=>pAttr(p,date).style!=='N').length;
+  const needBowl=a.style!=='N'&&bowlers<6?1.15:1,late=squadNeeds(T)<=3?.85:1;
+  const mood=.85+(((+pid)*31+T.id*17)%40)/100;
+  const need=squadNeeds(T),cap=Math.min(T.purse-(need-1)*.5,T.purse/Math.max(1,need)*2.6);   // budget discipline
+  return Math.min(fairPrice(v)*needBowl*late*mood,cap);
+}
+function startAuction(year){
+  const L=league(),date=year+'-03-01';
+  if(L.seasons[year-1])for(const T of Object.values(L.teams)){   // retention: AI keeps its best four, you choose
+    if(T.id===L.mine&&L.keep){T.squad=T.squad.filter(p=>L.keep.includes(p)).slice(0,4);}
+    else if(T.id!==L.mine)T.squad=T.squad.slice().sort((a,b)=>playerValue(b,date)-playerValue(a,date)).slice(0,4);
+    else T.squad=[];
+    T.purse=LG_PURSE-sum(LG_RETAIN.slice(0,T.squad.length));
+  }
+  L.keep=null;
+  L.auction={year,pool:auctionPool(date),i:0,lot:null,log:[]};
+  nextLot();
+}
+function nextLot(){
+  const A=league().auction;if(!A)return;
+  const teams=Object.values(league().teams);
+  if(teams.every(T=>T.squad.length>=LG_SQUAD)||A.i>=A.pool.length){finishAuction();return;}
+  const pid=A.pool[A.i++],v=playerValue(pid,A.year+'-03-01'),base=Math.max(.5,Math.round(fairPrice(v)*.4*2)/2);
+  A.lot={pid,bid:base,lead:0,passed:false,base};
+  if(!teams.some(T=>canBuy(T,pid,base))){A.log.push([pid,0,0]);A.lot=null;nextLot();return;}
+}
+// One round of AI bidding: the AI team that values him most (and can pay) raises; false if nobody will.
+function aiRaise(){
+  const L=league(),A=L.auction,lot=A.lot,date=A.year+'-03-01',inc=lot.bid<5?.5:1,next=lot.lead?lot.bid+inc:lot.bid;
+  const cands=Object.values(L.teams).filter(T=>T.id!==L.mine&&T.id!==lot.lead&&canBuy(T,lot.pid,next)&&aiValue(T,lot.pid,date)>=next);
+  if(!cands.length)return false;
+  const T=cands.sort((a,b)=>aiValue(b,lot.pid,date)-aiValue(a,lot.pid,date))[0];
+  lot.bid=next;lot.lead=T.id;return true;
+}
+function userBid(){
+  const L=league(),lot=L.auction.lot,me=L.teams[L.mine],inc=lot.bid<5?.5:1,next=lot.lead?lot.bid+inc:lot.bid;
+  if(lot.lead===L.mine||!canBuy(me,lot.pid,next))return false;
+  lot.bid=next;lot.lead=L.mine;
+  if(!aiRaise())settleLot();   // nobody comes back at you: sold
+  return true;
+}
+function settleLot(){
+  const L=league(),A=L.auction,lot=A.lot;if(!lot)return;
+  while(lot.lead!==L.mine&&aiRaise()){}   // AI bids out among themselves once you're out (or not bidding)
+  if(lot.lead){const T=L.teams[lot.lead];T.squad.push(lot.pid);T.purse=Math.round((T.purse-lot.bid)*10)/10;}
+  A.log.push([lot.pid,lot.lead,lot.lead?lot.bid:0]);A.lot=null;nextLot();
+}
+function userPass(){const L=league();L.auction.lot.passed=true;if(L.auction.lot.lead===L.mine)return settleLot();settleLot();}
+// You can also let the AI run your side of the auction: it bids your valuations for you.
+function simAuction(){
+  const L=league();let g=0;
+  while(L.auction&&g++<3000){
+    const lot=L.auction.lot;if(!lot)break;
+    const me=L.teams[L.mine],date=L.auction.year+'-03-01',next=lot.lead?lot.bid+(lot.bid<5?.5:1):lot.bid;
+    if(lot.lead!==L.mine&&canBuy(me,lot.pid,next)&&aiValue(me,lot.pid,date)>=next){userBid();continue;}
+    settleLot();
+  }
+}
+function finishAuction(){
+  const L=league(),A=L.auction,date=A.year+'-03-01';
+  // anyone short of a full squad picks up the best unsold men at their base price
+  const sold=new Set(Object.values(L.teams).flatMap(T=>T.squad));
+  const left=[...auctionPool(date),...squadAround(L.host,date,900),...Object.keys(S.gen?S.gen.players:{}).map(Number).filter(p=>S.gen.players[p].t===L.host)]
+    .filter((p,i,a)=>!sold.has(p)&&a.indexOf(p)===i&&!(S.gen&&S.gen.players[p]&&S.gen.players[p].ret&&S.gen.players[p].ret<=date));
+  for(const T of Object.values(L.teams))while(T.squad.length<LG_SQUAD){
+    let i=left.findIndex(p=>!overseas(T.id,p)||overseasCount(T)<LG_OVERSEAS);
+    if(i<0){genStore();left.push(newYoungster(L.host,A.year,true));i=left.length-1;}   // domestic players: there are only so many internationals
+    const p=left.splice(i,1)[0];T.squad.push(p);sold.add(p);T.purse=Math.max(0,T.purse-.5);}
+  L.log.push({year:A.year,text:`${A.year} auction: ${A.log.filter(x=>x[1]).length} players sold.`,top:A.log.filter(x=>x[1]).sort((a,b)=>b[2]-a[2]).slice(0,5)});
+  L.lastAuction=A.log;L.auction=null;scheduleSeason(A.year);
+}
+function scheduleSeason(year){
+  const L=league();if(L.seasons[year])return;
+  let start=year+LG_MONTH;if(start<careerDate())start=addDays(careerDate(),3);
+  const cup=createCup({name:`Franchise League ${year}`,fmt:'T20',format:'rr',host:L.host,start,teams:FRANCHISES.map(f=>f[0]),quiet:true});
+  cup.league=true;L.seasons[year]={cup:cup.id,champ:0};fxDirty();
+}
+// XI from a squad: keeper, four or five bowlers, batters, at most four overseas
+function leagueXI(team,date){
+  const L=league();if(!L)return null;const T=L.teams[team];if(!T||T.squad.length<11)return null;
+  const pool=T.squad.filter(p=>!(S.gen&&S.gen.players[p]&&S.gen.players[p].ret&&S.gen.players[p].ret<=date)&&!isInjured(p,date));
+  const at=p=>pAttr(p,date),os=p=>overseas(team,p),val=p=>playerValue(p,date);
+  let osN=0;const chosen=[];const take=p=>{if(chosen.includes(p))return false;if(os(p)){if(osN>=LG_XI_OVERSEAS)return false;osN++;}chosen.push(p);return true;};
+  const keeper=pool.filter(isKeeper).sort((a,b)=>val(b)-val(a))[0];if(keeper)take(keeper);
+  for(const p of pool.filter(p=>at(p).style!=='N').sort((a,b)=>at(a).rating-at(b).rating)){if(chosen.length>=6)break;take(p);}
+  for(const p of pool.slice().sort((a,b)=>val(b)-val(a))){if(chosen.length>=11)break;take(p);}
+  for(const p of pool){if(chosen.length>=11)break;if(!chosen.includes(p))chosen.push(p);}
+  const order=p=>({B:0,BG:1,G:2,GR:3,R:4}[at(p).bat]??2)*10+(p===keeper?15:0)+(at(p).style!=='N'?6-Math.min(5,at(p).rating):0);
+  const bat=chosen.slice(0,11).sort((a,b)=>order(a)-order(b));
+  return{bat,wk:keeper||bat[5],cap:bat.slice().sort((a,b)=>capsOf(b)-capsOf(a))[0]};
+}
+// A new season: once a season is over, the next auction opens from January and runs itself by late March.
+function ensureLeague(){
+  const L=league();if(!L||S.sandbox)return false;
+  const d=careerDate(),y=+d.slice(0,4);
+  for(const[yy,s]of Object.entries(L.seasons)){const c=cupById(s.cup);if(c&&!s.champ&&c.fix.every(f=>S.done[f.key])){s.champ=cupChampion(c);L.teams[s.champ].titles.push(+yy);if(s.champ===L.mine)achieve('leagueWin');L.log.push({year:+yy,text:`${L.teams[s.champ].name} win the ${yy} Franchise League.`});}}
+  const nextY=Math.max(...Object.keys(L.seasons).map(Number),L.founded-1)+1;
+  if(!L.auction&&!L.seasons[nextY]&&d>=nextY+'-01-01'&&L.seasons[nextY-1]?.champ)startAuction(nextY);
+  if(L.auction&&d>=L.auction.year+'-03-25'){simAuction();return true;}
+  return false;
+}
+
 // ═══ UI SHELL — navigation, views, modal, shared widgets ═══
 const TEAM_COL={AUS:'#c9a400',IND:'#1f4fbf',ENG:'#1d3a8a',RSA:'#0f7a3e',PAK:'#0b6e2e',SL:'#173f8f',WI:'#7a1f2b',NZ:'#222',ZIM:'#b8341b',
   BAN:'#05683f',KEN:'#9c1b1b',IRE:'#169b62',NED:'#e8601c',SCO:'#1b3f94',CAN:'#c8102e',UAE:'#00732f',NAM:'#003580',USA:'#3c3b6e',NEP:'#dc143c',
   OMA:'#c8102e',PNG:'#b8860b',HK:'#c8102e',BER:'#00247d',JER:'#c8102e',AFR:'#6b4f1d',ASIA:'#4b2a7b',WXI:'#334155'};
+for(const f of FRANCHISES)TEAM_COL[f[2]]=f[3];
 const badge=t=>`<span class="tbadge" style="background:${TEAM_COL[teamShort(t)]||'#334155'}">${esc(teamShort(t))}</span>`;
 const tlabel=t=>`${badge(t)} ${esc(teamName(t))}`;
 const plink=pid=>`<span class="plink" data-pid="${pid}">${esc(pName(pid))}</span>`;
-const VIEWS=[['home','Dashboard'],['match','Match'],['coach','Coach'],['play','Challenges'],['fixtures','Fixtures'],['tour','Tournament Centre'],['rank','Rankings'],['records','Records'],['query','Stats lab'],['players','Players'],['history','Results'],['miles','Milestones'],['settings','Settings']];
+const VIEWS=[['home','Dashboard'],['match','Match'],['coach','Coach'],['play','Challenges'],['league','League'],['fixtures','Fixtures'],['tour','Tournament Centre'],['rank','Rankings'],['records','Records'],['query','Stats lab'],['players','Players'],['history','Results'],['miles','Milestones'],['settings','Settings']];
 let VIEW='home',VIEW_ARG=null;
 const RENDER={};
 
@@ -2845,6 +3004,7 @@ function evText(e){
 // ---------- captaincy ----------
 // You captain the team you follow when it's playing, otherwise both sides.
 function captainOf(M){
+  const L=league();if(M.league&&L&&M.teams.includes(L.mine))return{[L.mine]:true};
   const my=S.settings.myTeam;
   return M.teams.includes(my)?{[my]:true}:Object.fromEntries(M.teams.map(t=>[t,true]));
 }
@@ -3299,7 +3459,7 @@ function openTestCreator(fmt='TEST'){
   const opts=sel=>pool.map(t=>`<option value="${t}" ${t===sel?'selected':''}>${esc(teamName(t))}</option>`).join('');
   const my=S.settings.myTeam&&pool.includes(S.settings.myTeam)?S.settings.myTeam:4;
   openModal(`<h2>Schedule a series</h2><div class="stack">
-    <div class="seg">${FORMATS.map(f=>`<button data-tsf="${f}" class="${f===fmt?'on':''}">${SERIES_SUFFIX[f]}</button>`).join('')}</div>
+    <div class="seg">${INTL.map(f=>`<button data-tsf="${f}" class="${f===fmt?'on':''}">${SERIES_SUFFIX[f]}</button>`).join('')}</div>
     <div class="row"><label>Hosts <select id="ts-a">${opts(my)}</select></label>
       <label>Tourists <select id="ts-b">${opts(my===1?4:1)}</select></label></div>
     <div class="row"><label>${SERIES_SUFFIX[fmt]} <select id="ts-n">${(fmt==='TEST'?[1,2,3,4,5]:[1,2,3,4,5,6,7]).map(k=>`<option ${k===3?'selected':''}>${k}</option>`).join('')}</select></label>
@@ -3319,7 +3479,7 @@ function openFriendly(){
   const opts=sel=>ALL_TEAMS.map(t=>`<option value="${t}" ${t===sel?'selected':''}>${esc(teamName(t))}</option>`).join('');
   openModal(`<h2>Friendly</h2><p class="sub">Any two sides, squads as they were on the date. Two players can take a side each and roll their own dice. It doesn't count in your career.</p>
     <div class="stack"><div class="row"><label>Home <select id="fr-a">${opts(4)}</select></label><label>Away <select id="fr-b">${opts(1)}</select></label></div>
-    <div class="row"><div class="seg">${FORMATS.map(f=>`<button data-frf="${f}" class="${f==='ODI'?'on':''}">${FMT_NAME[f]}</button>`).join('')}</div>
+    <div class="row"><div class="seg">${INTL.map(f=>`<button data-frf="${f}" class="${f==='ODI'?'on':''}">${FMT_NAME[f]}</button>`).join('')}</div>
       <label>Date <input type="date" id="fr-d" value="${careerDate()}"></label></div>
     <button class="btn pri" id="fr-go">Team sheets</button></div>`);
   let fmt='ODI';
@@ -3478,7 +3638,7 @@ function openCupCreator(){
   const list=ALL_TEAMS.filter(t=>!COMPOSITE.has(t)).sort((a,b)=>rankPtsOf(b)-rankPtsOf(a));
   openModal(`<h2>Build a tournament</h2><div class="stack">
     <div class="row"><input type="text" id="cu-name" placeholder="Name (optional)" style="flex:1">
-      <div class="seg">${FORMATS.map(f=>`<button data-cuf="${f}" class="${f==='ODI'?'on':''}">${FMT_NAME[f]}</button>`).join('')}</div></div>
+      <div class="seg">${INTL.map(f=>`<button data-cuf="${f}" class="${f==='ODI'?'on':''}">${FMT_NAME[f]}</button>`).join('')}</div></div>
     <div class="row"><select id="cu-format">${Object.entries(CUP_FORMATS).map(([k,v])=>`<option value="${k}">${esc(v.name)}</option>`).join('')}</select>
       <label>Hosts <select id="cu-host">${opts(S.settings.myTeam||4)}</select></label><label>Starts <input type="date" id="cu-d" value="${d}"></label></div>
     <div class="row"><button class="btn sm" data-pick="8">Top 8</button><button class="btn sm" data-pick="10">Top 10</button><button class="btn sm" data-pick="16">Top 16</button><button class="btn sm" data-pick="0">Clear</button><span class="muted" id="cu-n"></span></div>
@@ -4182,6 +4342,77 @@ function showCode(def){
   $('#cc-copy').onclick=()=>{try{navigator.clipboard.writeText(code);toast('Copied.');}catch(e){$('textarea').select();}};
 }
 document.addEventListener('click',e=>{if(e.target.closest('#sb-leave')){leaveSandbox();go(S?'play':'home');if(!S)showSplash();}});
+
+// ═══ FRANCHISE LEAGUE SCREEN — found it, run the auction, follow the season ═══
+const money=v=>'$'+(Math.round(v*10)/10).toFixed(1)+'m';
+function lotHTML(L){
+  const A=L.auction,lot=A.lot;if(!lot)return'<div class="card empty">Auction complete.</div>';
+  const date=A.year+'-03-01',a=pAttr(lot.pid,date),me=L.teams[L.mine],inc=lot.bid<5?.5:1,next=lot.lead?lot.bid+inc:lot.bid,v=playerValue(lot.pid,date);
+  const line=[['T20','T20I'],['ODI','ODI'],['LEAGUE','League']].map(([f,n])=>[n,S.stats[f][lot.pid]]).filter(x=>x[1])
+    .map(([n,x])=>`${n}: ${x.m} m, ${x.r} runs${x.bw?`, ${x.bw} wkts`:''}`).join(' · ')||'uncapped';
+  return`<div class="card hi stack"><div class="spread"><div><div class="sub">Lot ${A.i} of ${A.pool.length}</div><h2 style="margin:2px 0">${plink(lot.pid)}</h2>
+      <div class="row">${badge(nationOf(lot.pid))}${overseas(L.mine,lot.pid)?'<span class="pill">overseas</span>':'<span class="pill win">home player</span>'}
+        ${batChip((a.bat||'G')[0])} <span class="muted">${a.style==='N'?'batter':STYLE_NAME[a.style]+' bowler, rating '+Math.min(a.rating,5)}</span></div>
+      <div class="muted" style="font-size:12px;margin-top:4px">${line}</div></div>
+    <div style="text-align:right"><div class="sub">${lot.lead?'Current bid':'Base price'}</div><div class="result-big">${money(lot.bid)}</div>
+      <div class="sub">${lot.lead?esc(L.teams[lot.lead].name):'no bids yet'}</div><div class="muted" style="font-size:12px">value ${'★'.repeat(Math.max(1,Math.min(5,Math.round(v/2.4))))}</div></div></div>
+    <div class="row"><button class="btn pri" id="au-bid" ${canBuy(me,lot.pid,next)&&lot.lead!==L.mine?'':'disabled'}>Bid ${money(next)}</button>
+      <button class="btn" id="au-pass">${lot.lead===L.mine?'Sold!':'Pass'}</button><button class="btn" id="au-sim">Let the AI bid for me</button></div>
+    <div class="muted" style="font-size:12px">Your purse ${money(me.purse)} · squad ${me.squad.length}/${LG_SQUAD} · overseas ${overseasCount(me)}/${LG_OVERSEAS} (4 can play)</div></div>`;
+}
+function teamsTable(L){
+  return`<table class="num"><tr><th>Franchise</th><th class="r">Squad</th><th class="r">Overseas</th><th class="r">Purse</th><th class="r hide-sm">Titles</th></tr>${Object.values(L.teams).map(T=>`<tr class="${T.id===L.mine?'me':''}"><td>${tlabel(T.id)}</td><td class="r">${T.squad.length}</td><td class="r">${overseasCount(T)}</td><td class="r">${money(T.purse)}</td><td class="r hide-sm">${T.titles.length}</td></tr>`).join('')}</table>`;
+}
+function squadHTML(L,T,date){
+  return`<table><tr><th>Player</th><th class="hide-sm">Country</th><th>Role</th><th class="r">League M</th><th class="r">Runs</th><th class="r">Wkts</th></tr>${T.squad.map(p=>{const a=pAttr(p,date),s=S.stats.LEAGUE[p]||{};
+    return`<tr><td>${plink(p)} ${overseas(T.id,p)?'<span class="pill">OS</span>':''} ${genP(p)?.domestic?'<span class="pill">domestic</span>':''}</td><td class="hide-sm">${badge(nationOf(p))}</td><td class="muted" style="font-size:12px">${a.style==='N'?'Batter':STYLE_NAME[a.style]+' r'+Math.min(a.rating,5)} ${batChip((a.bat||'G')[0])}</td>
+      <td class="r num">${s.m||0}</td><td class="r num">${s.r||0}</td><td class="r num">${s.bw||0}</td></tr>`;}).join('')}</table>`;
+}
+RENDER.league=(el)=>{
+  const L=league();
+  if(!L){
+    const y=+careerDate().slice(0,4),start=careerDate()>y+'-03-20'?y+1:y;
+    el.innerHTML=`<div class="card stack" style="max-width:720px"><h2>Found a franchise league</h2>
+      <p class="sub">Eight franchises, a player auction every year and a T20 season every April. You own one franchise and bid against seven AI owners; they keep it apart from international cricket in the stats.</p>
+      <div class="row"><label>Host country <select id="lg-host">${TEST_TEAMS.map(t=>`<option value="${t}" ${t===3?'selected':''}>${esc(teamName(t))}</option>`).join('')}</select></label>
+        <label>Your franchise <select id="lg-mine">${FRANCHISES.map(f=>`<option value="${f[0]}">${esc(f[1])}</option>`).join('')}</select></label>
+        <label>First season <input type="number" id="lg-y" value="${Math.max(start,2003)}" min="2003" style="width:90px"></label></div>
+      <div class="muted" style="font-size:12px">Purse ${money(LG_PURSE)} · ${LG_SQUAD} players · up to ${LG_OVERSEAS} overseas (4 in an XI) · keep up to 4 players each new season.</div>
+      <button class="btn pri" id="lg-go">Found the league and go to the auction</button></div>`;
+    $('#lg-go').onclick=()=>{foundLeague({host:+$('#lg-host').value,mine:+$('#lg-mine').value,year:+$('#lg-y').value});saveGame();rerender();};
+    return;
+  }
+  const me=L.teams[L.mine],date=careerDate();
+  if(L.auction){
+    const recent=L.auction.log.slice(-8).reverse();
+    el.innerHTML=`<div class="stack"><div class="card"><h2 style="margin:0">${L.auction.year} auction</h2><div class="sub">${tlabel(L.mine)} · ${esc(teamName(L.host))}-hosted league</div></div>
+      ${lotHTML(L)}<div class="grid g2" style="align-items:start"><div class="card">${teamsTable(L)}</div>
+      <div class="card"><h3>Recent lots</h3>${recent.map(([p,t,pr])=>`<div class="spread"><span>${plink(p)}</span><span class="${t===L.mine?'green':'muted'}">${t?esc(teamShort(t))+' '+money(pr):'unsold'}</span></div>`).join('')||'<span class="muted">-</span>'}</div></div>
+      <div class="card"><h3>Your squad</h3>${squadHTML(L,me,L.auction.year+'-03-01')}</div></div>`;
+    $('#au-bid')&&($('#au-bid').onclick=()=>{userBid();saveGame();rerender();});
+    $('#au-pass')&&($('#au-pass').onclick=()=>{userPass();saveGame();rerender();});
+    $('#au-sim').onclick=()=>{simAuction();saveGame();rerender();};
+    return;
+  }
+  const years=Object.keys(L.seasons).map(Number).sort(),cur=years[years.length-1],season=L.seasons[cur],cup=cupById(season.cup);
+  const table=cup?tableFrom(cupMatches(cup).filter(E=>/^League/.test(E.stage)),cup.teams):[];
+  const nx=cup&&allFixtures().find(x=>x.sid===cup.id&&x.playable&&!S.done[x.key]);
+  const done=cup&&cup.fix.every(f=>S.done[f.key]);
+  const retain=done&&!L.seasons[cur+1];
+  el.innerHTML=`<div class="stack"><div class="card"><div class="spread"><div><h2 style="margin:0">${cur} Franchise League</h2><div class="sub">${tlabel(L.mine)} · hosted in ${esc(teamName(L.host))}</div></div>
+      <div class="row">${nx?`<button class="btn pri" data-playkey="${nx.key}">Play next: ${esc(teamShort(nx.a))} v ${esc(teamShort(nx.b))}</button><button class="btn" id="lg-sim">Sim the season</button>`:''}<button class="btn" data-go="tour" data-arg="${cup?cup.id:''}">Bracket</button></div></div>
+      ${done&&season.champ?`<div class="banner" style="margin-top:10px">🏆 ${cur} champions: <b>${tlabel(season.champ)}</b></div>`:''}</div>
+    ${retain?`<div class="card stack"><h3>Retain up to four for ${cur+1}</h3><div class="sub">Kept players cost ${LG_RETAIN.map(money).join(', ')} from next year's purse; everyone else goes back into the auction.</div>
+      <div class="grid g3">${me.squad.map(p=>`<label class="row" style="gap:6px"><input type="checkbox" data-keep="${p}" ${(L.keep||[]).includes(p)?'checked':''}> ${esc(pName(p))}</label>`).join('')}</div>
+      <button class="btn pri" id="lg-auction">Start the ${cur+1} auction</button><div class="muted" style="font-size:12px">It opens on its own in January and runs itself by late March if you don't.</div></div>`:''}
+    <div class="grid g2" style="align-items:start"><div class="card">${table.length?tableHTML(table,(t,i)=>i<4,'League table'):''}</div><div class="card">${teamsTable(L)}</div></div>
+    <div class="card"><h3>Your squad</h3>${squadHTML(L,me,date)}</div>
+    <div class="card"><h3>History</h3>${L.log.slice().reverse().slice(0,12).map(x=>`<div>${esc(x.text)}${x.top?' Top buys: '+x.top.map(([p,t,pr])=>`${esc(pName(p))} (${esc(teamShort(t))}, ${money(pr)})`).join(', '):''}</div>`).join('')}</div></div>`;
+  $$('[data-playkey]').forEach(b=>b.onclick=()=>startFixture(b.dataset.playkey));
+  $('#lg-sim')&&($('#lg-sim').onclick=()=>{simCup(cup);ensureLeague();saveGame();rerender();});
+  $$('[data-keep]').forEach(c=>c.onchange=()=>{const k=$$('[data-keep]:checked').map(x=>+x.dataset.keep);if(k.length>4){c.checked=false;toast('Four at most.','warn');return;}L.keep=k;saveGame();});
+  $('#lg-auction')&&($('#lg-auction').onclick=()=>{startAuction(cur+1);saveGame();rerender();});
+};
 
 // ═══ SETTINGS, SPLASH, LIVE HOOKS & INIT ═══
 const GUIDE=`<h2>How First XI works</h2>

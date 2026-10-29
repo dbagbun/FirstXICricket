@@ -12,7 +12,7 @@ const KO_ORDER={4:[1,4,2,3],8:[1,8,4,5,2,7,3,6],16:[1,16,8,9,4,13,5,12,2,15,7,10
 function rrPairs(list){const out=[];for(let i=0;i<list.length;i++)for(let j=i+1;j<list.length;j++)out.push([list[i],list[j]]);
   // spread each team's games: order by the later of the two indices, then the earlier
   return out.sort((x,y)=>(Math.max(list.indexOf(x[0]),list.indexOf(x[1]))-Math.max(list.indexOf(y[0]),list.indexOf(y[1])))||list.indexOf(x[0])-list.indexOf(y[0]));}
-function createCup({name,fmt='ODI',format='rr',host,start,teams}){
+function createCup({name,fmt='ODI',format='rr',host,start,teams,quiet}){
   const fk=fmt==='TEST'?'TEST':fmt;
   teams=[...new Set(teams.map(Number))].sort((a,b)=>rankPtsOf(b,fk)-rankPtsOf(a,fk));
   if(fmt==='TEST')format='rr';
@@ -52,7 +52,7 @@ function createCup({name,fmt='ODI',format='rr',host,start,teams}){
       round=next;}
   }
   (S.cups=S.cups||[]).push(cup);fxDirty();
-  if(!S.sandbox&&typeof achieve==='function')achieve('cupBuilt');
+  if(!S.sandbox&&!quiet&&typeof achieve==='function')achieve('cupBuilt');
   return cup;
 }
 const cupById=id=>(S.cups||[]).find(c=>c.id===id);

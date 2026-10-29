@@ -5,7 +5,7 @@
 // plays BLUE; a bowler's rating moves a step at FORM_BOWL. The tail (RED) is never touched.
 // Fatigue and injuries apply to the side you manage (coach mode or Settings -> Selection -> Me).
 // The engine only sees M.mods {bat:{pid:+1|-1}, bowl:{pid:+1|-1}}, built by matchMods() in buildMatch.
-const FORM_N=5,FORM_COLD={ODI:11,TEST:13,T20:7},FORM_HOT={ODI:16,TEST:20,T20:11},FORM_BOWL={cold:5,hot:46};
+const FORM_N=5,FORM_COLD={ODI:11,TEST:13,T20:7,LEAGUE:7},FORM_HOT={ODI:16,TEST:20,T20:11,LEAGUE:11},FORM_BOWL={cold:5,hot:46};
 function formOf(pid,fmt){
   const F=S&&S.form&&S.form[fmt]&&S.form[fmt][pid];if(!F)return{bat:null,bowl:null};
   const avg=a=>a.length>=3?a.reduce((x,y)=>x+y,0)/a.length:null;
@@ -20,7 +20,7 @@ function formLevel(pid,fmt,col){
 }
 function updateForm(E){
   if(!S.form)S.form=perFmt(()=>({}));
-  const F=S.form[E.fmt]=S.form[E.fmt]||{},base={ODI:4.8,TEST:3.2,T20:7.5}[E.fmt];
+  const F=S.form[E.fmt]=S.form[E.fmt]||{},base={ODI:4.8,TEST:3.2,T20:7.5,LEAGUE:7.5}[E.fmt];
   if(S.gen)for(const t of E.teams)for(const p of E.xi[t].slice(0,11)){const g=S.gen.players[p];if(g&&!g.real&&!g.debut)g.debut=E.date;}
   const push=(pid,k,v)=>{const x=F[pid]=F[pid]||{bat:[],bowl:[]};x[k].push(Math.round(v));if(x[k].length>FORM_N)x[k].shift();};
   for(const I of E.inns){
@@ -60,7 +60,7 @@ function matchMods(M){
     const opp=otherTeam(M,t),own=pAttr(pid,M.date).bat;
     // an associate's GREEN against a Test nation is the opposition rule, not form: never lift it
     const col=own&&own.length===2&&TEAMS.get(opp)?.full?'X':batColour({batMode:M.batMode,date:M.date},pid,i+1,opp);
-    const f=formLevel(pid,M.fmt,col);
+    const f=formLevel(pid,M.statFmt||M.fmt,col);
     if(f.bat)mods.bat[pid]=f.bat;
     if(f.bowl)mods.bowl[pid]=-f.bowl;
   });

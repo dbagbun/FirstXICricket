@@ -105,7 +105,7 @@ function openCupCreator(){
   const list=ALL_TEAMS.filter(t=>!COMPOSITE.has(t)).sort((a,b)=>rankPtsOf(b)-rankPtsOf(a));
   openModal(`<h2>Build a tournament</h2><div class="stack">
     <div class="row"><input type="text" id="cu-name" placeholder="Name (optional)" style="flex:1">
-      <div class="seg">${FORMATS.map(f=>`<button data-cuf="${f}" class="${f==='ODI'?'on':''}">${FMT_NAME[f]}</button>`).join('')}</div></div>
+      <div class="seg">${INTL.map(f=>`<button data-cuf="${f}" class="${f==='ODI'?'on':''}">${FMT_NAME[f]}</button>`).join('')}</div></div>
     <div class="row"><select id="cu-format">${Object.entries(CUP_FORMATS).map(([k,v])=>`<option value="${k}">${esc(v.name)}</option>`).join('')}</select>
       <label>Hosts <select id="cu-host">${opts(S.settings.myTeam||4)}</select></label><label>Starts <input type="date" id="cu-d" value="${d}"></label></div>
     <div class="row"><button class="btn sm" data-pick="8">Top 8</button><button class="btn sm" data-pick="10">Top 10</button><button class="btn sm" data-pick="16">Top 16</button><button class="btn sm" data-pick="0">Clear</button><span class="muted" id="cu-n"></span></div>

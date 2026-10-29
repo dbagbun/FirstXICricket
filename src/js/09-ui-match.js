@@ -57,6 +57,7 @@ function evText(e){
 // ---------- captaincy ----------
 // You captain the team you follow when it's playing, otherwise both sides.
 function captainOf(M){
+  const L=league();if(M.league&&L&&M.teams.includes(L.mine))return{[L.mine]:true};
   const my=S.settings.myTeam;
   return M.teams.includes(my)?{[my]:true}:Object.fromEntries(M.teams.map(t=>[t,true]));
 }

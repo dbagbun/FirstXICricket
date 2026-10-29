@@ -121,7 +121,7 @@ function openTestCreator(fmt='TEST'){
   const opts=sel=>pool.map(t=>`<option value="${t}" ${t===sel?'selected':''}>${esc(teamName(t))}</option>`).join('');
   const my=S.settings.myTeam&&pool.includes(S.settings.myTeam)?S.settings.myTeam:4;
   openModal(`<h2>Schedule a series</h2><div class="stack">
-    <div class="seg">${FORMATS.map(f=>`<button data-tsf="${f}" class="${f===fmt?'on':''}">${SERIES_SUFFIX[f]}</button>`).join('')}</div>
+    <div class="seg">${INTL.map(f=>`<button data-tsf="${f}" class="${f===fmt?'on':''}">${SERIES_SUFFIX[f]}</button>`).join('')}</div>
     <div class="row"><label>Hosts <select id="ts-a">${opts(my)}</select></label>
       <label>Tourists <select id="ts-b">${opts(my===1?4:1)}</select></label></div>
     <div class="row"><label>${SERIES_SUFFIX[fmt]} <select id="ts-n">${(fmt==='TEST'?[1,2,3,4,5]:[1,2,3,4,5,6,7]).map(k=>`<option ${k===3?'selected':''}>${k}</option>`).join('')}</select></label>
@@ -141,7 +141,7 @@ function openFriendly(){
   const opts=sel=>ALL_TEAMS.map(t=>`<option value="${t}" ${t===sel?'selected':''}>${esc(teamName(t))}</option>`).join('');
   openModal(`<h2>Friendly</h2><p class="sub">Any two sides, squads as they were on the date. Two players can take a side each and roll their own dice. It doesn't count in your career.</p>
     <div class="stack"><div class="row"><label>Home <select id="fr-a">${opts(4)}</select></label><label>Away <select id="fr-b">${opts(1)}</select></label></div>
-    <div class="row"><div class="seg">${FORMATS.map(f=>`<button data-frf="${f}" class="${f==='ODI'?'on':''}">${FMT_NAME[f]}</button>`).join('')}</div>
+    <div class="row"><div class="seg">${INTL.map(f=>`<button data-frf="${f}" class="${f==='ODI'?'on':''}">${FMT_NAME[f]}</button>`).join('')}</div>
       <label>Date <input type="date" id="fr-d" value="${careerDate()}"></label></div>
     <button class="btn pri" id="fr-go">Team sheets</button></div>`);
   let fmt='ODI';

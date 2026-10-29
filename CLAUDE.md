@@ -51,6 +51,8 @@ The repo root holds a prebuilt `first-xi.html` (double-click to open). **After a
 
 - Legends (`07h-legends.js`, state `S.hof`, UI: Rankings → Legends in `12b-ui-rankings.js`): `findRetirements` (generated retirements, or `HOF_CAPS`+ caps and two years without a match), `hofVote(year)` from `yearEnd` (career `legacyScore` → percentage; `HOF_PCT` 75, `HOF_MAX` 3 a year, `HOF_YEARS` on the ballot, eligible two years after retiring), `bestXI` (6 batters, keeper by keeping appearances, 4 bowlers) for `decadeTeams` and `allTimeXI`, `storyOf(pid)` for the player card.
 
+- Franchise league (`07i-league.js`, `S.league`, UI `12k-ui-league.js`): franchises 101-108 (`FRANCHISES`, invented names, added to `TEAMS`; colours in `08-ui-shell`). `foundLeague` → `startAuction` (retention for later seasons, costs `LG_RETAIN`) → lots (`nextLot`, `aiRaise` with `aiValue` = `fairPrice(playerValue)` × need × mood, capped by budget; `userBid`, `userPass`, `settleLot`, `simAuction`) → `finishAuction` (short squads filled, with generated domestic players for the host when internationals run out) → `scheduleSeason` (a quiet `createCup`, `cup.league`). League matches are T20s with `M.statFmt='LEAGUE'`, archived as format LEAGUE (`FORMATS` includes it; `INTL` is what you can schedule). `leagueXI` (≤4 overseas), `nationOf`/`isKeeper` from lazily built maps, `ensureLeague` (from `nextFixture`) crowns champions and opens/auto-runs the next auction.
+
 ## Layout
 - `src/template.html` - page shell with `/*@@CSS@@*/`, `/*@@DATA@@*/`, `/*@@JS@@*/`
 - `src/styles.css` - all CSS (Excel dark palette: navy `#0a0e1a`, panels `#0f172a`/`#1e293b`, cyan `#06b6d4`, gold `#ffd700`)

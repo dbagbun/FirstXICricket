@@ -62,6 +62,7 @@ function fixtureByKey(key){
   return null;
 }
 function nextFixture(){
+  if(typeof ensureLeague==='function')ensureLeague();
   let n=allFixtures().find(x=>x.playable&&!S.done[x.key])||null;
   for(let i=0;!n&&i<3&&ensureFuture();i++)n=allFixtures().find(x=>x.playable&&!S.done[x.key])||null;   // the future: next year's calendar
   return n;
@@ -76,6 +77,7 @@ function buildMatch(fx){
     const M=newMatch({fmt:fx.fmt,a:fx.a,b:fx.b,home,date:fx.date,venue:fx.venue,city:fx.city,sid:fx.sid,series:fx.title,stage:fx.stage||fx.label,
       xiA:fx.xiA||xi(fx.a),xiB:fx.xiB||xi(fx.b)});
     if(fx.superOver)M.superOverOn=true;
+    if(fx.cup&&cupById(fx.sid)?.league){M.statFmt='LEAGUE';M.league=true;}
     selectAndMods(M,fx);
     M.key=fx.key;M.batMode=S.settings.batColours;return M;
   }
