@@ -55,6 +55,12 @@ function allFixtures(){
   FX_CACHE={S,list:out};
   return out;
 }
+// The fixtures of one series or cup (indexed once per fixture list).
+function fixturesOf(sid){
+  allFixtures();const C=FX_CACHE;
+  if(!C.bySid){C.bySid=new Map();for(const x of C.list){const L=C.bySid.get(x.sid);if(L)L.push(x);else C.bySid.set(x.sid,[x]);}}
+  return C.bySid.get(sid)||[];
+}
 function fixtureByKey(key){
   if(key[0]==='o'||key[0]==='r')return ODI_FX_BY_KEY.get(key)||null;
   for(const T of S.tests){const k=T.fix.findIndex(x=>x.key===key);if(k>=0)return customFx(T,T.fix[k],k);}
@@ -63,8 +69,10 @@ function fixtureByKey(key){
 }
 function nextFixture(){
   if(typeof ensureLeague==='function')ensureLeague();
-  let n=allFixtures().find(x=>x.playable&&!S.done[x.key])||null;
-  for(let i=0;!n&&i<3&&ensureFuture();i++)n=allFixtures().find(x=>x.playable&&!S.done[x.key])||null;   // the future: next year's calendar
+  // a cursor past the played (and unplayable) fixtures; a new fixture list (fxDirty) starts it again
+  const find=()=>{const L=allFixtures(),C=FX_CACHE;let i=C.next||0;while(i<L.length&&(!L[i].playable||S.done[L[i].key]))i++;C.next=i;return L[i]||null;};
+  let n=find();
+  for(let i=0;!n&&i<3&&ensureFuture();i++)n=find();   // the future: next year's calendar
   return n;
 }
 function careerDate(){const last=S.matches[S.matches.length-1];return last?last.date:CAREER_START;}
@@ -118,7 +126,7 @@ function onMatchDone(M){
   if(M.key)S.done[M.key]=E.id;
   if(M.reseeded)S.reseed[M.key]={a:M.teams[0],b:M.teams[1]};
   S.matches.push(E);
-  if(S.cups&&S.cups.length)fxDirty();   // knockout slots in your tournaments may now resolve
+  if(S.cups&&S.cups.length&&cupById(E.sid))fxDirty();   // knockout slots in that tournament may now resolve
   S.logs[E.id]=packBalls(M);
   const ids=Object.keys(S.logs);if(ids.length>LOG_KEEP)for(const id of ids.slice(0,ids.length-LOG_KEEP))delete S.logs[id];
   applyStats(E);
@@ -146,6 +154,15 @@ try{SLOT=+(localStorage.getItem('fxi_slot')||0)||0;}catch(e){}
 function setSlot(i){SLOT=i;try{localStorage.setItem('fxi_slot',String(i));}catch(e){}}
 function parseSave(raw){try{const d=JSON.parse(saveText(raw));return d&&d.v===1&&Array.isArray(d.matches)?d:null;}catch(e){return null;}}
 function readSlot(i){try{return parseSave(localStorage.getItem(SLOT_KEYS[i]));}catch(e){return null;}}
+// A slot's name, match count and last date, kept beside it so menus needn't unpack whole careers.
+const metaKey=i=>SLOT_KEYS[i]+'_meta';
+function writeMeta(i,d){try{localStorage.setItem(metaKey(i),JSON.stringify({name:d.name,n:d.matches.length,last:d.matches.length?d.matches[d.matches.length-1].date:CAREER_START}));}catch(e){}}
+function slotInfo(i){
+  try{const raw=localStorage.getItem(SLOT_KEYS[i]);if(!raw)return null;
+    const m=JSON.parse(localStorage.getItem(metaKey(i))||'null');if(m)return m;
+    const d=parseSave(raw);if(!d)return null;writeMeta(i,d);return JSON.parse(localStorage.getItem(metaKey(i))||'null')||{name:d.name,n:d.matches.length,last:CAREER_START};}catch(e){return null;}
+}
+function clearSlot(i){try{localStorage.removeItem(SLOT_KEYS[i]);localStorage.removeItem(metaKey(i));}catch(e){}}
 // Long careers: past SAVE_SOFT characters the oldest matches lose their bulkiest detail (batter-v-bowler
 // matchups and over-by-over chart data); scorecards, stats and records are kept. The newest ARCHIVE_FULL stay whole.
 const SAVE_SOFT=2400000,ARCHIVE_FULL=1500;
@@ -162,7 +179,7 @@ function saveGame(){
   let data=lzPack(JSON.stringify(S));
   if(data.length>SAVE_SOFT&&compactArchive())data=lzPack(JSON.stringify(S));
   if(data.length>SAVE_SOFT&&compactArchive(600))data=lzPack(JSON.stringify(S));
-  const write=()=>localStorage.setItem(key,data);
+  const write=()=>{localStorage.setItem(key,data);if(!S.sandbox)writeMeta(SLOT,S);};
   if(typeof askPersist==='function')askPersist();
   if(typeof FILE_HANDLE!=='undefined'&&FILE_HANDLE&&!S.sandbox)writeSaveFile();
   try{write();return true;}

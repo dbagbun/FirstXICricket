@@ -384,11 +384,12 @@ function situationShift(M,I,over){
 }
 
 // ---------- Test clock ----------
-// Time is counted in overs: bowled + changeovers between innings + overs lost to the weather.
-// Each new day rolls the weather (WEATHER_P chance of losing 8-60 overs, up to the whole day).
-const WEATHER_P=.3;
+// Time is counted in overs: bowled + changeovers between innings + overs lost to the weather + slow over rates.
+// Each new day rolls the weather (WEATHER_P chance of losing 8-60 overs, up to the whole day) and the over rate
+// (SLOW_OVERS short of 90, as real days rarely get all 90 in) - together they bring draws to about a fifth.
+const WEATHER_P=.3,SLOW_OVERS=[3,8];
 function testBallsBowled(M){return sum(M.inns.map(i=>i.lb));}
-function testClock(M){return testBallsBowled(M)/6+TEST_CHANGEOVER*M.inns.filter(i=>i.closed).length+(M.lost||0);}
+function testClock(M){return testBallsBowled(M)/6+TEST_CHANGEOVER*M.inns.filter(i=>i.closed).length+(M.lost||0)+(M.slow||0);}
 function testOversLeft(M){return Math.max(0,TEST_OVERS-testClock(M));}
 function testDay(M){return Math.min(5,Math.floor(testClock(M)/90)+1);}
 function testSession(M){const o=testClock(M)%90;return o<30?1:o<60?2:3;}
@@ -397,6 +398,7 @@ function testWeather(M){
   const d=testDay(M);
   while((M.wxDay||0)<d){
     M.wxDay=(M.wxDay||0)+1;
+    if(M.wxDay>1)M.slow=(M.slow||0)+rndInt(...SLOW_OVERS);   // the day just finished
     if(rnd()<WEATHER_P){
       const dayLeft=M.wxDay*90-testClock(M),lost=Math.min(Math.max(0,Math.floor(dayLeft)),rndInt(8,60));
       if(lost>0){M.lost=(M.lost||0)+lost;(M.wx=M.wx||{})[M.wxDay]=lost;fire(M,null,{t:'rain',day:M.wxDay,lost});}

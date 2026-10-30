@@ -49,7 +49,7 @@ RENDER.home=(el)=>{
   if(n){
     $('#h-play').onclick=()=>startFixture(n.key);
     $('#h-sim').onclick=()=>{const M=quickSim(n.key);toast(esc(M.result.text));rerender();};
-    $('#h-sims').onclick=()=>simMany(allFixtures().filter(x=>x.sid===n.sid&&x.playable&&!S.done[x.key]),'the rest of the series');
+    $('#h-sims').onclick=()=>simMany(fixturesOf(n.sid).filter(x=>x.playable&&!S.done[x.key]),'the rest of the series');
     $('#h-simn').onclick=openSimMore;
   }
   $('#h-test').onclick=()=>openTestCreator();

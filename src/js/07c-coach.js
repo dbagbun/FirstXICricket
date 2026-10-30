@@ -75,7 +75,7 @@ function squadFor(sid,team,date){
   S.squads=S.squads||{};
   const k=sid+':'+team;
   if(!S.squads[k]){
-    const real=allFixtures().filter(x=>x.sid===sid&&x.f&&WORLD.xi[x.f.cid]&&WORLD.xi[x.f.cid][team]).flatMap(x=>fixtureXI(x.f.cid,team).bat);
+    const real=fixturesOf(sid).filter(x=>x.f&&WORLD.xi[x.f.cid]&&WORLD.xi[x.f.cid][team]).flatMap(x=>fixtureXI(x.f.cid,team).bat);
     const pool=[...new Set([...real,...squadAround(team,date,365)])];
     S.squads[k]=pool.filter(p=>!isInjured(p,date)).slice(0,SQUAD_SIZE);
   }
@@ -109,7 +109,7 @@ function coachNews(text,cls=''){S.coach.news.push({date:careerDate(),text,cls});
 // Objectives for a series as soon as your next match belongs to it.
 function ensureObjectives(fx){
   const C=S.coach;if(!C||!C.team||!fx||fx.friendly||!fx.sid||![fx.a,fx.b].includes(C.team)||C.objs.some(o=>o.sid===fx.sid))return;
-  const all=allFixtures().filter(x=>x.sid===fx.sid&&x.playable),mine=all.filter(x=>x.a===C.team||x.b===C.team);
+  const all=fixturesOf(fx.sid).filter(x=>x.playable),mine=all.filter(x=>x.a===C.team||x.b===C.team);
   const teams=[...new Set(all.flatMap(x=>[x.a,x.b]))],fmt=fx.fmt==='TEST'?'TEST':fx.fmt==='T20'?'T20':'ODI';
   let o;
   if(teams.length<=2){

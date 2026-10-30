@@ -27,7 +27,7 @@ const addDays=(d,n)=>new Date(Date.parse(d)+n*864e5).toISOString().slice(0,10);
 function toast(html,cls=''){
   const t=document.createElement('div');t.className='toast '+cls;t.innerHTML=html;
   const box=$('#toasts');box.appendChild(t);
-  while(box.children.length>4)box.firstChild.remove();
+  while(box.children.length>(innerWidth<=600?2:4))box.firstChild.remove();   // phones: two at a time
   setTimeout(()=>t.classList.add('out'),4200);setTimeout(()=>t.remove(),4800);
 }
 

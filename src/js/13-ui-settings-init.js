@@ -37,7 +37,7 @@ function openGuide(){openModal(GUIDE);}
 
 RENDER.settings=(el)=>{
   const st=S.settings;
-  const slots=SLOT_KEYS.map((_,i)=>readSlot(i));
+  const slots=SLOT_KEYS.map((_,i)=>slotInfo(i));
   const seg=(k,opts)=>`<div class="seg">${opts.map(([v,n])=>`<button data-set="${k}" data-val="${v}" class="${String(st[k])===String(v)?'on':''}">${n}</button>`).join('')}</div>`;
   el.innerHTML=`<div class="grid g2">
   <div class="card stack"><h3>Game</h3>
@@ -62,7 +62,7 @@ RENDER.settings=(el)=>{
     <div class="spread"><span>Follow a team</span><select id="st-team"><option value="0">None</option>${[...TEAMS.values()].map(t=>`<option value="${t.id}" ${st.myTeam===t.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select></div>
     <button class="btn" id="st-guide">How to play</button></div>
   <div class="card stack"><h3>Save slots</h3>
-    ${slots.map((d,i)=>`<div class="spread"><div><b>Slot ${i+1}</b>${i===SLOT?' <span class="pill win">active</span>':''}<br><span class="muted">${d?`${esc(d.name)} · ${d.matches.length} matches · ${fmtDate(d.matches.length?d.matches[d.matches.length-1].date:CAREER_START)}`:'empty'}</span></div>
+    ${slots.map((d,i)=>`<div class="spread"><div><b>Slot ${i+1}</b>${i===SLOT?' <span class="pill win">active</span>':''}<br><span class="muted">${d?`${esc(d.name)} · ${d.n} matches · ${fmtDate(d.last)}`:'empty'}</span></div>
       <div class="row">${d&&i!==SLOT?`<button class="btn sm" data-load="${i}">Load</button>`:''}${!d?`<button class="btn sm" data-new="${i}">New career</button>`:''}${d&&i!==SLOT?`<button class="btn sm warn" data-del="${i}">Delete</button>`:''}</div></div>`).join('')}
     <div class="row"><button class="btn" id="st-exp">Back up now (JSON)</button><label class="btn">Import<input type="file" id="st-imp" accept=".json,application/json" hidden></label>
       ${canSaveToFile()?`<button class="btn" id="st-file">${FILE_HANDLE?'Saving to '+esc(FILE_HANDLE.name):'Auto-save to a file…'}</button>`:''}</div>
@@ -82,27 +82,27 @@ RENDER.settings=(el)=>{
   $('#st-guide').onclick=openGuide;
   $$('[data-load]').forEach(b=>b.onclick=()=>{saveGame();if(loadSlot(+b.dataset.load)){LM=null;toast('Loaded.');go('home');}});
   $$('[data-new]').forEach(b=>b.onclick=()=>{saveGame();setSlot(+b.dataset.new);S=null;LM=null;showSplash();});
-  $$('[data-del]').forEach(b=>b.onclick=()=>{if(confirm('Delete this save for good?')){try{localStorage.removeItem(SLOT_KEYS[+b.dataset.del]);}catch(e){}rerender();}});
+  $$('[data-del]').forEach(b=>b.onclick=()=>{if(confirm('Delete this save for good?')){clearSlot(+b.dataset.del);rerender();}});
   $('#st-exp').onclick=()=>{backupNow();rerender();};
   $('#st-file')&&($('#st-file').onclick=async()=>{if(await chooseSaveFile())rerender();});
   storageLine().then(t=>{const e=$('#st-storage');if(e&&t)e.textContent+=' '+t;});
   $('#st-imp').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{if(importCareer(t)){LM=null;toast('Career imported.');go('home');}else toast('That file is not a First XI career.','bad');});};
   $('#st-rebuild').onclick=()=>{rebuildStats();REC_CACHE=null;saveGame();toast('Stats rebuilt from '+S.matches.length+' scorecards.');};
-  $('#st-reset').onclick=()=>{if(confirm('Wipe this career and start again from 2002?')){S=null;LM=null;try{localStorage.removeItem(SLOT_KEYS[SLOT]);}catch(e){}showSplash();}};
+  $('#st-reset').onclick=()=>{if(confirm('Wipe this career and start again from 2002?')){S=null;LM=null;clearSlot(SLOT);showSplash();}};
 };
 
 function showSplash(){
   renderNav();
-  const slots=SLOT_KEYS.map((_,i)=>readSlot(i));
+  const slots=SLOT_KEYS.map((_,i)=>slotInfo(i));
   $('#view').innerHTML=`<div class="card hi" style="max-width:640px;margin:30px auto"><h1 style="font-size:28px">First XI <span class="cyan">Cricket</span></h1>
     <p class="sub">Every ODI from ${fmtDate(FIX[0].date)} to ${fmtDate(FIX[FIX.length-1].date)}, with the real XIs and bowling plans, played out with the First XI run-rate cards. Add Test series whenever you like.</p>
     <div class="stack"><div class="row"><input type="text" id="sp-name" placeholder="Career name" value="My career"><select id="sp-team"><option value="0">Follow a team (optional)</option>${[...TEAMS.values()].filter(t=>t.full).map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('')}</select>
       <button class="btn pri" id="sp-go">Start a new career</button></div>
       <label class="row" style="gap:6px"><input type="checkbox" id="sp-coach"> Coach the team I follow (board targets, contracts, squads, the sack)</label>
-      ${slots.some(Boolean)?`<h3 style="margin-top:10px">Or carry on</h3>${slots.map((d,i)=>d?`<div class="spread"><span>Slot ${i+1}: <b>${esc(d.name)}</b> <span class="muted">${d.matches.length} matches</span></span><button class="btn sm" data-sp="${i}">Load</button></div>`:'').join('')}`:''}
+      ${slots.some(Boolean)?`<h3 style="margin-top:10px">Or carry on</h3>${slots.map((d,i)=>d?`<div class="spread"><span>Slot ${i+1}: <b>${esc(d.name)}</b> <span class="muted">${d.n} matches</span></span><button class="btn sm" data-sp="${i}">Load</button></div>`:'').join('')}`:''}
       <button class="btn" id="sp-guide">How it works</button></div></div>`;
   $('#sp-go').onclick=()=>{
-    if(readSlot(SLOT)){const free=SLOT_KEYS.findIndex((_,i)=>!readSlot(i));if(free>=0)setSlot(free);else if(!confirm('All three slots are in use. Overwrite slot '+(SLOT+1)+'?'))return;}
+    if(slotInfo(SLOT)){const free=SLOT_KEYS.findIndex((_,i)=>!slotInfo(i));if(free>=0)setSlot(free);else if(!confirm('All three slots are in use. Overwrite slot '+(SLOT+1)+'?'))return;}
     S=newCareer({name:$('#sp-name').value.trim()||'My career',myTeam:+$('#sp-team').value});
     if($('#sp-coach').checked){if(!+$('#sp-team').value){toast('Pick the team to coach.','warn');S=null;return;}startCoach(+$('#sp-team').value);}
     saveGame();go(S.coach?'coach':'home');

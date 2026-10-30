@@ -51,7 +51,7 @@ RENDER.league=(el)=>{
   }
   const years=Object.keys(L.seasons).map(Number).sort(),cur=years[years.length-1],season=L.seasons[cur],cup=cupById(season.cup);
   const table=cup?tableFrom(cupMatches(cup).filter(E=>/^League/.test(E.stage)),cup.teams):[];
-  const nx=cup&&allFixtures().find(x=>x.sid===cup.id&&x.playable&&!S.done[x.key]);
+  const nx=cup&&fixturesOf(cup.id).find(x=>x.playable&&!S.done[x.key]);
   const done=cup&&cup.fix.every(f=>S.done[f.key]);
   const retain=done&&!L.seasons[cur+1];
   el.innerHTML=`<div class="stack"><div class="card"><div class="spread"><div><h2 style="margin:0">${cur} Franchise League</h2><div class="sub">${tlabel(L.mine)} · hosted in ${esc(teamName(L.host))}</div></div>

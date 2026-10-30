@@ -64,7 +64,7 @@ function teamRanking(fmt){
 
 // ---------- player of the series: best total match score over a finished series ----------
 function seriesDone(sid){
-  return allFixtures().filter(x=>x.sid===sid&&x.playable).every(x=>S.done[x.key]);
+  return fixturesOf(sid).filter(x=>x.playable).every(x=>S.done[x.key]);
 }
 function playerOfSeries(sid){
   const R=R_();if(R.pos[sid]||!sid||!seriesDone(sid))return null;

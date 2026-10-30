@@ -273,6 +273,7 @@ tbody tr:hover td{background:rgba(30,41,59,.6)}
 [data-bc=modern] .dice{background:#0c0c10;border-color:#b6ff00}[data-bc=modern] .dice b{color:#b6ff00}
 [data-bc=event] .dice{background:#3c1a78;border-color:#ffb703}[data-bc=event] .dice b{color:#ffd166}
 
+@media (max-width:600px){.seg{flex-wrap:wrap;max-width:100%}}
 @media (max-width:600px){.tv .tv-k{font-size:22px;letter-spacing:.1em}}
 @media (max-width:600px){
   .bug-runs{font-size:26px}[data-bc=modern] .bug-runs{font-size:32px}
@@ -329,7 +330,7 @@ const addDays=(d,n)=>new Date(Date.parse(d)+n*864e5).toISOString().slice(0,10);
 function toast(html,cls=''){
   const t=document.createElement('div');t.className='toast '+cls;t.innerHTML=html;
   const box=$('#toasts');box.appendChild(t);
-  while(box.children.length>4)box.firstChild.remove();
+  while(box.children.length>(innerWidth<=600?2:4))box.firstChild.remove();   // phones: two at a time
   setTimeout(()=>t.classList.add('out'),4200);setTimeout(()=>t.remove(),4800);
 }
 
@@ -871,11 +872,12 @@ function situationShift(M,I,over){
 }
 
 // ---------- Test clock ----------
-// Time is counted in overs: bowled + changeovers between innings + overs lost to the weather.
-// Each new day rolls the weather (WEATHER_P chance of losing 8-60 overs, up to the whole day).
-const WEATHER_P=.3;
+// Time is counted in overs: bowled + changeovers between innings + overs lost to the weather + slow over rates.
+// Each new day rolls the weather (WEATHER_P chance of losing 8-60 overs, up to the whole day) and the over rate
+// (SLOW_OVERS short of 90, as real days rarely get all 90 in) - together they bring draws to about a fifth.
+const WEATHER_P=.3,SLOW_OVERS=[3,8];
 function testBallsBowled(M){return sum(M.inns.map(i=>i.lb));}
-function testClock(M){return testBallsBowled(M)/6+TEST_CHANGEOVER*M.inns.filter(i=>i.closed).length+(M.lost||0);}
+function testClock(M){return testBallsBowled(M)/6+TEST_CHANGEOVER*M.inns.filter(i=>i.closed).length+(M.lost||0)+(M.slow||0);}
 function testOversLeft(M){return Math.max(0,TEST_OVERS-testClock(M));}
 function testDay(M){return Math.min(5,Math.floor(testClock(M)/90)+1);}
 function testSession(M){const o=testClock(M)%90;return o<30?1:o<60?2:3;}
@@ -884,6 +886,7 @@ function testWeather(M){
   const d=testDay(M);
   while((M.wxDay||0)<d){
     M.wxDay=(M.wxDay||0)+1;
+    if(M.wxDay>1)M.slow=(M.slow||0)+rndInt(...SLOW_OVERS);   // the day just finished
     if(rnd()<WEATHER_P){
       const dayLeft=M.wxDay*90-testClock(M),lost=Math.min(Math.max(0,Math.floor(dayLeft)),rndInt(8,60));
       if(lost>0){M.lost=(M.lost||0)+lost;(M.wx=M.wx||{})[M.wxDay]=lost;fire(M,null,{t:'rain',day:M.wxDay,lost});}
@@ -1759,6 +1762,12 @@ function allFixtures(){
   FX_CACHE={S,list:out};
   return out;
 }
+// The fixtures of one series or cup (indexed once per fixture list).
+function fixturesOf(sid){
+  allFixtures();const C=FX_CACHE;
+  if(!C.bySid){C.bySid=new Map();for(const x of C.list){const L=C.bySid.get(x.sid);if(L)L.push(x);else C.bySid.set(x.sid,[x]);}}
+  return C.bySid.get(sid)||[];
+}
 function fixtureByKey(key){
   if(key[0]==='o'||key[0]==='r')return ODI_FX_BY_KEY.get(key)||null;
   for(const T of S.tests){const k=T.fix.findIndex(x=>x.key===key);if(k>=0)return customFx(T,T.fix[k],k);}
@@ -1767,8 +1776,10 @@ function fixtureByKey(key){
 }
 function nextFixture(){
   if(typeof ensureLeague==='function')ensureLeague();
-  let n=allFixtures().find(x=>x.playable&&!S.done[x.key])||null;
-  for(let i=0;!n&&i<3&&ensureFuture();i++)n=allFixtures().find(x=>x.playable&&!S.done[x.key])||null;   // the future: next year's calendar
+  // a cursor past the played (and unplayable) fixtures; a new fixture list (fxDirty) starts it again
+  const find=()=>{const L=allFixtures(),C=FX_CACHE;let i=C.next||0;while(i<L.length&&(!L[i].playable||S.done[L[i].key]))i++;C.next=i;return L[i]||null;};
+  let n=find();
+  for(let i=0;!n&&i<3&&ensureFuture();i++)n=find();   // the future: next year's calendar
   return n;
 }
 function careerDate(){const last=S.matches[S.matches.length-1];return last?last.date:CAREER_START;}
@@ -1822,7 +1833,7 @@ function onMatchDone(M){
   if(M.key)S.done[M.key]=E.id;
   if(M.reseeded)S.reseed[M.key]={a:M.teams[0],b:M.teams[1]};
   S.matches.push(E);
-  if(S.cups&&S.cups.length)fxDirty();   // knockout slots in your tournaments may now resolve
+  if(S.cups&&S.cups.length&&cupById(E.sid))fxDirty();   // knockout slots in that tournament may now resolve
   S.logs[E.id]=packBalls(M);
   const ids=Object.keys(S.logs);if(ids.length>LOG_KEEP)for(const id of ids.slice(0,ids.length-LOG_KEEP))delete S.logs[id];
   applyStats(E);
@@ -1850,6 +1861,15 @@ try{SLOT=+(localStorage.getItem('fxi_slot')||0)||0;}catch(e){}
 function setSlot(i){SLOT=i;try{localStorage.setItem('fxi_slot',String(i));}catch(e){}}
 function parseSave(raw){try{const d=JSON.parse(saveText(raw));return d&&d.v===1&&Array.isArray(d.matches)?d:null;}catch(e){return null;}}
 function readSlot(i){try{return parseSave(localStorage.getItem(SLOT_KEYS[i]));}catch(e){return null;}}
+// A slot's name, match count and last date, kept beside it so menus needn't unpack whole careers.
+const metaKey=i=>SLOT_KEYS[i]+'_meta';
+function writeMeta(i,d){try{localStorage.setItem(metaKey(i),JSON.stringify({name:d.name,n:d.matches.length,last:d.matches.length?d.matches[d.matches.length-1].date:CAREER_START}));}catch(e){}}
+function slotInfo(i){
+  try{const raw=localStorage.getItem(SLOT_KEYS[i]);if(!raw)return null;
+    const m=JSON.parse(localStorage.getItem(metaKey(i))||'null');if(m)return m;
+    const d=parseSave(raw);if(!d)return null;writeMeta(i,d);return JSON.parse(localStorage.getItem(metaKey(i))||'null')||{name:d.name,n:d.matches.length,last:CAREER_START};}catch(e){return null;}
+}
+function clearSlot(i){try{localStorage.removeItem(SLOT_KEYS[i]);localStorage.removeItem(metaKey(i));}catch(e){}}
 // Long careers: past SAVE_SOFT characters the oldest matches lose their bulkiest detail (batter-v-bowler
 // matchups and over-by-over chart data); scorecards, stats and records are kept. The newest ARCHIVE_FULL stay whole.
 const SAVE_SOFT=2400000,ARCHIVE_FULL=1500;
@@ -1866,7 +1886,7 @@ function saveGame(){
   let data=lzPack(JSON.stringify(S));
   if(data.length>SAVE_SOFT&&compactArchive())data=lzPack(JSON.stringify(S));
   if(data.length>SAVE_SOFT&&compactArchive(600))data=lzPack(JSON.stringify(S));
-  const write=()=>localStorage.setItem(key,data);
+  const write=()=>{localStorage.setItem(key,data);if(!S.sandbox)writeMeta(SLOT,S);};
   if(typeof askPersist==='function')askPersist();
   if(typeof FILE_HANDLE!=='undefined'&&FILE_HANDLE&&!S.sandbox)writeSaveFile();
   try{write();return true;}
@@ -2045,7 +2065,7 @@ function teamRanking(fmt){
 
 // ---------- player of the series: best total match score over a finished series ----------
 function seriesDone(sid){
-  return allFixtures().filter(x=>x.sid===sid&&x.playable).every(x=>S.done[x.key]);
+  return fixturesOf(sid).filter(x=>x.playable).every(x=>S.done[x.key]);
 }
 function playerOfSeries(sid){
   const R=R_();if(R.pos[sid]||!sid||!seriesDone(sid))return null;
@@ -2177,7 +2197,7 @@ function squadFor(sid,team,date){
   S.squads=S.squads||{};
   const k=sid+':'+team;
   if(!S.squads[k]){
-    const real=allFixtures().filter(x=>x.sid===sid&&x.f&&WORLD.xi[x.f.cid]&&WORLD.xi[x.f.cid][team]).flatMap(x=>fixtureXI(x.f.cid,team).bat);
+    const real=fixturesOf(sid).filter(x=>x.f&&WORLD.xi[x.f.cid]&&WORLD.xi[x.f.cid][team]).flatMap(x=>fixtureXI(x.f.cid,team).bat);
     const pool=[...new Set([...real,...squadAround(team,date,365)])];
     S.squads[k]=pool.filter(p=>!isInjured(p,date)).slice(0,SQUAD_SIZE);
   }
@@ -2211,7 +2231,7 @@ function coachNews(text,cls=''){S.coach.news.push({date:careerDate(),text,cls});
 // Objectives for a series as soon as your next match belongs to it.
 function ensureObjectives(fx){
   const C=S.coach;if(!C||!C.team||!fx||fx.friendly||!fx.sid||![fx.a,fx.b].includes(C.team)||C.objs.some(o=>o.sid===fx.sid))return;
-  const all=allFixtures().filter(x=>x.sid===fx.sid&&x.playable),mine=all.filter(x=>x.a===C.team||x.b===C.team);
+  const all=fixturesOf(fx.sid).filter(x=>x.playable),mine=all.filter(x=>x.a===C.team||x.b===C.team);
   const teams=[...new Set(all.flatMap(x=>[x.a,x.b]))],fmt=fx.fmt==='TEST'?'TEST':fx.fmt==='T20'?'T20':'ODI';
   let o;
   if(teams.length<=2){
@@ -3747,7 +3767,7 @@ RENDER.home=(el)=>{
   if(n){
     $('#h-play').onclick=()=>startFixture(n.key);
     $('#h-sim').onclick=()=>{const M=quickSim(n.key);toast(esc(M.result.text));rerender();};
-    $('#h-sims').onclick=()=>simMany(allFixtures().filter(x=>x.sid===n.sid&&x.playable&&!S.done[x.key]),'the rest of the series');
+    $('#h-sims').onclick=()=>simMany(fixturesOf(n.sid).filter(x=>x.playable&&!S.done[x.key]),'the rest of the series');
     $('#h-simn').onclick=openSimMore;
   }
   $('#h-test').onclick=()=>openTestCreator();
@@ -3920,7 +3940,7 @@ RENDER.tour=(el,arg)=>{
   const sid=arg&&SERIES.has(arg)&&SERIES.get(arg).kind==='tournament'?arg:currentTourney();
   const E=edition(sid),R=editionResults(sid);
   const years=[...new Set(TOURNEYS.map(s=>s.start.slice(0,4)))];
-  const nextIn=allFixtures().find(x=>x.sid===sid&&!S.done[x.key]&&x.playable);
+  const nextIn=fixturesOf(sid).find(x=>!S.done[x.key]&&x.playable);
   const stageNow=nextIn?(E.stageOf.get(nextIn.f.no)==='super'?superName(E):stageName(E.stageOf.get(nextIn.f.no),E)):R.size?'Complete':'Not started';
   const q=qualCount(E),sup=E.hasSuper?superTeams(E):null;
   const gt=groupTables(E);
@@ -3973,7 +3993,7 @@ function renderCup(el,cup){
     const w=m.E&&m.E.result.winner,sc=t=>m.E?m.E.inns.filter(I=>I.bat===t).map(I=>I.runs+(I.wkts<10?'/'+I.wkts:'')).join(''):'';
     return`<div class="m" ${m.E?`data-mid="${m.E.id}" style="cursor:pointer"`:''}>${[0,1].map(k=>{const t=k?m.fx.b:m.fx.a;return`<div class="${w&&w===t?'wn':''}"><span>${t?badge(t)+' '+esc(teamShort(t)):'<span class="muted">'+esc(slotName(m.f[k?'sb':'sa']))+'</span>'}</span><span class="num">${t?sc(t):''}</span></div>`;}).join('')}
       <div class="muted" style="font-size:11px">${fmtDate(m.f.date)}</div></div>`;}).join('')}</div>`).join('')}</div></div>`:'';
-  const nextKey=allFixtures().find(x=>x.sid===cup.id&&x.playable&&!S.done[x.key]);
+  const nextKey=fixturesOf(cup.id).find(x=>x.playable&&!S.done[x.key]);
   el.innerHTML=`<div class="card"><div class="row"><select id="tc-sel">${cupOptions(cup.id)}${[...new Set(TOURNEYS.map(s=>s.start.slice(0,4)))].map(y=>`<optgroup label="${y}">${TOURNEYS.filter(s=>s.start.startsWith(y)).map(s=>`<option value="${esc(s.sid)}">${esc(s.title)}</option>`).join('')}</optgroup>`).join('')}</select>
     <button class="btn sm" id="tc-new">+ Build a tournament</button>
     <span class="muted">${FMT_NAME[cup.fmt]} · hosted by ${esc(teamName(cup.host))} · ${cup.teams.length} teams · ${esc(CUP_FORMATS[cup.format].name)} · ${M.length}/${cup.fix.length} played</span></div>
@@ -3989,7 +4009,7 @@ function renderCup(el,cup){
 // knockouts only resolve as results come in, so sim a fixture at a time
 function simCup(cup){
   let g=0;
-  for(;;){const nx=allFixtures().find(x=>x.sid===cup.id&&x.playable&&!S.done[x.key]);if(!nx||g++>200)break;simFixture(nx);}
+  for(;;){const nx=fixturesOf(cup.id).find(x=>x.playable&&!S.done[x.key]);if(!nx||g++>200)break;simFixture(nx);}
   saveGame();rerender();
 }
 function openCupCreator(){
@@ -4790,7 +4810,7 @@ RENDER.league=(el)=>{
   }
   const years=Object.keys(L.seasons).map(Number).sort(),cur=years[years.length-1],season=L.seasons[cur],cup=cupById(season.cup);
   const table=cup?tableFrom(cupMatches(cup).filter(E=>/^League/.test(E.stage)),cup.teams):[];
-  const nx=cup&&allFixtures().find(x=>x.sid===cup.id&&x.playable&&!S.done[x.key]);
+  const nx=cup&&fixturesOf(cup.id).find(x=>x.playable&&!S.done[x.key]);
   const done=cup&&cup.fix.every(f=>S.done[f.key]);
   const retain=done&&!L.seasons[cur+1];
   el.innerHTML=`<div class="stack"><div class="card"><div class="spread"><div><h2 style="margin:0">${cur} Franchise League</h2><div class="sub">${tlabel(L.mine)} · hosted in ${esc(teamName(L.host))}</div></div>
@@ -5063,7 +5083,7 @@ function openGuide(){openModal(GUIDE);}
 
 RENDER.settings=(el)=>{
   const st=S.settings;
-  const slots=SLOT_KEYS.map((_,i)=>readSlot(i));
+  const slots=SLOT_KEYS.map((_,i)=>slotInfo(i));
   const seg=(k,opts)=>`<div class="seg">${opts.map(([v,n])=>`<button data-set="${k}" data-val="${v}" class="${String(st[k])===String(v)?'on':''}">${n}</button>`).join('')}</div>`;
   el.innerHTML=`<div class="grid g2">
   <div class="card stack"><h3>Game</h3>
@@ -5088,7 +5108,7 @@ RENDER.settings=(el)=>{
     <div class="spread"><span>Follow a team</span><select id="st-team"><option value="0">None</option>${[...TEAMS.values()].map(t=>`<option value="${t.id}" ${st.myTeam===t.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select></div>
     <button class="btn" id="st-guide">How to play</button></div>
   <div class="card stack"><h3>Save slots</h3>
-    ${slots.map((d,i)=>`<div class="spread"><div><b>Slot ${i+1}</b>${i===SLOT?' <span class="pill win">active</span>':''}<br><span class="muted">${d?`${esc(d.name)} · ${d.matches.length} matches · ${fmtDate(d.matches.length?d.matches[d.matches.length-1].date:CAREER_START)}`:'empty'}</span></div>
+    ${slots.map((d,i)=>`<div class="spread"><div><b>Slot ${i+1}</b>${i===SLOT?' <span class="pill win">active</span>':''}<br><span class="muted">${d?`${esc(d.name)} · ${d.n} matches · ${fmtDate(d.last)}`:'empty'}</span></div>
       <div class="row">${d&&i!==SLOT?`<button class="btn sm" data-load="${i}">Load</button>`:''}${!d?`<button class="btn sm" data-new="${i}">New career</button>`:''}${d&&i!==SLOT?`<button class="btn sm warn" data-del="${i}">Delete</button>`:''}</div></div>`).join('')}
     <div class="row"><button class="btn" id="st-exp">Back up now (JSON)</button><label class="btn">Import<input type="file" id="st-imp" accept=".json,application/json" hidden></label>
       ${canSaveToFile()?`<button class="btn" id="st-file">${FILE_HANDLE?'Saving to '+esc(FILE_HANDLE.name):'Auto-save to a file…'}</button>`:''}</div>
@@ -5108,27 +5128,27 @@ RENDER.settings=(el)=>{
   $('#st-guide').onclick=openGuide;
   $$('[data-load]').forEach(b=>b.onclick=()=>{saveGame();if(loadSlot(+b.dataset.load)){LM=null;toast('Loaded.');go('home');}});
   $$('[data-new]').forEach(b=>b.onclick=()=>{saveGame();setSlot(+b.dataset.new);S=null;LM=null;showSplash();});
-  $$('[data-del]').forEach(b=>b.onclick=()=>{if(confirm('Delete this save for good?')){try{localStorage.removeItem(SLOT_KEYS[+b.dataset.del]);}catch(e){}rerender();}});
+  $$('[data-del]').forEach(b=>b.onclick=()=>{if(confirm('Delete this save for good?')){clearSlot(+b.dataset.del);rerender();}});
   $('#st-exp').onclick=()=>{backupNow();rerender();};
   $('#st-file')&&($('#st-file').onclick=async()=>{if(await chooseSaveFile())rerender();});
   storageLine().then(t=>{const e=$('#st-storage');if(e&&t)e.textContent+=' '+t;});
   $('#st-imp').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{if(importCareer(t)){LM=null;toast('Career imported.');go('home');}else toast('That file is not a First XI career.','bad');});};
   $('#st-rebuild').onclick=()=>{rebuildStats();REC_CACHE=null;saveGame();toast('Stats rebuilt from '+S.matches.length+' scorecards.');};
-  $('#st-reset').onclick=()=>{if(confirm('Wipe this career and start again from 2002?')){S=null;LM=null;try{localStorage.removeItem(SLOT_KEYS[SLOT]);}catch(e){}showSplash();}};
+  $('#st-reset').onclick=()=>{if(confirm('Wipe this career and start again from 2002?')){S=null;LM=null;clearSlot(SLOT);showSplash();}};
 };
 
 function showSplash(){
   renderNav();
-  const slots=SLOT_KEYS.map((_,i)=>readSlot(i));
+  const slots=SLOT_KEYS.map((_,i)=>slotInfo(i));
   $('#view').innerHTML=`<div class="card hi" style="max-width:640px;margin:30px auto"><h1 style="font-size:28px">First XI <span class="cyan">Cricket</span></h1>
     <p class="sub">Every ODI from ${fmtDate(FIX[0].date)} to ${fmtDate(FIX[FIX.length-1].date)}, with the real XIs and bowling plans, played out with the First XI run-rate cards. Add Test series whenever you like.</p>
     <div class="stack"><div class="row"><input type="text" id="sp-name" placeholder="Career name" value="My career"><select id="sp-team"><option value="0">Follow a team (optional)</option>${[...TEAMS.values()].filter(t=>t.full).map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('')}</select>
       <button class="btn pri" id="sp-go">Start a new career</button></div>
       <label class="row" style="gap:6px"><input type="checkbox" id="sp-coach"> Coach the team I follow (board targets, contracts, squads, the sack)</label>
-      ${slots.some(Boolean)?`<h3 style="margin-top:10px">Or carry on</h3>${slots.map((d,i)=>d?`<div class="spread"><span>Slot ${i+1}: <b>${esc(d.name)}</b> <span class="muted">${d.matches.length} matches</span></span><button class="btn sm" data-sp="${i}">Load</button></div>`:'').join('')}`:''}
+      ${slots.some(Boolean)?`<h3 style="margin-top:10px">Or carry on</h3>${slots.map((d,i)=>d?`<div class="spread"><span>Slot ${i+1}: <b>${esc(d.name)}</b> <span class="muted">${d.n} matches</span></span><button class="btn sm" data-sp="${i}">Load</button></div>`:'').join('')}`:''}
       <button class="btn" id="sp-guide">How it works</button></div></div>`;
   $('#sp-go').onclick=()=>{
-    if(readSlot(SLOT)){const free=SLOT_KEYS.findIndex((_,i)=>!readSlot(i));if(free>=0)setSlot(free);else if(!confirm('All three slots are in use. Overwrite slot '+(SLOT+1)+'?'))return;}
+    if(slotInfo(SLOT)){const free=SLOT_KEYS.findIndex((_,i)=>!slotInfo(i));if(free>=0)setSlot(free);else if(!confirm('All three slots are in use. Overwrite slot '+(SLOT+1)+'?'))return;}
     S=newCareer({name:$('#sp-name').value.trim()||'My career',myTeam:+$('#sp-team').value});
     if($('#sp-coach').checked){if(!+$('#sp-team').value){toast('Pick the team to coach.','warn');S=null;return;}startCoach(+$('#sp-team').value);}
     saveGame();go(S.coach?'coach':'home');

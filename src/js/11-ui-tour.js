@@ -27,7 +27,7 @@ RENDER.tour=(el,arg)=>{
   const sid=arg&&SERIES.has(arg)&&SERIES.get(arg).kind==='tournament'?arg:currentTourney();
   const E=edition(sid),R=editionResults(sid);
   const years=[...new Set(TOURNEYS.map(s=>s.start.slice(0,4)))];
-  const nextIn=allFixtures().find(x=>x.sid===sid&&!S.done[x.key]&&x.playable);
+  const nextIn=fixturesOf(sid).find(x=>!S.done[x.key]&&x.playable);
   const stageNow=nextIn?(E.stageOf.get(nextIn.f.no)==='super'?superName(E):stageName(E.stageOf.get(nextIn.f.no),E)):R.size?'Complete':'Not started';
   const q=qualCount(E),sup=E.hasSuper?superTeams(E):null;
   const gt=groupTables(E);
@@ -80,7 +80,7 @@ function renderCup(el,cup){
     const w=m.E&&m.E.result.winner,sc=t=>m.E?m.E.inns.filter(I=>I.bat===t).map(I=>I.runs+(I.wkts<10?'/'+I.wkts:'')).join(''):'';
     return`<div class="m" ${m.E?`data-mid="${m.E.id}" style="cursor:pointer"`:''}>${[0,1].map(k=>{const t=k?m.fx.b:m.fx.a;return`<div class="${w&&w===t?'wn':''}"><span>${t?badge(t)+' '+esc(teamShort(t)):'<span class="muted">'+esc(slotName(m.f[k?'sb':'sa']))+'</span>'}</span><span class="num">${t?sc(t):''}</span></div>`;}).join('')}
       <div class="muted" style="font-size:11px">${fmtDate(m.f.date)}</div></div>`;}).join('')}</div>`).join('')}</div></div>`:'';
-  const nextKey=allFixtures().find(x=>x.sid===cup.id&&x.playable&&!S.done[x.key]);
+  const nextKey=fixturesOf(cup.id).find(x=>x.playable&&!S.done[x.key]);
   el.innerHTML=`<div class="card"><div class="row"><select id="tc-sel">${cupOptions(cup.id)}${[...new Set(TOURNEYS.map(s=>s.start.slice(0,4)))].map(y=>`<optgroup label="${y}">${TOURNEYS.filter(s=>s.start.startsWith(y)).map(s=>`<option value="${esc(s.sid)}">${esc(s.title)}</option>`).join('')}</optgroup>`).join('')}</select>
     <button class="btn sm" id="tc-new">+ Build a tournament</button>
     <span class="muted">${FMT_NAME[cup.fmt]} · hosted by ${esc(teamName(cup.host))} · ${cup.teams.length} teams · ${esc(CUP_FORMATS[cup.format].name)} · ${M.length}/${cup.fix.length} played</span></div>
@@ -96,7 +96,7 @@ function renderCup(el,cup){
 // knockouts only resolve as results come in, so sim a fixture at a time
 function simCup(cup){
   let g=0;
-  for(;;){const nx=allFixtures().find(x=>x.sid===cup.id&&x.playable&&!S.done[x.key]);if(!nx||g++>200)break;simFixture(nx);}
+  for(;;){const nx=fixturesOf(cup.id).find(x=>x.playable&&!S.done[x.key]);if(!nx||g++>200)break;simFixture(nx);}
   saveGame();rerender();
 }
 function openCupCreator(){
