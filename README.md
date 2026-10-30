@@ -13,7 +13,7 @@ Every ODI from June 2002 to January 2026 - the real fixtures, the real XIs and t
 - Tests: five days, weather, pitch reports, wear, follow-ons and declarations (you can captain them).
 - Tournament Centre with pools, NRR, Super Six/Eight tables and brackets. Knockouts are re-seeded from **your** tables - in your timeline Kenya might make the final.
 - Coach career: board targets for every series, confidence, contracts, the sack and job offers; 15-man squads, fatigue, injuries and form.
-- Rain and D/L in ODIs, super overs in knockouts; T20 internationals (with two provisional fast cards); schedule Test, ODI or T20 series between any sides.
+- Rain and D/L in ODIs, super overs in knockouts; T20 internationals on their own designed run-rate cards (RR_T6-RR_T12, `python3 tools/design_t20_cards.py data/world.json t20-cards.xlsx` writes them and a workbook-ready .xlsx); schedule Test, ODI or T20 series between any sides.
 - Build your own tournaments; two-player head-to-head and friendlies on any date.
 - Stats lab (filter by year, opponent, country, position, stage; batter v bowler; grounds); varied commentary, highlights, scorecards and season reviews as images.
 - Your timeline v history: with Cricsheet's real results imported, every match you play shows what really happened, and the dashboard tracks how far your timeline has drifted.

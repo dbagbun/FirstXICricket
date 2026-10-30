@@ -77,6 +77,13 @@ def main():
             grid.append(toks)
         assert len(grid) == 100, (code, len(grid))
         cards[code] = grid
+    # the designed T20 cards (tools/design_t20_cards.py), once pasted into the workbook as RR_T6 ... RR_T12
+    for name in wb.sheetnames:
+        if name.startswith('RR_T') and name[4:].isdigit():
+            grid = [['0' if c in (None, '', '.') else str(c).strip().upper().replace(' ', '_') for c in r[1:7]]
+                    for r in rows(wb[name]) if num(r[0]) >= 1]
+            assert len(grid) == 100, (name, len(grid))
+            cards[name[3:]] = grid
 
     # ---- fixtures ----
     fixtures = []

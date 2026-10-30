@@ -8,11 +8,13 @@
 // at most one step by his position (a promoted all-rounder keeps the top-order BLUE; a No.11 sent in to open is
 // GREEN, not BLUE), except an associate's second letter against a Test nation ('BG', 'GR').
 const RR_CODES=['3','4A','4B','5','6','7'];
-// T20: the six cards top out at 6.7 an over, so T20 adds two PROVISIONAL cards - RR_8 from RR_6 (~8.0 an over,
-// its GREEN/RED wickets) and RR_9 from RR_7 (~10.3, its BLUE/RED wickets) - same wicket tokens, so the colours
-// work exactly as before, with a fixed pattern of dots/1s/2s/4s upgraded. Replace them with designed cards by
-// putting RR_8 / RR_9 sheets in the workbook (tools/extract.py reads any RR_* sheet).
-const T20_CODES=['4B','5','6','8','9','7'];
+// T20 has its own ladder of six designed cards, RR_T6 (6 an over) to RR_T12 (12 an over, the death card with
+// the most BLUE wickets), made by tools/design_t20_cards.py in the workbook's token language and calibrated to
+// real T20 ball mixes. The old PROVISIONAL ladder (ODI cards plus RR_8 from RR_6 and RR_9 from RR_7, a fixed
+// pattern of dots/1s/2s/4s upgraded) stays as a setting and as the fallback if the data has no T cards.
+const T20_DESIGN=['T6','T7','T8','T9','T10','T12'],T20_OLD=['4B','5','6','8','9','7'];
+const HAS_T20_DESIGN=T20_DESIGN.every(c=>WORLD.cards[c]);
+const t20Designed=M=>HAS_T20_DESIGN&&M.t20cards!=='provisional';
 function deriveCard(base,R){
   return base.map((row,i)=>row.map((t,j)=>{
     if(!/^\d+$/.test(t))return t;
@@ -26,12 +28,14 @@ function deriveCard(base,R){
 }
 if(!WORLD.cards['8'])WORLD.cards['8']=deriveCard(WORLD.cards['6'],{dot:30,dot4:15,one:35,one6:20,two:30,four:30});
 if(!WORLD.cards['9'])WORLD.cards['9']=deriveCard(WORLD.cards['7'],{dot:40,dot4:25,one:45,one6:30,two:45,four:40});
-const cardCodes=M=>M.fmt==='T20'?T20_CODES:RR_CODES;
+const cardCodes=M=>M.fmt!=='T20'?RR_CODES:t20Designed(M)?T20_DESIGN:T20_OLD;
+const weightKey=M=>M.fmt==='T20'&&t20Designed(M)?'T20D':M.fmt;
 const CARD_WEIGHTS={
   ODI:{1:[35,30,20,10,4,1],2:[15,30,30,15,8,2],3:[5,15,30,30,15,5],4:[2,8,15,30,30,15],5:[1,4,10,20,35,30]},
   // Tests: RR_3 carries most overs and RR_7 is the wicket card: ~3.4 an over, ~34 a wicket (tests/engine-stats.js).
   TEST:{1:[84,5,4,2,0,5],2:[80,7,6,3,0,4],3:[76,9,8,3,1,3],4:[70,12,10,4,2,2],5:[62,15,13,6,2,2]},
-  // T20 weights are over T20_CODES (RR_4B, 5, 6, 8, 9, 7), tuned with tests/engine-stats.js
+  // T20D over the designed ladder (RR_T6 ... RR_T12); T20 over the provisional one (RR_4B, 5, 6, 8, 9, 7). Tuned with tests/engine-stats.js
+  T20D:{1:[40,30,18,8,3,1],2:[30,30,22,12,5,1],3:[22,28,26,15,7,2],4:[14,22,28,22,10,4],5:[8,16,26,28,15,7]},
   T20:{1:[10,20,25,20,20,5],2:[5,15,25,25,25,5],3:[2,8,20,30,32,8],4:[1,4,15,30,38,12],5:[0,2,8,25,45,20]},
 };
 // Test pitches wear: from day 4, points move from RR_3 to RR_7 (double for spinners).
@@ -118,7 +122,7 @@ function soInnings(M,bat){
   const I0=M.inns.find(i=>i.bat===bat);
   const batters=Object.entries(I0.bt).sort((a,b)=>b[1].r-a[1].r).map(e=>+e[0]).slice(0,3);
   const Ib=M.inns.find(i=>i.bowl===bowl),bw=Ib.eng.B.slice().sort((a,b)=>a.rating-b.rating)[0];
-  const card=pickCard(applyShift(baseWeights(M.fmt,bw.rating),2),cardCodes(M));
+  const card=pickCard(applyShift(baseWeights(weightKey(M),bw.rating),2),cardCodes(M));
   let roll=roll100(),col=1,legal=0,runs=0,wk=0,st=0,ns=1;const balls=[];
   while(legal<6&&wk<2){
     const r=col<=6?roll:roll100(),c=col<=6?col:1;col++;
@@ -359,7 +363,15 @@ function setNextBatter(M,pid){
 // ---------- situation shift (port of CalcSituationShift, plus Test match situations) ----------
 function situationShift(M,I,over){
   let s=0;
-  if(LIMITED(M)){
+  if(M.fmt==='T20'&&t20Designed(M)){
+    // T20 phases on the designed ladder: powerplay as dealt, middle overs a card slower, death from the 16th
+    const mx=I.maxOv,k=mx/20;
+    if(over>mx-2*k)s+=2;else if(over>mx-5*k)s+=1;else if(over>6*k)s-=1;
+    if(I.no===2&&I.target>0){
+      const left=mx-over+1,need=I.target-I.runs;
+      if(left>0&&need>0){const rrr=need/left;s+=rrr>13?2:rrr>10?1:0;}
+    }
+  }else if(LIMITED(M)){
     const mx=I.maxOv,k=M.maxOv/50;
     if(over>mx-5*k)s+=2;else if(over>mx-15*k)s+=1;
     if(I.no===2&&I.target>0){
@@ -414,7 +426,7 @@ function bowlBall(M,manualRoll){
   if(M.cur&&M.cur.rev)return reviewStep(M,I,manualRoll);
   if(!M.cur){
     const over=Math.floor(I.lb/6)+1,bi=captainBowler(M,I,over)??chooseBowler(M,I,over),b=I.eng.B[bi];
-    const card=pickCard(applyShift(wearWeights(M,b,baseWeights(M.fmt,b.rating)),situationShift(M,I,over)),cardCodes(M));
+    const card=pickCard(applyShift(wearWeights(M,b,baseWeights(weightKey(M),b.rating)),situationShift(M,I,over)),cardCodes(M));
     M.cur={over,bi,bowler:b.pid,card,roll:0,col:1,comp:false,legal:0,n:0,runs:0};
     if(!I.bw[b.pid]){I.bw[b.pid]={b:0,r:0,w:0,md:0,wd:0,nb:0};I.bwOrder.push(b.pid);}
   }

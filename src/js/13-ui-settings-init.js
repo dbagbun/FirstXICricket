@@ -10,9 +10,10 @@ except that associate batters not yet proven against Test nations are GREEN agai
 <p><b>Bowlers</b> follow the real bowling plan of the match where Cricsheet has it, then a spell engine (pace with the new ball and at the death, spin through the middle).
 Ratings 1 (elite) to 5 (part-timer) come from your Excel ratings where you set them, otherwise from each bowler's real spells. Edit any of them on a player's card.</p>
 <p><b>Rain in ODIs:</b> some matches lose overs. Targets are revised with a Duckworth-Lewis-style resource model (overs left and wickets down; an approximation of the published table), and if fewer than 20 overs are possible for the chasing side it's a no result. A tied knockout goes to a <b>super over</b>.</p>
-<p><b>T20s</b> need faster cards than the six in the workbook (RR_7 tops out at 6.7 an over), so they add two <b>provisional</b> cards:
-RR_8, built from RR_6 (~8 an over, its GREEN and RED wickets), and RR_9, built from RR_7 (~10 an over, its BLUE and RED wickets) - the wicket colours work exactly as before.
-They're a stand-in until you design real ones. Bowlers get 4 overs; innings average ~155.</p>
+<p><b>T20s</b> have their own ladder of six cards, <b>RR_T6</b> (6 an over) to <b>RR_T12</b> (12 an over, the death card), designed in the same token language and calibrated to real T20s:
+about 155 an innings, 6-7 wickets and 5-6 sixes; the powerplay near 8 an over, the middle overs 7.4, the death 10. Faster cards carry more BLUE wickets, so a top-order batter's risk rises with the rate.
+The middle overs deal one card slower, overs 16-18 one faster and the last two two faster; a steep chase pushes faster again. Bowlers get 4 overs.
+Settings → T20 run-rate cards can switch back to the provisional ladder (the ODI cards plus RR_8 and RR_9 built from RR_6 and RR_7).</p>
 <p><b>Tests</b> use their own card weights (RR_3 most overs, RR_7 as the wicket card), five days of 90 overs, weather, pitches that wear, follow-ons at 200 and declarations.</p>
 <p><b>Your dice:</b> switch Settings → Dice to "I roll" and enter each roll yourself.</p>
 <p><b>Captain:</b> Settings → Captaincy → Me, and you captain the team you follow (or both sides): choose who bowls each over (the real bowler of that over is marked),
@@ -58,6 +59,7 @@ RENDER.settings=(el)=>{
     <div class="spread"><span>Umpires &amp; DRS</span>${seg('drs',[['era','Real dates'],['on','DRS always'],['off','Perfect umpires']])}</div>
     <div class="spread"><span>Batting colours</span>${seg('batColours',[['player','Player'],['position','Classic (by position)']])}</div>
     <div class="spread"><span>After the real calendar (2026)</span>${seg('future',[['on','Carry on into the future'],['off','Stop']])}</div>
+    ${HAS_T20_DESIGN?`<div class="spread"><span>T20 run-rate cards</span>${seg('t20cards',[['designed','Designed (RR_T6-T12)'],['provisional','Provisional (ODI cards + RR_8/9)']])}</div>`:''}
     <div class="spread"><span>T20 World Cups (real years, 2007-2024)</span>${seg('t20wc',[['on','On'],['off','Off']])}</div>
     <div class="spread"><span>Tournament knockouts</span>${seg('knockouts',[['timeline','My timeline'],['history','History']])}</div>
     ${HAS_REAL?`<div class="spread"><span>Real results (after you play a match)</span>${seg('history',[['after','Show'],['off','Hide']])}</div>`:''}
@@ -81,7 +83,7 @@ RENDER.settings=(el)=>{
   </div>
   <div class="card" style="margin-top:14px"><h3>Data</h3><p class="sub">${FIX.length.toLocaleString()} ODI fixtures from Cricsheet (${fmtDate(FIX[0].date)} - ${fmtDate(FIX[FIX.length-1].date)}), ${Object.keys(WORLD.xi).length.toLocaleString()} real XIs and bowling plans, ${Object.keys(WORLD.players).length.toLocaleString()} players. Built from ${esc(WORLD.source||'the First XI workbook')}.</p></div>`;
   $$('[data-set]').forEach(b=>b.onclick=()=>{const k=b.dataset.set,v=b.dataset.val;st[k]=k==='ballDelay'?+v:v==='true'?true:v==='false'?false:v;
-    if(S.live&&S.live.state!=='done'){if(k==='dice')S.live.manual=v==='manual';if(k==='captain')S.live.manualCaptain=v==='manual'?captainOf(S.live):null;if(k==='batColours')S.live.batMode=v;}
+    if(S.live&&S.live.state!=='done'){if(k==='dice')S.live.manual=v==='manual';if(k==='captain')S.live.manualCaptain=v==='manual'?captainOf(S.live):null;if(k==='batColours')S.live.batMode=v;if(k==='t20cards')S.live.t20cards=v;}
     if(k==='broadcast'||k==='font')applyBroadcast();
     if(k==='t20wc')iccToggle(v==='on');
     saveGame();rerender();});

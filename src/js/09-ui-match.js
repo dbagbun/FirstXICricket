@@ -324,7 +324,7 @@ function drawMatchTab(M){
 function rrCardHTML(M){
   const C=M.cur,code=C?C.card:(curInn(M).overs.slice(-1)[0]||{}).card||'3';
   const grid=WORLD.cards[code];
-  return`<div class="row" style="margin-bottom:8px">${[...new Set([...RR_CODES,...(M.fmt==='T20'?['8','9']:[])])].map(c=>`<button class="btn sm ${c===code?'pri':''}" data-rr="${c}">RR_${c}</button>`).join('')}</div>
+  return`<div class="row" style="margin-bottom:8px">${(M.fmt==='T20'?cardCodes(M):RR_CODES).map(c=>`<button class="btn sm ${c===code?'pri':''}" data-rr="${c}">RR_${c}</button>`).join('')}</div>
   <div class="muted" style="font-size:12px;margin-bottom:6px">Rows are the 1-100 roll, columns balls 1-6. BLUE wickets get anyone out, GREEN only Nos.7-11, RED only Nos.10-11.</div>
   <div class="tbl-wrap" style="max-height:380px;overflow:auto"><table class="mono" style="font-size:11px" id="rr-tbl">${rrRows(code,C)}</table></div>`;
 }
