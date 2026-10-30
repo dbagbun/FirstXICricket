@@ -8,8 +8,9 @@ const GEN_ID0=900001;
 const isFuture=date=>!!date&&date>addDays(LAST_REAL,20);
 const genP=pid=>S&&S.gen&&S.gen.players[pid]||null;
 const ageOf=(g,date)=>+date.slice(0,4)-g.born;
-// rating for a generated player at a date: potential, minus youth and age
-function genRating(g,date){const a=ageOf(g,date);return clamp(g.pot+(a<22?2:a<25?1:a<=31?0:a<=34?1:2),1,5);}
+// rating for a generated player at a date: potential, minus youth and age; caps bring youngsters on (15 = a step)
+function genRating(g,date,pid){const a=ageOf(g,date),young=a<22?2:a<25?1:0,xp=pid?Math.floor(capsOf(pid)/15):0;
+  return clamp(g.pot+Math.max(0,young-xp)+(a<=31?0:a<=34?1:2),1,5);}
 function capsOf(pid){let n=0;if(S)for(const f of FORMATS){const s=S.stats[f][pid];if(s)n+=s.m;}return n;}
 function genColour(g,pid){
   if(g.role==='tail')return'R';if(g.role==='mid')return'G';
@@ -19,7 +20,7 @@ function genColour(g,pid){
 // pAttr for generated players, and ageing for real ones in the future (called from pAttr)
 function futureAttr(pid,date,base){
   const g=genP(pid);if(!g)return base;
-  if(!g.real){const st=g.st;return{style:st,rating:st==='N'?7:genRating(g,date),max:st==='N'?0:10,src:'g',bat:genColour(g,pid),batSrc:'g',era:true};}
+  if(!g.real){const st=g.st;return{style:st,rating:st==='N'?7:genRating(g,date,pid),max:st==='N'?0:10,src:'g',bat:genColour(g,pid),batSrc:'g',era:true};}
   if(!isFuture(date))return base;
   const a=ageOf(g,date),dec=a>=37?2:a>=34?1:0;
   const out={...base};

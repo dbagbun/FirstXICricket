@@ -34,6 +34,8 @@ Start one from the first ball of the chase or from ten, five, two or one overs l
 tools/cricsheet_batting.py goes further: batting colours from real averages, year by year (BLUE from 30, GREEN from 15), with no lift for batting position.</p>
 <p><b>ICC events:</b> the real 50-over World Cups and Champions Trophies are in the ODI calendar; the real T20 World Cups (2007-2024) are added with their real hosts and the teams in the game (Settings to switch them off).
 The <b>World Test Championship</b> runs from August 2019 in two-year cycles: every Test between the nine full members counts (12 points a win, 4 a draw, 6 a tie), the table is ranked on the percentage of points available, and the top two meet in a one-off final in England (a draw shares the title). Rankings → Test Championship.</p>
+<p><b>Scouting:</b> as a coach you get six uncapped prospects a year and four scouting reports to reveal their true potential (until then it's a range).
+Call one up into your next squad and he gets first chance when the XI needs his role. Young players grow into their potential with age - and with caps.</p>
 <p><b>Knockouts</b> are re-seeded from your own tables once a tournament's league stage is finished (Settings to follow history instead).</p>`;
 function openGuide(){
   openModal(GUIDE+(S&&!S.sandbox?`<div class="row" style="margin-top:12px"><button class="btn" id="g-start">Show the Start here checklist</button><button class="btn" id="g-keys">Keyboard shortcuts</button></div>`:''));

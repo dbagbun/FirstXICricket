@@ -2215,7 +2215,8 @@ function pickXI(fx,team,base){
     if(ok(bat[i]))continue;
     const out=bat[i],a=pAttr(out,date),keeper=out===base.wk;
     const cands=squad.filter(p=>!used.has(p)&&ok(p));
-    const like=cands.filter(p=>keeper?true:(pAttr(p,date).style==='N')===(a.style==='N'));
+    const called=p=>genP(p)&&genP(p).called?1:0;   // men you called up get the first chance
+    const like=cands.filter(p=>keeper?true:(pAttr(p,date).style==='N')===(a.style==='N')).sort((x,y)=>called(y)-called(x));
     const inn=(like[0]??cands[0]);
     if(inn==null)continue;
     used.add(inn);bat[i]=inn;notes.push({out,inn,why:isInjured(out,date)?'injured':isRested(fx,out)?'rested':'not in your squad'});
@@ -2581,6 +2582,7 @@ const ACHIEVEMENTS=[
   ['league','💼','Owner','Found a franchise league.'],['leagueWin','🏆','Franchise champions','Win the Franchise League with your franchise.'],
   ['press','🎙️','Face the press','Answer a press conference as coach.'],
   ['rotate','🔄','Rotation policy','Rest a player for a match.'],
+  ['callup','📞','The call-up','Call up an uncapped prospect.'],
   ['coach1','📋','The job','Take a coaching job.'],['target10','🎯','Delivering','Meet 10 board targets.'],['sacked','📦','Clear your desk','Get sacked.'],
   ['nations3','✈️','Journeyman','Coach three different nations.'],['coachWC','🏆','World champion coach','Win a World Cup final as coach.'],
   ['challenge1','🧩','Up for it','Complete a challenge.'],['challenge3','⭐','Three stars','Three-star a challenge.'],
@@ -2633,8 +2635,9 @@ const GEN_ID0=900001;
 const isFuture=date=>!!date&&date>addDays(LAST_REAL,20);
 const genP=pid=>S&&S.gen&&S.gen.players[pid]||null;
 const ageOf=(g,date)=>+date.slice(0,4)-g.born;
-// rating for a generated player at a date: potential, minus youth and age
-function genRating(g,date){const a=ageOf(g,date);return clamp(g.pot+(a<22?2:a<25?1:a<=31?0:a<=34?1:2),1,5);}
+// rating for a generated player at a date: potential, minus youth and age; caps bring youngsters on (15 = a step)
+function genRating(g,date,pid){const a=ageOf(g,date),young=a<22?2:a<25?1:0,xp=pid?Math.floor(capsOf(pid)/15):0;
+  return clamp(g.pot+Math.max(0,young-xp)+(a<=31?0:a<=34?1:2),1,5);}
 function capsOf(pid){let n=0;if(S)for(const f of FORMATS){const s=S.stats[f][pid];if(s)n+=s.m;}return n;}
 function genColour(g,pid){
   if(g.role==='tail')return'R';if(g.role==='mid')return'G';
@@ -2644,7 +2647,7 @@ function genColour(g,pid){
 // pAttr for generated players, and ageing for real ones in the future (called from pAttr)
 function futureAttr(pid,date,base){
   const g=genP(pid);if(!g)return base;
-  if(!g.real){const st=g.st;return{style:st,rating:st==='N'?7:genRating(g,date),max:st==='N'?0:10,src:'g',bat:genColour(g,pid),batSrc:'g',era:true};}
+  if(!g.real){const st=g.st;return{style:st,rating:st==='N'?7:genRating(g,date,pid),max:st==='N'?0:10,src:'g',bat:genColour(g,pid),batSrc:'g',era:true};}
   if(!isFuture(date))return base;
   const a=ageOf(g,date),dec=a>=37?2:a>=34?1:0;
   const out={...base};
@@ -3319,6 +3322,70 @@ function wtcHTML(){
       ${L.length?`<table class="num"><tr><th>#</th><th>Team</th><th class="r">P</th><th class="r hide-sm">W</th><th class="r hide-sm">L</th><th class="r hide-sm">D</th><th class="r">Pts</th><th class="r">%</th></tr>
       ${L.map((r,i)=>`<tr class="${r.team===S.settings.myTeam?'me':''}"><td class="muted">${i+1}</td><td>${tlabel(r.team)}</td><td class="r">${r.p}</td><td class="r hide-sm">${r.w}</td><td class="r hide-sm">${r.l}</td><td class="r hide-sm">${r.d}</td><td class="r">${r.pts}</td><td class="r"><b>${r.pct}</b></td></tr>`).join('')}</table>`
       :'<div class="muted">No WTC Tests yet - schedule some (Dashboard → Schedule a series).</div>'}</div>`;}).join('');
+}
+
+// ═══ SCOUTING & CALL-UPS — uncapped prospects for the side you coach ═══
+// S.scout = {team, year, pool:[pid], reports, known:{pid:1}}: each year (and each new job) brings SCOUT_POOL
+// domestic prospects for your team (generated players, S.gen), SCOUT_REPORTS reports to reveal their true
+// potential (until then you see a range), and you can call one up into your next squad. Generated players grow
+// into their potential with age and, since this was added, with caps too (genRating: 15 caps = one step of youth).
+const SCOUT_POOL=6,SCOUT_REPORTS=4;
+function scoutState(){
+  const C=S.coach;if(!C||!C.team)return null;
+  const y=+careerDate().slice(0,4);
+  if(!S.scout||S.scout.team!==C.team||S.scout.year!==y){
+    genStore();
+    const old=S.scout&&S.scout.team===C.team?S.scout:null,date=careerDate();
+    const keep=old?old.pool.filter(p=>{const g=genP(p);return g&&!g.ret&&!capsOf(p)&&ageOf(g,date)<=27;}):[];
+    const pool=keep.slice(0,SCOUT_POOL-2);
+    while(pool.length<SCOUT_POOL)pool.push(newYoungster(C.team,y,true));
+    S.scout={team:C.team,year:y,pool,reports:SCOUT_REPORTS,known:old?Object.fromEntries(Object.entries(old.known).filter(([p])=>pool.includes(+p))):{}};
+  }
+  return S.scout;
+}
+const starsOf=p=>6-genP(p).pot;   // 5 stars = potential rating 1
+// What you know of his potential: the truth once scouted, otherwise a range two wide around a guess.
+function potRange(p){
+  const s=starsOf(p);if(S.scout&&S.scout.known[p])return[s,s];
+  const off=(hstr('pot'+p)%3)-1,lo=clamp(s+off-1,1,5);return[lo,clamp(lo+2,1,5)];
+}
+function scoutReport(p){
+  const X=scoutState();if(!X||X.reports<=0||X.known[p]||!X.pool.includes(+p))return false;
+  X.reports--;X.known[p]=1;return true;
+}
+// Into the squad for your next series (a free place needed); he plays when the XI needs his role.
+function callUp(p){
+  const X=scoutState(),nx=coachNext();if(!X||!nx||!X.pool.includes(+p))return'none';
+  const sq=squadFor(nx.sid,X.team,nx.date);if(sq.includes(+p))return'in';
+  if(sq.length>=SQUAD_SIZE)return'full';
+  sq.push(+p);genP(p).called=nx.date;
+  coachNews(`${pName(p)} is called up for ${nx.title}.`,'good');
+  if(typeof achieve==='function')achieve('callup');
+  return'ok';
+}
+function prospectLine(p,date){
+  const g=genP(p),a=pAttr(p,date),[lo,hi]=potRange(p);
+  return{p,age:ageOf(g,date),role:g.role==='top'?'Top-order batter':g.role==='mid'?(g.st==='N'?'Middle-order batter':'All-rounder'):g.wk?'Keeper':'Bowler',
+    style:a.style,rating:a.rating,bat:a.bat,lo,hi,known:!!(S.scout&&S.scout.known[p]),capped:capsOf(p)>0};
+}
+// ---------- the Coach screen's scouting card ----------
+function scoutHTML(){
+  const X=scoutState();if(!X)return'';
+  const date=careerDate(),nx=coachNext(),sq=nx?squadFor(nx.sid,X.team,nx.date):[];
+  const star=(lo,hi)=>lo===hi?'★'.repeat(lo):`${'★'.repeat(lo)}<span class="muted">${'☆'.repeat(hi-lo)}</span>`;
+  return`<div class="card"><div class="spread"><h3 style="margin:0">Scouting - ${esc(teamName(X.team))} prospects</h3><span class="pill">${plural(X.reports,'report')} left in ${X.year}</span></div>
+    <div class="muted" style="font-size:12px;margin:4px 0 8px">Uncapped players pushing for a place. Potential is a guess until you scout him; youngsters grow into it with age and with caps. Call one up into your next squad (it needs a free place).</div>
+    <div class="tbl-wrap"><table><tr><th>Player</th><th class="hide-sm">Role</th><th>Now</th><th>Potential</th><th></th></tr>
+    ${X.pool.map(p=>{const L=prospectLine(p,date),inSq=sq.includes(p);
+      return`<tr><td>${plink(p)} <span class="muted" style="font-size:12px">${L.age}</span>${L.capped?' <span class="pill win">capped</span>':''}</td><td class="hide-sm muted" style="font-size:12px">${L.role}</td>
+      <td style="font-size:12px">${batChip((L.bat||'G')[0])} ${L.style!=='N'?STYLE_NAME[L.style]+' r'+L.rating:''}</td><td class="gold" title="${L.known?'scouted':'a guess'}">${star(L.lo,L.hi)}</td>
+      <td class="r"><span class="row" style="justify-content:flex-end">${L.known?'':`<button class="btn sm" data-scout="${p}" ${X.reports?'':'disabled'}>Scout</button>`}
+      ${nx?(inSq?'<span class="pill">in the squad</span>':`<button class="btn sm pri" data-callup="${p}">Call up</button>`):''}</span></td></tr>`;}).join('')}</table></div></div>`;
+}
+function scoutWire(){
+  $$('[data-scout]').forEach(b=>b.onclick=()=>{if(scoutReport(+b.dataset.scout)){const p=+b.dataset.scout;toast(`Scouting report: ${esc(pName(p))} - ${'★'.repeat(starsOf(p))} potential.`);saveGame();rerender();}});
+  $$('[data-callup]').forEach(b=>b.onclick=()=>{const r=callUp(+b.dataset.callup);
+    toast(r==='ok'?`${esc(pName(+b.dataset.callup))} is in the squad.`:r==='full'?`The squad is full (${SQUAD_SIZE}) - leave someone out first.`:'No series to call him up for.',r==='ok'?'ms':'warn');saveGame();rerender();});
 }
 
 // ═══ UI SHELL — navigation, views, modal, shared widgets ═══
@@ -4433,8 +4500,8 @@ RENDER.coach=(el)=>{
     ${C.history.map(h=>`<tr><td>${tlabel(h.team)}</td><td>${fmtDate(h.from)}</td><td>${fmtDate(h.to)}</td><td class="r">${h.p}</td><td class="r">${h.w}</td><td class="r">${h.l}</td><td>${esc(h.why)}</td></tr>`).join('')}</table></div>`:'';
   el.innerHTML=`<div class="stack">${job}${offers}${next}${pressRoomHTML()}
     <div class="grid g2" style="align-items:start"><div class="stack">${objHTML}${injList.length?`<div class="card"><h3>Injuries</h3>${injList.map(([p,x])=>`<div>🩹 ${plink(+p)} <span class="muted">${esc(x.what)}, back ${fmtDate(x.until)}</span></div>`).join('')}</div>`:''}${hist}</div>
-    <div class="stack">${backPagesHTML(4)}${news}</div></div>${squad}</div>`;
-  pressWire();
+    <div class="stack">${backPagesHTML(4)}${news}</div></div>${squad}${C&&C.team?scoutHTML():''}</div>`;
+  pressWire();scoutWire();
   $$('[data-take]').forEach(b=>b.onclick=()=>{takeJob(+b.dataset.take);const nx2=coachNext();if(nx2)ensureObjectives(nx2);saveGame();rerender();});
   $$('[data-decline]').forEach(b=>b.onclick=()=>{C.offers.splice(+b.dataset.decline,1);saveGame();rerender();});
   $$('[data-playkey]').forEach(b=>b.onclick=()=>startFixture(b.dataset.playkey));
@@ -5237,6 +5304,8 @@ Start one from the first ball of the chase or from ten, five, two or one overs l
 tools/cricsheet_batting.py goes further: batting colours from real averages, year by year (BLUE from 30, GREEN from 15), with no lift for batting position.</p>
 <p><b>ICC events:</b> the real 50-over World Cups and Champions Trophies are in the ODI calendar; the real T20 World Cups (2007-2024) are added with their real hosts and the teams in the game (Settings to switch them off).
 The <b>World Test Championship</b> runs from August 2019 in two-year cycles: every Test between the nine full members counts (12 points a win, 4 a draw, 6 a tie), the table is ranked on the percentage of points available, and the top two meet in a one-off final in England (a draw shares the title). Rankings → Test Championship.</p>
+<p><b>Scouting:</b> as a coach you get six uncapped prospects a year and four scouting reports to reveal their true potential (until then it's a range).
+Call one up into your next squad and he gets first chance when the XI needs his role. Young players grow into their potential with age - and with caps.</p>
 <p><b>Knockouts</b> are re-seeded from your own tables once a tournament's league stage is finished (Settings to follow history instead).</p>`;
 function openGuide(){
   openModal(GUIDE+(S&&!S.sandbox?`<div class="row" style="margin-top:12px"><button class="btn" id="g-start">Show the Start here checklist</button><button class="btn" id="g-keys">Keyboard shortcuts</button></div>`:''));

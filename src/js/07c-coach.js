@@ -91,7 +91,8 @@ function pickXI(fx,team,base){
     if(ok(bat[i]))continue;
     const out=bat[i],a=pAttr(out,date),keeper=out===base.wk;
     const cands=squad.filter(p=>!used.has(p)&&ok(p));
-    const like=cands.filter(p=>keeper?true:(pAttr(p,date).style==='N')===(a.style==='N'));
+    const called=p=>genP(p)&&genP(p).called?1:0;   // men you called up get the first chance
+    const like=cands.filter(p=>keeper?true:(pAttr(p,date).style==='N')===(a.style==='N')).sort((x,y)=>called(y)-called(x));
     const inn=(like[0]??cands[0]);
     if(inn==null)continue;
     used.add(inn);bat[i]=inn;notes.push({out,inn,why:isInjured(out,date)?'injured':isRested(fx,out)?'rested':'not in your squad'});

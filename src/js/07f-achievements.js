@@ -19,6 +19,7 @@ const ACHIEVEMENTS=[
   ['league','💼','Owner','Found a franchise league.'],['leagueWin','🏆','Franchise champions','Win the Franchise League with your franchise.'],
   ['press','🎙️','Face the press','Answer a press conference as coach.'],
   ['rotate','🔄','Rotation policy','Rest a player for a match.'],
+  ['callup','📞','The call-up','Call up an uncapped prospect.'],
   ['coach1','📋','The job','Take a coaching job.'],['target10','🎯','Delivering','Meet 10 board targets.'],['sacked','📦','Clear your desk','Get sacked.'],
   ['nations3','✈️','Journeyman','Coach three different nations.'],['coachWC','🏆','World champion coach','Win a World Cup final as coach.'],
   ['challenge1','🧩','Up for it','Complete a challenge.'],['challenge3','⭐','Three stars','Three-star a challenge.'],
