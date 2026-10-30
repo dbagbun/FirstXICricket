@@ -160,7 +160,22 @@ function tacticPts(M,b){
   if(testClock(M)>1&&clk<DAYSTART_OVERS)w+=DAYSTART_PTS;
   return w;
 }
+// ODI tempo, as points moved onto RR_5 / RR_6 (the cards where set batters score freely - RR_7 is the wicket card):
+// the powerplay (fielding restrictions), wickets in hand in the back half, and the era (two new balls from 2011,
+// bigger hitting from 2015). Points come off the slowest cards first.
+const ODI_PP=[10,20],ODI_ACCEL=[[3,20,26],[5,10,20]],ODI_ERA=[['2000-01-01',8],['2011-01-01',14],['2015-01-01',20]];
+function movePts(W,to,n){for(let i=0;i<to&&n>0;i++){const m=Math.min(W[i],n);W[i]-=m;W[to]+=m;n-=m;}return W;}
+function odiTempo(M,W){
+  if(M.fmt!=='ODI')return W;
+  const I=curInn(M),over=Math.floor(I.lb/6)+1,k=I.maxOv/50,left=I.maxOv-over+1;
+  if(over<=ODI_PP[0]*k)movePts(W,4,ODI_PP[1]);
+  for(const[w,o,n]of ODI_ACCEL)if(I.wkts<=w&&left<=o*k){movePts(W,4,n>>1);movePts(W,3,n-(n>>1));break;}
+  let era=0;for(const[d,n]of ODI_ERA)if(M.date>=d)era=n;
+  if(era)movePts(W,4,era);
+  return W;
+}
 function wearWeights(M,b,W){
+  if(M.fmt==='ODI')return odiTempo(M,W);
   if(M.fmt!=='TEST')return W;
   const P=PITCHES[M.pitch]||PITCHES.normal;
   const w=Math.round((TEST_WEAR[testDay(M)]||0)*(b.style==='S'?2:1)*P.wear)+P.all+(P[b.style]||0)+(TEST_INN_PRESSURE[curInn(M).no]||0)+tacticPts(M,b);

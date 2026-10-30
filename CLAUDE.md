@@ -72,6 +72,7 @@ The repo root holds a prebuilt `first-xi.html` (double-click to open). **After a
 - Replay: `replayMatch(E)` (scorecard modal button) builds a friendly `M.replayOf` from the archived XIs, ground, date and format; the result popup compares it with the first time round.
 - Associate tiers (03-engine `batColour`): `WEAK_ASSOC` {team:[from,to]} / `weakAssoc(t,date)` - against Test nations those sides' batters play one colour lower (after the position lift, before form), unless `M.assocTiers===false` (Settings `assocTiers`, set in `selectAndMods`). Measured: weak associates 1-3% v full members (avg ~95), Kenya 2003 / Ireland 2007+ / Netherlands / Scotland 5-13%, associate v associate unchanged.
 - Stumpings: the workbook's ODI/Test cards have no STUMPED tokens, so in `applyBall` a caught-behind off a spinner becomes a stumping `STUMP_SPIN` of the time (`stumpOf`, a hash of the ball - no extra random draws).
+- ODI tempo (03-engine `odiTempo`, called from `wearWeights` for ODIs): points moved onto RR_5/RR_6 (never RR_7, the wicket card) by `movePts` - powerplay `ODI_PP`, wickets in hand late on `ODI_ACCEL` [[max wkts, overs left, points]], era `ODI_ERA` (2000/2011/2015). Full v full first innings ~246/6.8 (2004), ~250/7.2 (2010); measure with a sim of Test nations before changing.
 
 ## Layout
 - `src/template.html` - page shell with `/*@@CSS@@*/`, `/*@@DATA@@*/`, `/*@@JS@@*/`
