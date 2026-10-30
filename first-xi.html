@@ -637,10 +637,22 @@ function applyShift(W,shift){
   if(tot!==100){if(shift>0)t[5]+=100-tot;else t[0]+=100-tot;}
   return t;
 }
+// Test tactics: a new ball helps the seamers (NEWBALL_PTS for its first NEWBALL_OVERS overs), an old one (60+ overs)
+// the spinners, and bowlers are fresh at the start of a day (DAYSTART_PTS for the first overs) - which is why a
+// side sends in a nightwatchman late in the day.
+const NEWBALL_PTS=2,NEWBALL_OVERS=10,OLDBALL_PTS=1,DAYSTART_PTS=2,DAYSTART_OVERS=3;
+function tacticPts(M,b){
+  const I=curInn(M),over=Math.floor(I.lb/6)+1,age=over-(I.eng?I.eng.newBallAt:1),clk=testClock(M)%90;
+  let w=0;
+  if(b.style!=='S'&&age<NEWBALL_OVERS)w+=NEWBALL_PTS;
+  if(b.style==='S'&&age>=60)w+=OLDBALL_PTS;
+  if(testClock(M)>1&&clk<DAYSTART_OVERS)w+=DAYSTART_PTS;
+  return w;
+}
 function wearWeights(M,b,W){
   if(M.fmt!=='TEST')return W;
   const P=PITCHES[M.pitch]||PITCHES.normal;
-  const w=Math.round((TEST_WEAR[testDay(M)]||0)*(b.style==='S'?2:1)*P.wear)+P.all+(P[b.style]||0)+(TEST_INN_PRESSURE[curInn(M).no]||0);
+  const w=Math.round((TEST_WEAR[testDay(M)]||0)*(b.style==='S'?2:1)*P.wear)+P.all+(P[b.style]||0)+(TEST_INN_PRESSURE[curInn(M).no]||0)+tacticPts(M,b);
   const m=w>=0?Math.min(w,W[0]):-Math.min(-w,W[5]);
   W[0]-=m;W[5]+=m;return W;
 }
@@ -782,7 +794,7 @@ function phaseBonus(M,I,style,over){
 }
 function chooseBowler(M,I,over){
   const E=I.eng,B=E.B;
-  if(M.fmt==='TEST'&&over>1&&(over-E.newBallAt)>=NEW_BALL)E.newBallAt=over;
+  if(M.fmt==='TEST'&&over>1&&(over-E.newBallAt)>=NEW_BALL&&!M.manualCaptain?.[I.bowl])E.newBallAt=over;
   if(E.plan&&E.plan[over-1]){
     const i=B.findIndex(b=>b.pid===E.plan[over-1]);
     if(i>=0&&i!==E.lastIdx&&(!LIMITED(M)||B[i].used<perBowler(M))){
@@ -843,6 +855,18 @@ function captainBowler(M,I,over){
   return i;
 }
 // Send in a different batter next: he moves to the front of those still to bat.
+// Late in a day (and not the last), with a top-six batter next: send the best-batting tail-ender instead.
+function nightwatch(M,I){
+  const clk=testClock(M)%90,k=I.wkts+1;
+  if(testDay(M)>=5||clk<84||I.wkts>=7||k>5||I.target&&I.target-I.runs<60)return false;
+  const cand=[7,8,9].map(i=>I.order[i]).filter(p=>p!=null&&!I.bt[p]&&pAttr(p,M.date).style!=='N')
+    .sort((a,b)=>(COL_RANK[pAttr(a,M.date).bat?.[0]]??2)-(COL_RANK[pAttr(b,M.date).bat?.[0]]??2))[0];
+  if(cand==null)return false;
+  const j=I.order.indexOf(cand);I.order.splice(j,1);I.order.splice(k,0,cand);
+  fire(M,null,{t:'nw',pid:cand,bat:I.bat});return true;
+}
+function takeNewBall(M){const I=curInn(M);if(M.fmt!=='TEST'||M.cur||!I.eng)return false;I.eng.newBallAt=Math.floor(I.lb/6)+1;fire(M,null,{t:'newball',bowl:I.bowl});return true;}
+const newBallAge=(M,I)=>Math.floor(I.lb/6)+1-(I.eng?I.eng.newBallAt:1);
 function setNextBatter(M,pid){
   const I=curInn(M),k=I.wkts+2,j=I.order.indexOf(pid);
   if(j<k||I.bt[pid])return false;
@@ -973,6 +997,7 @@ function applyBall(M,I,D){
       fire(M,ball,{t:'w',pid:striker,how:t.how,bowler:C.bowler,fielder:ball.fielder});
       trackHat(M,I,C.bowler,credit,ball);
       if(I.wkts<10){
+        if(M.fmt==='TEST'&&!M.manualCaptain?.[I.bat])nightwatch(M,I);
         const nb=I.order[I.wkts+1];I.st=nb;I.bt[nb]=newBat(I.wkts+1);
         I.part={a:nb,b:I.ns,r:0,bl:0,ra:0,rb:0,w:I.wkts+1};
       }
@@ -1754,6 +1779,17 @@ function createSeries({fmt='TEST',a,b,n,start}){
   return T;
 }
 const createTestSeries=o=>createSeries({...o,fmt:'TEST'});
+// A full tour: Tests, ODIs and T20Is back to back (Tests first, or the white-ball leg first), a few days between legs.
+function createTour({a,b,tests=0,odis=0,t20s=0,start,order='tests'}){
+  const legs=(order==='tests'?[['TEST',tests],['ODI',odis],['T20',t20s]]:[['T20',t20s],['ODI',odis],['TEST',tests]]).filter(([,n])=>n>0);
+  let d=start;const out=[];
+  for(const[fmt,n]of legs){
+    if(fmt==='T20'&&d<T20_START)d=T20_START;
+    const T=createSeries({fmt,a,b,n,start:d});out.push(T);
+    d=addDays(T.fix[T.fix.length-1].date,fmt==='TEST'?6:4);
+  }
+  return out;
+}
 function customFx(T,x,k){const fmt=T.fmt||'TEST';return{key:x.key,fmt,date:x.date,a:T.a,b:T.b,venue:x.venue,city:x.city,sid:T.id,title:T.title,label:`${ordinal(k+1)} ${MATCH_LABEL[fmt]}`,playable:true,custom:true};}
 function deleteTestSeries(id){
   const T=S.tests.find(t=>t.id===id);if(!T||T.fix.some(x=>S.done[x.key]))return false;
@@ -3760,6 +3796,8 @@ function evText(e){
     case'dl':return`D/L: revised target ${e.target} from ${e.overs} overs`;
     case'drs':return drsText(e);
     case'followon':return`${teamName(e.team)} enforce the follow-on`;
+    case'nw':return`${pName(e.pid)} comes in as nightwatchman`;
+    case'newball':return`${teamName(e.bowl)} take the new ball`;
     case'innsEnd':return`End of innings: ${teamName(e.bat)} ${e.runs}${e.wkts<10?'/'+e.wkts:''} (${e.why})`;
     case'result':return e.text;
   }
@@ -3786,17 +3824,35 @@ function captainPanel(M){
       rows.push(`<div class="row"><span class="sub">${esc(teamShort(I.bowl))} - next over:</span><select id="cap-bowl"><option value="">AI picks</option>${opts.map(o=>`<option value="${o.pid}" ${o.ok?'':'disabled'} ${M.nextBowler===o.pid?'selected':''}>${esc(pName(o.pid))} - ${oversTxt(o.W.b)}-${o.W.md||0}-${o.W.r}-${o.W.w} · ${STYLE_NAME[o.style]||''} r${Math.min(o.rating,5)}${o.regular?'':' (part-timer)'}${o.real?' · bowled this over for real':''}${o.why?' · '+o.why:''}</option>`).join('')}</select></div>`);
     }
     rows.push(`<div class="row">${seg('f'+I.bowl,'Field:')}</div>`);
+    if(M.fmt==='TEST'){const age=newBallAge(M,I);rows.push(age>=NEW_BALL&&!M.cur?`<div class="row"><span>🔴 The new ball is due (${age} overs old).</span><button class="btn sm pri" id="cap-nb">Take the new ball</button><span class="muted" style="font-size:12px">Seamers get help with it for ${NEWBALL_OVERS} overs; spinners like the old one.</span></div>`
+      :`<div class="muted" style="font-size:12px">Ball ${Math.max(0,age)} overs old${age<NEWBALL_OVERS?' - the seamers get help':age>=60?' - the spinners get help':''}.</div>`);}
   }
   if(C[I.bat]){
     const left=I.order.slice(I.wkts+2).filter(p=>!I.bt[p]);
     if(left.length)rows.push(`<div class="row"><span class="sub">${esc(teamShort(I.bat))} - next in:</span><select id="cap-next">${left.map(p=>`<option value="${p}">${esc(pName(p))} (${BAT_NAME[batColour(M,p,I.wkts+2,I.bowl)]})</option>`).join('')}</select></div>`);
     rows.push(`<div class="row">${seg(I.bat,'Batting:')}</div>`);
+    if(M.fmt==='TEST')rows.push(testAdvice(M,I));
   }
   const head=M.h2h?`<h3 style="margin:0">${esc(M.h2h[I.bowl])} (${esc(teamShort(I.bowl))}) bowls · ${esc(M.h2h[I.bat])} (${esc(teamShort(I.bat))}) bats</h3>`:'<h3 style="margin:0">Captain</h3>';
   return`<div class="stack" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)">${head}${rows.join('')}
     <div class="muted" style="font-size:12px">Attack moves every over one card faster (more runs, more wickets), defend one slower. Batting and field settings add up.</div></div>`;
 }
+// Test captaincy hints for the batting side: a nightwatchman near the close, and the declaration.
+function testAdvice(M,I){
+  const out=[],clk=testClock(M)%90,k=I.wkts+2,next=I.order[k];
+  if(testDay(M)<5&&clk>=84&&I.wkts<8&&k<=6&&next!=null&&!I.bt[next]){
+    const nw=[7,8,9].map(i=>I.order[i]).filter(p=>p!=null&&!I.bt[p]&&pAttr(p,M.date).style!=='N')[0];
+    if(nw!=null)out.push(`<div class="row"><span>🌙 Close of play is near and ${esc(pName(next))} is next. Bowlers are fresh in the morning.</span><button class="btn sm" id="cap-nw" data-pid="${nw}">Send ${esc(pName(nw))} as nightwatchman</button></div>`);
+  }
+  if(I.no<=3&&!I.target){
+    const lead=testTotals(M,I.bat)-testTotals(M,I.bowl),left=Math.round(testOversLeft(M));
+    out.push(`<div class="muted" style="font-size:12px">${aiShouldDeclare(M,I)?'<b class="gold">Most captains would declare now.</b> ':''}${I.no===3?`Lead ${lead}, ${left} overs left: a declaration now sets ${lead+1}${left>0?` at ${(Math.max(0,lead+1)/Math.max(1,left-2)).toFixed(1)} an over`:''}.`:`${lead>=0?'Lead':'Trail by'} ${Math.abs(lead)}, ${left} overs left in the match.`}</div>`);
+  }
+  return out.join('');
+}
 function wireCaptain(M){
+  $('#cap-nb')&&($('#cap-nb').onclick=()=>{takeNewBall(M);rerender();});
+  $('#cap-nw')&&($('#cap-nw').onclick=e=>{setNextBatter(M,+e.target.dataset.pid);rerender();});
   $$('[data-att]').forEach(b=>b.onclick=()=>{M.att=M.att||{};M.att[b.dataset.att]=+b.dataset.v;rerender();});
   const sb=$('#cap-bowl');if(sb)sb.onchange=()=>{M.nextBowler=+sb.value||null;};
   const sn=$('#cap-next');if(sn)sn.onchange=()=>{setNextBatter(M,+sn.value);rerender();};
@@ -4237,20 +4293,29 @@ function openSimMore(){
 }
 function openTestCreator(fmt='TEST'){
   const d=(nextFixture()||{date:careerDate()}).date;
-  const pool=fmt==='TEST'?TEST_TEAMS:ALL_TEAMS;
+  const pool=fmt==='TEST'||fmt==='TOUR'?TEST_TEAMS:ALL_TEAMS;
   const opts=sel=>pool.map(t=>`<option value="${t}" ${t===sel?'selected':''}>${esc(teamName(t))}</option>`).join('');
   const my=S.settings.myTeam&&pool.includes(S.settings.myTeam)?S.settings.myTeam:4;
   openModal(`<h2>Schedule a series</h2><div class="stack">
-    <div class="seg">${INTL.map(f=>`<button data-tsf="${f}" class="${f===fmt?'on':''}">${SERIES_SUFFIX[f]}</button>`).join('')}</div>
+    <div class="seg">${[...INTL,'TOUR'].map(f=>`<button data-tsf="${f}" class="${f===fmt?'on':''}">${f==='TOUR'?'Full tour':SERIES_SUFFIX[f]}</button>`).join('')}</div>
     <div class="row"><label>Hosts <select id="ts-a">${opts(my)}</select></label>
       <label>Tourists <select id="ts-b">${opts(my===1?4:1)}</select></label></div>
-    <div class="row"><label>${SERIES_SUFFIX[fmt]} <select id="ts-n">${(fmt==='TEST'?[1,2,3,4,5]:[1,2,3,4,5,6,7]).map(k=>`<option ${k===3?'selected':''}>${k}</option>`).join('')}</select></label>
-      <label>First match <input type="date" id="ts-d" value="${fmt==='T20'&&d<T20_START?T20_START:d}"></label></div>
-    <p class="muted">Squads come from each side's real XI nearest the date (you can swap players before each match). Grounds are the hosts' home venues.${fmt==='T20'?' T20 uses two provisional fast cards, RR_8 and RR_9 (see How to play).':''}</p>
+    ${fmt==='TOUR'?`<div class="row"><label>Tests <select id="tt-t">${[0,1,2,3,4,5].map(k=>`<option ${k===3?'selected':''}>${k}</option>`).join('')}</select></label>
+        <label>ODIs <select id="tt-o">${[0,1,2,3,4,5,6,7].map(k=>`<option ${k===3?'selected':''}>${k}</option>`).join('')}</select></label>
+        <label>T20Is <select id="tt-2">${[0,1,2,3,4,5].map(k=>`<option ${k===2?'selected':''}>${k}</option>`).join('')}</select></label></div>
+      <div class="row"><div class="seg" id="tt-ord"><button data-tto="tests" class="on">Tests first</button><button data-tto="white">White-ball first</button></div>
+        <label>Tour starts <input type="date" id="ts-d" value="${d}"></label></div>`
+    :`<div class="row"><label>${SERIES_SUFFIX[fmt]} <select id="ts-n">${(fmt==='TEST'?[1,2,3,4,5]:[1,2,3,4,5,6,7]).map(k=>`<option ${k===3?'selected':''}>${k}</option>`).join('')}</select></label>
+      <label>First match <input type="date" id="ts-d" value="${fmt==='T20'&&d<T20_START?T20_START:d}"></label></div>`}
+    <p class="muted">Squads come from each side's real XI nearest the date (you can swap players before each match). Grounds are the hosts' home venues.${fmt==='TOUR'?' The legs follow on with a few days between them.':''}</p>
     <button class="btn pri" id="ts-go">Create series</button></div>`);
   $$('[data-tsf]').forEach(b=>b.onclick=()=>openTestCreator(b.dataset.tsf));
+  let ord='tests';$$('[data-tto]').forEach(b=>b.onclick=()=>{ord=b.dataset.tto;$$('[data-tto]').forEach(x=>x.classList.toggle('on',x===b));});
   $('#ts-go').onclick=()=>{
     const a=+$('#ts-a').value,b=+$('#ts-b').value;if(a===b){toast('Pick two different teams.','warn');return;}
+    if(fmt==='TOUR'){const n=[+$('#tt-t').value,+$('#tt-o').value,+$('#tt-2').value];if(!n.some(Boolean)){toast('Add some matches.','warn');return;}
+      const L=createTour({a,b,tests:n[0],odis:n[1],t20s:n[2],start:$('#ts-d').value||d,order:ord});
+      saveGame();closeModal();toast(`${esc(teamName(b))} tour of ${esc(teamName(a))}: ${L.map(T=>T.fix.length+' '+(T.fmt==='TEST'?'Test':T.fmt==='T20'?'T20I':'ODI')+(T.fix.length>1?'s':'')).join(', ')} scheduled.`);rerender();return;}
     const T=createSeries({fmt,a,b,n:+$('#ts-n').value,start:$('#ts-d').value||d});
     saveGame();closeModal();toast(esc(T.title)+' scheduled.');rerender();
   };
@@ -5741,6 +5806,8 @@ You play domestic cricket between your side's matches; your selection standing f
 Your intent - defend, normal or attack - moves the cards one step for the overs you face and the overs you bowl. Experience turns a GREEN batter BLUE and brings a bowler's rating down towards 1; age takes it back from 34. My player has it all.</p>
 <p><b>Dream XIs:</b> Challenges → Dream XIs. Draft two elevens from any era - search any player, or load a nation's best - and every man plays at his peak: his best bowling rating and his best batting colour.
 Play it (you captain the first side) or sim it, in ODI, T20 or Test form, at Lord's. Share the matchup as a code. It runs in the sandbox, so your career is untouched.</p>
+<p><b>Test tactics:</b> a new ball helps the seamers for its first 10 overs and an old one (60+ overs) the spinners; bowlers are fresh in the first overs of a day.
+As captain you choose when to take the new ball (it's due after 80 overs), whether to send a nightwatchman in near the close, and when to declare - the captain panel shows what most captains would do.</p>
 <p><b>Knockouts</b> are re-seeded from your own tables once a tournament's league stage is finished (Settings to follow history instead).</p>`;
 function openGuide(){
   openModal(GUIDE+(S&&!S.sandbox?`<div class="row" style="margin-top:12px"><button class="btn" id="g-start">Show the Start here checklist</button><button class="btn" id="g-keys">Keyboard shortcuts</button></div>`:''));

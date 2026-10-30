@@ -120,20 +120,29 @@ function openSimMore(){
 }
 function openTestCreator(fmt='TEST'){
   const d=(nextFixture()||{date:careerDate()}).date;
-  const pool=fmt==='TEST'?TEST_TEAMS:ALL_TEAMS;
+  const pool=fmt==='TEST'||fmt==='TOUR'?TEST_TEAMS:ALL_TEAMS;
   const opts=sel=>pool.map(t=>`<option value="${t}" ${t===sel?'selected':''}>${esc(teamName(t))}</option>`).join('');
   const my=S.settings.myTeam&&pool.includes(S.settings.myTeam)?S.settings.myTeam:4;
   openModal(`<h2>Schedule a series</h2><div class="stack">
-    <div class="seg">${INTL.map(f=>`<button data-tsf="${f}" class="${f===fmt?'on':''}">${SERIES_SUFFIX[f]}</button>`).join('')}</div>
+    <div class="seg">${[...INTL,'TOUR'].map(f=>`<button data-tsf="${f}" class="${f===fmt?'on':''}">${f==='TOUR'?'Full tour':SERIES_SUFFIX[f]}</button>`).join('')}</div>
     <div class="row"><label>Hosts <select id="ts-a">${opts(my)}</select></label>
       <label>Tourists <select id="ts-b">${opts(my===1?4:1)}</select></label></div>
-    <div class="row"><label>${SERIES_SUFFIX[fmt]} <select id="ts-n">${(fmt==='TEST'?[1,2,3,4,5]:[1,2,3,4,5,6,7]).map(k=>`<option ${k===3?'selected':''}>${k}</option>`).join('')}</select></label>
-      <label>First match <input type="date" id="ts-d" value="${fmt==='T20'&&d<T20_START?T20_START:d}"></label></div>
-    <p class="muted">Squads come from each side's real XI nearest the date (you can swap players before each match). Grounds are the hosts' home venues.${fmt==='T20'?' T20 uses two provisional fast cards, RR_8 and RR_9 (see How to play).':''}</p>
+    ${fmt==='TOUR'?`<div class="row"><label>Tests <select id="tt-t">${[0,1,2,3,4,5].map(k=>`<option ${k===3?'selected':''}>${k}</option>`).join('')}</select></label>
+        <label>ODIs <select id="tt-o">${[0,1,2,3,4,5,6,7].map(k=>`<option ${k===3?'selected':''}>${k}</option>`).join('')}</select></label>
+        <label>T20Is <select id="tt-2">${[0,1,2,3,4,5].map(k=>`<option ${k===2?'selected':''}>${k}</option>`).join('')}</select></label></div>
+      <div class="row"><div class="seg" id="tt-ord"><button data-tto="tests" class="on">Tests first</button><button data-tto="white">White-ball first</button></div>
+        <label>Tour starts <input type="date" id="ts-d" value="${d}"></label></div>`
+    :`<div class="row"><label>${SERIES_SUFFIX[fmt]} <select id="ts-n">${(fmt==='TEST'?[1,2,3,4,5]:[1,2,3,4,5,6,7]).map(k=>`<option ${k===3?'selected':''}>${k}</option>`).join('')}</select></label>
+      <label>First match <input type="date" id="ts-d" value="${fmt==='T20'&&d<T20_START?T20_START:d}"></label></div>`}
+    <p class="muted">Squads come from each side's real XI nearest the date (you can swap players before each match). Grounds are the hosts' home venues.${fmt==='TOUR'?' The legs follow on with a few days between them.':''}</p>
     <button class="btn pri" id="ts-go">Create series</button></div>`);
   $$('[data-tsf]').forEach(b=>b.onclick=()=>openTestCreator(b.dataset.tsf));
+  let ord='tests';$$('[data-tto]').forEach(b=>b.onclick=()=>{ord=b.dataset.tto;$$('[data-tto]').forEach(x=>x.classList.toggle('on',x===b));});
   $('#ts-go').onclick=()=>{
     const a=+$('#ts-a').value,b=+$('#ts-b').value;if(a===b){toast('Pick two different teams.','warn');return;}
+    if(fmt==='TOUR'){const n=[+$('#tt-t').value,+$('#tt-o').value,+$('#tt-2').value];if(!n.some(Boolean)){toast('Add some matches.','warn');return;}
+      const L=createTour({a,b,tests:n[0],odis:n[1],t20s:n[2],start:$('#ts-d').value||d,order:ord});
+      saveGame();closeModal();toast(`${esc(teamName(b))} tour of ${esc(teamName(a))}: ${L.map(T=>T.fix.length+' '+(T.fmt==='TEST'?'Test':T.fmt==='T20'?'T20I':'ODI')+(T.fix.length>1?'s':'')).join(', ')} scheduled.`);rerender();return;}
     const T=createSeries({fmt,a,b,n:+$('#ts-n').value,start:$('#ts-d').value||d});
     saveGame();closeModal();toast(esc(T.title)+' scheduled.');rerender();
   };

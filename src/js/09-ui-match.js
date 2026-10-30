@@ -49,6 +49,8 @@ function evText(e){
     case'dl':return`D/L: revised target ${e.target} from ${e.overs} overs`;
     case'drs':return drsText(e);
     case'followon':return`${teamName(e.team)} enforce the follow-on`;
+    case'nw':return`${pName(e.pid)} comes in as nightwatchman`;
+    case'newball':return`${teamName(e.bowl)} take the new ball`;
     case'innsEnd':return`End of innings: ${teamName(e.bat)} ${e.runs}${e.wkts<10?'/'+e.wkts:''} (${e.why})`;
     case'result':return e.text;
   }
@@ -75,17 +77,35 @@ function captainPanel(M){
       rows.push(`<div class="row"><span class="sub">${esc(teamShort(I.bowl))} - next over:</span><select id="cap-bowl"><option value="">AI picks</option>${opts.map(o=>`<option value="${o.pid}" ${o.ok?'':'disabled'} ${M.nextBowler===o.pid?'selected':''}>${esc(pName(o.pid))} - ${oversTxt(o.W.b)}-${o.W.md||0}-${o.W.r}-${o.W.w} · ${STYLE_NAME[o.style]||''} r${Math.min(o.rating,5)}${o.regular?'':' (part-timer)'}${o.real?' · bowled this over for real':''}${o.why?' · '+o.why:''}</option>`).join('')}</select></div>`);
     }
     rows.push(`<div class="row">${seg('f'+I.bowl,'Field:')}</div>`);
+    if(M.fmt==='TEST'){const age=newBallAge(M,I);rows.push(age>=NEW_BALL&&!M.cur?`<div class="row"><span>🔴 The new ball is due (${age} overs old).</span><button class="btn sm pri" id="cap-nb">Take the new ball</button><span class="muted" style="font-size:12px">Seamers get help with it for ${NEWBALL_OVERS} overs; spinners like the old one.</span></div>`
+      :`<div class="muted" style="font-size:12px">Ball ${Math.max(0,age)} overs old${age<NEWBALL_OVERS?' - the seamers get help':age>=60?' - the spinners get help':''}.</div>`);}
   }
   if(C[I.bat]){
     const left=I.order.slice(I.wkts+2).filter(p=>!I.bt[p]);
     if(left.length)rows.push(`<div class="row"><span class="sub">${esc(teamShort(I.bat))} - next in:</span><select id="cap-next">${left.map(p=>`<option value="${p}">${esc(pName(p))} (${BAT_NAME[batColour(M,p,I.wkts+2,I.bowl)]})</option>`).join('')}</select></div>`);
     rows.push(`<div class="row">${seg(I.bat,'Batting:')}</div>`);
+    if(M.fmt==='TEST')rows.push(testAdvice(M,I));
   }
   const head=M.h2h?`<h3 style="margin:0">${esc(M.h2h[I.bowl])} (${esc(teamShort(I.bowl))}) bowls · ${esc(M.h2h[I.bat])} (${esc(teamShort(I.bat))}) bats</h3>`:'<h3 style="margin:0">Captain</h3>';
   return`<div class="stack" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)">${head}${rows.join('')}
     <div class="muted" style="font-size:12px">Attack moves every over one card faster (more runs, more wickets), defend one slower. Batting and field settings add up.</div></div>`;
 }
+// Test captaincy hints for the batting side: a nightwatchman near the close, and the declaration.
+function testAdvice(M,I){
+  const out=[],clk=testClock(M)%90,k=I.wkts+2,next=I.order[k];
+  if(testDay(M)<5&&clk>=84&&I.wkts<8&&k<=6&&next!=null&&!I.bt[next]){
+    const nw=[7,8,9].map(i=>I.order[i]).filter(p=>p!=null&&!I.bt[p]&&pAttr(p,M.date).style!=='N')[0];
+    if(nw!=null)out.push(`<div class="row"><span>🌙 Close of play is near and ${esc(pName(next))} is next. Bowlers are fresh in the morning.</span><button class="btn sm" id="cap-nw" data-pid="${nw}">Send ${esc(pName(nw))} as nightwatchman</button></div>`);
+  }
+  if(I.no<=3&&!I.target){
+    const lead=testTotals(M,I.bat)-testTotals(M,I.bowl),left=Math.round(testOversLeft(M));
+    out.push(`<div class="muted" style="font-size:12px">${aiShouldDeclare(M,I)?'<b class="gold">Most captains would declare now.</b> ':''}${I.no===3?`Lead ${lead}, ${left} overs left: a declaration now sets ${lead+1}${left>0?` at ${(Math.max(0,lead+1)/Math.max(1,left-2)).toFixed(1)} an over`:''}.`:`${lead>=0?'Lead':'Trail by'} ${Math.abs(lead)}, ${left} overs left in the match.`}</div>`);
+  }
+  return out.join('');
+}
 function wireCaptain(M){
+  $('#cap-nb')&&($('#cap-nb').onclick=()=>{takeNewBall(M);rerender();});
+  $('#cap-nw')&&($('#cap-nw').onclick=e=>{setNextBatter(M,+e.target.dataset.pid);rerender();});
   $$('[data-att]').forEach(b=>b.onclick=()=>{M.att=M.att||{};M.att[b.dataset.att]=+b.dataset.v;rerender();});
   const sb=$('#cap-bowl');if(sb)sb.onchange=()=>{M.nextBowler=+sb.value||null;};
   const sn=$('#cap-next');if(sn)sn.onchange=()=>{setNextBatter(M,+sn.value);rerender();};

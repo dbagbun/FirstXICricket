@@ -34,6 +34,17 @@ function createSeries({fmt='TEST',a,b,n,start}){
   return T;
 }
 const createTestSeries=o=>createSeries({...o,fmt:'TEST'});
+// A full tour: Tests, ODIs and T20Is back to back (Tests first, or the white-ball leg first), a few days between legs.
+function createTour({a,b,tests=0,odis=0,t20s=0,start,order='tests'}){
+  const legs=(order==='tests'?[['TEST',tests],['ODI',odis],['T20',t20s]]:[['T20',t20s],['ODI',odis],['TEST',tests]]).filter(([,n])=>n>0);
+  let d=start;const out=[];
+  for(const[fmt,n]of legs){
+    if(fmt==='T20'&&d<T20_START)d=T20_START;
+    const T=createSeries({fmt,a,b,n,start:d});out.push(T);
+    d=addDays(T.fix[T.fix.length-1].date,fmt==='TEST'?6:4);
+  }
+  return out;
+}
 function customFx(T,x,k){const fmt=T.fmt||'TEST';return{key:x.key,fmt,date:x.date,a:T.a,b:T.b,venue:x.venue,city:x.city,sid:T.id,title:T.title,label:`${ordinal(k+1)} ${MATCH_LABEL[fmt]}`,playable:true,custom:true};}
 function deleteTestSeries(id){
   const T=S.tests.find(t=>t.id===id);if(!T||T.fix.some(x=>S.done[x.key]))return false;

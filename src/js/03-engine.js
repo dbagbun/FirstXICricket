@@ -148,10 +148,22 @@ function applyShift(W,shift){
   if(tot!==100){if(shift>0)t[5]+=100-tot;else t[0]+=100-tot;}
   return t;
 }
+// Test tactics: a new ball helps the seamers (NEWBALL_PTS for its first NEWBALL_OVERS overs), an old one (60+ overs)
+// the spinners, and bowlers are fresh at the start of a day (DAYSTART_PTS for the first overs) - which is why a
+// side sends in a nightwatchman late in the day.
+const NEWBALL_PTS=2,NEWBALL_OVERS=10,OLDBALL_PTS=1,DAYSTART_PTS=2,DAYSTART_OVERS=3;
+function tacticPts(M,b){
+  const I=curInn(M),over=Math.floor(I.lb/6)+1,age=over-(I.eng?I.eng.newBallAt:1),clk=testClock(M)%90;
+  let w=0;
+  if(b.style!=='S'&&age<NEWBALL_OVERS)w+=NEWBALL_PTS;
+  if(b.style==='S'&&age>=60)w+=OLDBALL_PTS;
+  if(testClock(M)>1&&clk<DAYSTART_OVERS)w+=DAYSTART_PTS;
+  return w;
+}
 function wearWeights(M,b,W){
   if(M.fmt!=='TEST')return W;
   const P=PITCHES[M.pitch]||PITCHES.normal;
-  const w=Math.round((TEST_WEAR[testDay(M)]||0)*(b.style==='S'?2:1)*P.wear)+P.all+(P[b.style]||0)+(TEST_INN_PRESSURE[curInn(M).no]||0);
+  const w=Math.round((TEST_WEAR[testDay(M)]||0)*(b.style==='S'?2:1)*P.wear)+P.all+(P[b.style]||0)+(TEST_INN_PRESSURE[curInn(M).no]||0)+tacticPts(M,b);
   const m=w>=0?Math.min(w,W[0]):-Math.min(-w,W[5]);
   W[0]-=m;W[5]+=m;return W;
 }
@@ -293,7 +305,7 @@ function phaseBonus(M,I,style,over){
 }
 function chooseBowler(M,I,over){
   const E=I.eng,B=E.B;
-  if(M.fmt==='TEST'&&over>1&&(over-E.newBallAt)>=NEW_BALL)E.newBallAt=over;
+  if(M.fmt==='TEST'&&over>1&&(over-E.newBallAt)>=NEW_BALL&&!M.manualCaptain?.[I.bowl])E.newBallAt=over;
   if(E.plan&&E.plan[over-1]){
     const i=B.findIndex(b=>b.pid===E.plan[over-1]);
     if(i>=0&&i!==E.lastIdx&&(!LIMITED(M)||B[i].used<perBowler(M))){
@@ -354,6 +366,18 @@ function captainBowler(M,I,over){
   return i;
 }
 // Send in a different batter next: he moves to the front of those still to bat.
+// Late in a day (and not the last), with a top-six batter next: send the best-batting tail-ender instead.
+function nightwatch(M,I){
+  const clk=testClock(M)%90,k=I.wkts+1;
+  if(testDay(M)>=5||clk<84||I.wkts>=7||k>5||I.target&&I.target-I.runs<60)return false;
+  const cand=[7,8,9].map(i=>I.order[i]).filter(p=>p!=null&&!I.bt[p]&&pAttr(p,M.date).style!=='N')
+    .sort((a,b)=>(COL_RANK[pAttr(a,M.date).bat?.[0]]??2)-(COL_RANK[pAttr(b,M.date).bat?.[0]]??2))[0];
+  if(cand==null)return false;
+  const j=I.order.indexOf(cand);I.order.splice(j,1);I.order.splice(k,0,cand);
+  fire(M,null,{t:'nw',pid:cand,bat:I.bat});return true;
+}
+function takeNewBall(M){const I=curInn(M);if(M.fmt!=='TEST'||M.cur||!I.eng)return false;I.eng.newBallAt=Math.floor(I.lb/6)+1;fire(M,null,{t:'newball',bowl:I.bowl});return true;}
+const newBallAge=(M,I)=>Math.floor(I.lb/6)+1-(I.eng?I.eng.newBallAt:1);
 function setNextBatter(M,pid){
   const I=curInn(M),k=I.wkts+2,j=I.order.indexOf(pid);
   if(j<k||I.bt[pid])return false;
@@ -484,6 +508,7 @@ function applyBall(M,I,D){
       fire(M,ball,{t:'w',pid:striker,how:t.how,bowler:C.bowler,fielder:ball.fielder});
       trackHat(M,I,C.bowler,credit,ball);
       if(I.wkts<10){
+        if(M.fmt==='TEST'&&!M.manualCaptain?.[I.bat])nightwatch(M,I);
         const nb=I.order[I.wkts+1];I.st=nb;I.bt[nb]=newBat(I.wkts+1);
         I.part={a:nb,b:I.ns,r:0,bl:0,ra:0,rb:0,w:I.wkts+1};
       }
