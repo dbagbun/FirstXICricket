@@ -263,6 +263,7 @@ tbody tr:hover td{background:rgba(30,41,59,.6)}
 [data-bc=modern] .dice{background:#0c0c10;border-color:#b6ff00}[data-bc=modern] .dice b{color:#b6ff00}
 [data-bc=event] .dice{background:#3c1a78;border-color:#ffb703}[data-bc=event] .dice b{color:#ffd166}
 
+@media (max-width:600px){.tv .tv-k{font-size:22px;letter-spacing:.1em}}
 @media (max-width:600px){
   .bug-runs{font-size:26px}[data-bc=modern] .bug-runs{font-size:32px}
   .bug-bats,.bug-bowl{min-width:0;flex:1 1 100%;border-left:0!important;border-right:0!important;padding:3px 12px}
@@ -446,7 +447,7 @@ for(const f of FIX)for(const t of[f.a,f.b])if(WORLD.xi[f.cid]&&WORLD.xi[f.cid][t
 const DEBUT=new Map();
 for(const f of FIX)if(WORLD.xi[f.cid])for(const t in WORLD.xi[f.cid])for(const p of WORLD.xi[f.cid][t].slice(0,11))if(!DEBUT.has(p))DEBUT.set(p,f.date);
 function nearestXI(tid,date,opts={}){
-  if(isFranchise(tid))return leagueXI(+tid,date);
+  if(typeof isFranchise==='function'&&isFranchise(tid))return leagueXI(+tid,date);   // (engine-only runs don't load the league)
   if(typeof S!=='undefined'&&S&&S.gen&&isFuture(date)){const x=genXI(+tid,date);if(x)return x;}
   const games=TEAM_GAMES.get(+tid)||[];
   let best=null,bd=1e9;
@@ -885,6 +886,7 @@ function testWeather(M){
 function bowlBall(M,manualRoll){
   if(M.state!=='live'||M.pending)return null;
   const I=curInn(M);
+  if(M.cur&&M.cur.rev)return reviewStep(M,I,manualRoll);
   if(!M.cur){
     const over=Math.floor(I.lb/6)+1,bi=captainBowler(M,I,over)??chooseBowler(M,I,over),b=I.eng.B[bi];
     const card=pickCard(applyShift(wearWeights(M,b,baseWeights(M.fmt,b.rating)),situationShift(M,I,over)),cardCodes(M));
@@ -906,8 +908,15 @@ function bowlBall(M,manualRoll){
   const tok=WORLD.cards[C.card][roll-1][col-1];
   const t=parseToken(tok);
   const striker=I.st,pos=I.order.indexOf(striker)+1;
-  let voided=false;const bcol=batColour(M,striker,pos,I.bowl);
+  let voided=false;const bcol=batColour(M,striker,pos,I.bowl),how0=t.how;
   if(t.w&&!wicketCounts(bcol,t.color)){voided=true;Object.assign(t,{w:false,color:'',how:'',bat:0,ex:0,exType:''});}
+  const D={roll,col,tok,t,voided,bcol};
+  if(M.drs){const R=umpireCheck(M,I,t,how0,voided);if(R){C.rev={...R,D};return reviewStep(M,I,null);}}
+  return applyBall(M,I,D);
+}
+// The rest of a delivery, once its outcome (and any umpire's decision) is settled.
+function applyBall(M,I,D){
+  const C=M.cur,{roll,col,tok,t,voided,bcol}=D,striker=I.st;
   const illegal=t.exType==='wd'||t.exType==='nb';
   const runs=t.bat+t.ex,B=I.bt[striker],W=I.bw[C.bowler];
   C.n++;
@@ -923,6 +932,7 @@ function bowlBall(M,manualRoll){
   if(striker===P.a)P.ra+=t.bat;else P.rb+=t.bat;
   const ball={inn:I.no,over:C.over,n:C.n,legal:0,card:C.card,roll,col,tok,st:striker,ns:I.ns,bowler:C.bowler,
     bat:t.bat,ex:t.ex,exType:t.exType,w:0,how:'',fielder:0,out:0,runs:I.runs,wkts:I.wkts,voided,bcol,ev:[]};
+  if(D.ump){ball.ump=D.ump;fire(M,ball,{t:'drs',...D.ump,pid:striker,bowler:C.bowler});}
   if(illegal){
     C.comp=true;
   }else{
@@ -1094,7 +1104,92 @@ function finishMatch(M){
 // Fast-forward helpers (auto dice only)
 function bowlOver(M){if(!M.cur&&M.state==='live'){bowlBall(M);}while(M.cur&&M.state==='live'&&!M.pending){const r=bowlBall(M);if(!r||r.need)return r;}return true;}
 function simInnings(M){const n=M.inns.length;let g=0;while(M.state==='live'&&!M.pending&&M.inns.length===n&&g++<20000){const r=bowlBall(M);if(!r||r.need)return r;}return true;}
-function simMatch(M){let g=0;while(M.state==='live'&&g++<40000){if(M.pending){if(M.pending.type==='followon')decideFollowOn(M,aiFollowOn(M,M.pending.lead));continue;}const r=bowlBall(M);if(!r||r.need)return r;}return true;}
+function simMatch(M){let g=0;while(M.state==='live'&&g++<40000){if(M.pending){if(M.pending.type==='followon')decideFollowOn(M,aiFollowOn(M,M.pending.lead));else if(M.pending.type==='review')decideReview(M,aiReview(M,curInn(M),M.cur.rev));continue;}const r=bowlBall(M);if(!r||r.need)return r;}return true;}
+
+// ═══ DRS & UMPIRES — the card is the truth; the umpire can get it wrong; reviews put it right ═══
+// After the card (and the wicket colour) settles a ball, the on-field umpire rules:
+//  - an lbw or caught-behind on the card can be given not out (UMP.miss),
+//  - a big appeal on a wicket the batter's colour saved, or now and then any dot ball, can be given out.
+// The side the call went against may review (M.drs.n per innings, a failed review costs one).
+// An lbw review rolls 1-100 for umpire's call: UMP.uc or under and the on-field call stands
+// (the review is kept from October 2017). Otherwise the card's truth wins.
+// M.drs = null (perfect umpires) | {on, n, uc}: on = reviews in use (DRS_FROM by format, or always).
+const UMP={miss:{lbw:.1,ctwk:.07},appeal:.4,falseApp:.07,falseDot:.0015,uc:25,
+  ai:{miss:.8,wrongOut:.85,outLbw:.15,outWk:.08,appeal:.1}};
+const DRS_FROM={TEST:'2009-11-24',ODI:'2011-02-19',T20:'2017-10-07'};
+const DRS_CODE={O:'overturned',S:'stands',U:"umpire's call",M:'umpire error'};
+function drsSetup(M){
+  const mode=S.settings.drs||'era',d=M.date,always=mode==='on';
+  if(mode==='off'){M.drs=null;return;}
+  const modern=always||d>='2020-06-01';
+  M.drs={on:always||d>=(DRS_FROM[M.fmt]||'9999'),n:M.fmt==='TEST'?(modern?3:2):(modern?2:1),uc:always||d>='2017-10-01'};
+}
+// The on-field decision for a settled ball: null when there's nothing to rule on.
+function umpireCheck(M,I,t,how0,voided){
+  if(t.w){
+    if(t.how!=='lbw'&&t.how!=='ctwk')return null;
+    const err=rnd()<UMP.miss[t.how];
+    return{truth:1,field:err?0:1,how:t.how,side:err?I.bowl:I.bat};
+  }
+  if(t.ex||t.bat||t.exType)return null;
+  if(voided&&(how0==='lbw'||how0==='ctwk')){
+    if(rnd()>=UMP.appeal)return null;
+    const err=rnd()<UMP.falseApp;
+    return{truth:0,field:err?1:0,how:how0,side:err?I.bat:I.bowl};
+  }
+  if(rnd()<UMP.falseDot)return{truth:0,field:1,how:rnd()<.6?'lbw':'ctwk',side:I.bat};
+  return null;
+}
+const revLeft=(M,I,side)=>{if(!I.rev)I.rev={[I.bat]:M.drs.n,[I.bowl]:M.drs.n};return I.rev[side];};
+// Would the AI review? It has a feel for the truth, more so with a set batter in.
+function aiReview(M,I,R){
+  const A=UMP.ai;let p;
+  if(!R.field)p=R.truth?A.miss:A.appeal;
+  else p=R.truth?(R.how==='lbw'?A.outLbw:A.outWk):A.wrongOut;
+  if(revLeft(M,I,R.side)===1)p*=.8;
+  const B=I.bt[I.st];if(R.field&&B&&B.r>=50)p=Math.min(.95,p*1.4);
+  return rnd()<p;
+}
+function decideReview(M,yes){const R=M.cur&&M.cur.rev;M.pending=null;if(R)R.ask=!!yes;}
+// Settles an open decision: asks your captain (M.askRev, from ball-by-ball play), rolls umpire's call, then bowls the ball.
+function reviewStep(M,I,manualRoll){
+  const C=M.cur,R=C.rev;
+  if(R.ask==null){
+    if(!M.drs.on||revLeft(M,I,R.side)<=0)R.ask=false;
+    else if(M.manualCaptain?.[R.side]&&M.askRev){M.pending={type:'review',side:R.side,how:R.how,field:R.field,pid:I.st,bowler:C.bowler,left:revLeft(M,I,R.side)};return{need:'review'};}
+    else R.ask=aiReview(M,I,R);
+  }
+  if(R.ask&&R.how==='lbw'&&R.uc==null){if(M.manual&&manualRoll==null)return{need:'uc'};R.uc=manualRoll??roll100();}
+  let out=R.field,code='';
+  if(R.ask){
+    if(R.how==='lbw'&&R.uc<=UMP.uc){code='U';if(!M.drs.uc)I.rev[R.side]--;}
+    else if(R.truth!==R.field){out=R.truth;code='O';}
+    else{code='S';I.rev[R.side]--;}
+  }else if(R.truth!==R.field)code='M';
+  const D=R.D,t=D.t;
+  if(out&&!t.w){Object.assign(t,{w:true,how:R.how,bat:0,ex:0,exType:''});D.voided=false;}
+  if(!out&&t.w)Object.assign(t,{w:false,how:'',color:''});
+  if(code)D.ump={side:R.side,how:R.how,field:R.field,truth:R.truth,rev:R.ask?1:0,uc:R.uc||0,code,out:out?1:0,left:M.drs.on?revLeft(M,I,R.side):0,on:M.drs.on?1:0};
+  delete C.rev;
+  return applyBall(M,I,D);
+}
+function drsText(e){
+  const p=pName(e.pid),how=e.how==='lbw'?'lbw':'caught behind',team=teamName(e.side);
+  const why=e.on?(e.left>0?' - not reviewed':' - no reviews left'):'';
+  if(e.code==='M')return e.field?`${p} given out ${how}, but replays show it was not out${why}`:`Not out says the umpire, but replays show ${p} was ${how}${why}`;
+  const asked=e.field?`${p} reviews the ${how} decision`:`${team} review the not-out ${how} appeal`;
+  if(e.code==='U')return`${asked} - umpire's call (roll ${e.uc}): ${e.out?'still out':'still not out'}`;
+  if(e.code==='O')return`${asked} - OVERTURNED: ${e.out?'OUT':'not out'}`;
+  return`${asked} - the decision stands, review lost (${e.left} left)`;
+}
+// Archived per match: [innings, reviewing side, batter, how, code, out].
+const drsArchive=M=>M.events.filter(e=>e.t==='drs').map(e=>[e.inn,e.side,e.pid,e.how,e.code,e.out]);
+function drsSummary(E){
+  if(!E.drs||!E.drs.length)return'';
+  const by=t=>{const r=E.drs.filter(d=>d[1]===t&&d[4]!=='M');return r.length?`${teamShort(t)} ${r.filter(d=>d[4]==='O').length}/${r.length} successful`:'';};
+  const err=E.drs.filter(d=>d[4]==='M').length;
+  return[...E.teams.map(by).filter(Boolean),err?plural(err,'umpiring error')+' stood':''].filter(Boolean).join(' · ');
+}
 
 // ═══ CAREER — state, match archive, career stats, man of the match, milestones ═══
 // S is the whole saved game. Persistent state must be listed in SAVE_KEYS (see 06-save.js).
@@ -1102,7 +1197,7 @@ let S=null;
 function newCareer(opts={}){
   return{
     v:1,created:Date.now(),name:opts.name||'My career',
-    settings:{dice:'auto',captain:'auto',knockouts:'timeline',batColours:'player',ratings:'era',history:'after',selection:'auto',form:'on',broadcast:'standard',font:'barlow',voice:false,voiceRate:1.05,future:'on',myTeam:+opts.myTeam||0,ballDelay:250,sound:false,tv:true},
+    settings:{dice:'auto',captain:'auto',knockouts:'timeline',batColours:'player',ratings:'era',history:'after',selection:'auto',form:'on',broadcast:'standard',font:'barlow',voice:false,voiceRate:1.05,future:'on',drs:'era',myTeam:+opts.myTeam||0,ballDelay:250,sound:false,tv:true},
     done:{},          // fixture no / test id -> match id
     matches:[],       // archived scorecards (compact), oldest first
     logs:{},          // match id -> compact ball log, last LOG_KEEP matches only
@@ -1132,6 +1227,7 @@ function archiveMatch(M){
       mu:matchups(I)})),
     ev:M.events.filter(e=>['50','100','200','5w','hat'].includes(e.t)).map(e=>[e.t,e.pid,e.inn,e.balls||e.w||0]),
   };
+  const dr=drsArchive(M);if(dr.length)E.drs=dr;
   E.motm=pickMOTM(E);
   return E;
 }
@@ -1695,7 +1791,7 @@ function buildMatch(fx){
 function selectAndMods(M,fx){
   const my=managedTeam();
   if(my&&!fx.friendly&&M.teams.includes(my)&&M.xi[my]){const r=pickXI(fx,my,M.xi[my]);M.xi[my]=r.xi;M.selNotes=r.notes;}
-  M.mods=matchMods(M);
+  M.mods=matchMods(M);drsSetup(M);
 }
 
 // ---------- end of match ----------
@@ -2438,6 +2534,7 @@ const ACHIEVEMENTS=[
   ['ton','💯','Three figures','See a hundred scored.'],['dbl','🌟','Double top','An ODI double hundred.'],['t20ton','🚀','Short-form century','A T20 hundred.'],['triple','👑','Triple','A Test triple hundred.'],
   ['big400','🔥','Four hundred','A team makes 400 in an ODI.'],['under50','🧊','Collapse','A side bowled out for under 50.'],['chase350','🏃','Mountain climbed','Chase down 350 or more.'],
   ['hat','🎩','Hat-trick','Witness a hat-trick.'],['seven','7️⃣','Seventh heaven','Seven wickets in an innings.'],['tenfor','🔟','Ten in the match','Ten wickets in a Test.'],
+  ['drs','📺','Upstairs','Win a review as captain.'],
   ['tie','🟰','Honours even','A tied match.'],['so','⏱️','Super over','A super over decides it.'],['dl','🌧️','Duckworth what?','A rain-affected D/L result.'],
   ['draw','🛡️','Rain-soaked stalemate','A drawn Test.'],['inns','🧱','Innings and plenty','An innings victory.'],
   ['assocWC','😲','Giant-killers','An associate nation wins a World Cup final.'],['no1','🥇','Top of the world','The team you follow goes No.1 in the ODI rankings.'],
@@ -2906,8 +3003,10 @@ const resultPill=(E,t)=>!E.result||!E.result.winner?`<span class="pill">${E.resu
 function innsShort(I,fmt){return`${I.runs}${I.wkts<10?'/'+I.wkts:''}${I.why==='declared'?'d':''}${fmt!=='TEST'||I.why!=='all out'?` <span class="muted">(${oversTxt(I.lb)})</span>`:''}`;}
 function matchLine(E){
   const sc=t=>E.inns.filter(I=>I.bat===t).map(I=>innsShort(I,E.fmt)).join(' &amp; ')||'-';
+  // batting order, so a rain-revised chase reads as one; the chasing side shows its D/L target
+  const order=E.inns.length?[E.inns[0].bat,...E.teams.filter(t=>t!==E.inns[0].bat)]:E.teams;
   return`<div class="spread" data-mid="${E.id}" style="cursor:pointer">
-    <div>${E.teams.map(t=>`<div class="row">${badge(t)} <span>${sc(t)}</span></div>`).join('')}</div>
+    <div>${order.map((t,i)=>`<div class="row">${badge(t)} <span>${sc(t)}</span>${i===1&&E.dl?`<span class="muted" style="font-size:12px">target ${E.dl.target} (D/L)</span>`:''}</div>`).join('')}</div>
     <div style="text-align:right"><div class="${E.result.winner?'green':'sub'}">${esc(E.result.text)}</div><div class="muted" style="font-size:12px">${fmtDate(E.date)} · ${FMT_NAME[E.fmt]}${E.stage?' · '+esc(E.stage):''}</div></div></div>`;
 }
 
@@ -2994,6 +3093,7 @@ function evText(e){
     case'rain':return`Rain: ${e.lost} overs lost on day ${e.day}`;
     case'rainlo':return`Rain! ${plural(e.lost,'over')} lost - ${e.inn===1?'the match is':'the chase is'} cut to ${e.overs} overs a side`;
     case'dl':return`D/L: revised target ${e.target} from ${e.overs} overs`;
+    case'drs':return drsText(e);
     case'followon':return`${teamName(e.team)} enforce the follow-on`;
     case'innsEnd':return`End of innings: ${teamName(e.bat)} ${e.runs}${e.wkts<10?'/'+e.wkts:''} (${e.why})`;
     case'result':return e.text;
@@ -3148,7 +3248,7 @@ function renderLive(el,M){
   const thisOver=I.balls.filter(b=>b.over===ovNo).slice(-12);
   const lastOvers=I.balls.slice(-18);
   const P=I.part;
-  const pend=M.pending&&M.pending.type==='followon';
+  const pend=M.pending&&M.pending.type==='followon',prev=M.pending&&M.pending.type==='review'&&M.pending;
   el.innerHTML=`<div class="stack">
   <div class="sub">${esc(M.series)}${M.stage?' · <span class="gold">'+esc(M.stage)+'</span>':''} · ${esc(M.venue)}</div>
   ${S.settings.broadcast&&S.settings.broadcast!=='standard'?scorebugHTML(M):`<div class="scorebar">
@@ -3169,7 +3269,7 @@ function renderLive(el,M){
       <div class="ticker" style="margin-top:10px;opacity:.75">${lastOvers.map(ballChip).join('')}</div>
     </div></div>
   <div class="card"><div class="row" id="controls">
-    ${pend?`<b>${esc(teamName(M.pending.team))} lead by ${M.pending.lead}.</b> Enforce the follow-on? <button class="btn pri" id="fo-yes">Enforce</button><button class="btn" id="fo-no">Bat again</button>`:`
+    ${pend?`<b>${esc(teamName(M.pending.team))} lead by ${M.pending.lead}.</b> Enforce the follow-on? <button class="btn pri" id="fo-yes">Enforce</button><button class="btn" id="fo-no">Bat again</button>`:prev?reviewAsk(M,prev):`
     <button class="btn" id="c-ball">Next ball</button><button class="btn pri" id="c-over">Bowl over</button>
     <button class="btn" id="c-5">5 overs</button><button class="btn" id="c-inn">End of innings</button>
     <button class="btn" id="c-watch">${WATCH?'❚❚ Pause':'▶ Watch'}</button><button class="btn" id="c-sim">Sim match</button>
@@ -3182,6 +3282,7 @@ function renderLive(el,M){
   drawMatchTab(M);
   $$('[data-tab]').forEach(b=>b.onclick=()=>{MATCH_TAB=b.dataset.tab;$$('[data-tab]').forEach(x=>x.classList.toggle('on',x===b));drawMatchTab(M);});
   if(done){$('#d-next')&&($('#d-next').onclick=()=>{const n=nextFixture();LM=null;if(n)startFixture(n.key);else go('home');});return;}
+  if(prev){$('#rv-yes').onclick=()=>{decideReview(M,true);step(M,'ball');};$('#rv-no').onclick=()=>{decideReview(M,false);step(M,'ball');};return;}
   if(pend){$('#fo-yes').onclick=()=>{decideFollowOn(M,true);afterStep(M);};$('#fo-no').onclick=()=>{decideFollowOn(M,false);afterStep(M);};return;}
   $('#c-ball').onclick=()=>step(M,'ball');$('#c-over').onclick=()=>step(M,'over');$('#c-5').onclick=()=>step(M,'5');
   $('#c-inn').onclick=()=>step(M,'inn');$('#c-sim').onclick=()=>step(M,'match');$('#c-watch').onclick=()=>toggleWatch(M);
@@ -3189,6 +3290,13 @@ function renderLive(el,M){
   wireCaptain(M);fxDice(M);
   $('#c-snd')&&($('#c-snd').onclick=()=>{S.settings.sound=!S.settings.sound;if(S.settings.sound)SFX.crack(.8);saveGame();rerender();});
   if(M.needRoll)askRoll(M);
+}
+function reviewAsk(M,P){
+  const how=P.how==='lbw'?'lbw':'caught behind',who=M.h2h?`<b>${esc(M.h2h[P.side])}</b>: `:'';
+  const q=P.field?`<span class="red"><b>OUT!</b></span> ${esc(pName(P.pid))} is given out ${how}. ${who}Review it?`
+    :`Big ${how} appeal from ${esc(pName(P.bowler))} - <b>not out</b>. ${who}Review it?`;
+  return`<span>📺 ${q}</span><button class="btn pri" id="rv-yes">Review (${P.left} left)</button><button class="btn" id="rv-no">${P.field?'Walk off':'Accept it'}</button>
+    <span class="muted" style="font-size:12px">${P.how==='lbw'?"An lbw review rolls for umpire's call (25 or under: the on-field decision stands).":'Caught behind: the replay always finds the truth.'}</span>`;
 }
 function diceBlock(M,C){
   const row=WORLD.cards[C.card][(C.roll||1)-1];
@@ -3210,10 +3318,10 @@ function step(M,kind){
   let g=0;
   const target=kind==='over'?1:kind==='5'?5:0;
   let overs=0;
-  FX.allow=kind==='ball'||kind==='over';
+  FX.allow=kind==='ball'||kind==='over';M.askRev=FX.allow;
   while(M.state==='live'&&!M.pending&&g++<50000){
     const r=bowlBall(M,M.rollIn);M.rollIn=null;
-    if(r&&r.need){M.needRoll=r.need;break;}
+    if(r&&r.need){if(r.need!=='review')M.needRoll=r.need;break;}
     M.needRoll=null;
     if(kind==='ball'){fxBall(M,r);voiceBall(M,r);break;}
     if(!M.cur&&target){overs++;if(overs>=target)break;}
@@ -3226,7 +3334,7 @@ function afterStep(M){
   rerender();
 }
 function askRoll(M){
-  const C=M.cur,what=M.needRoll==='comp'?'a fresh roll for the re-bowled ball':'the roll for this over';
+  const C=M.cur,what=M.needRoll==='comp'?'a fresh roll for the re-bowled ball':M.needRoll==='uc'?"the umpire's call roll (25 or under: the decision stands)":'the roll for this over';
   const who=M.h2h?`<b>${esc(M.h2h[curInn(M).bowl])}</b>, `:'';
   $('#dice-in').innerHTML=`<span class="dice">🎲 ${who}${who?'enter':'Enter'} ${what} (RR_${C?C.card:'?'}): <input type="number" id="roll-v" min="1" max="100" style="width:70px"> <button class="btn sm pri" id="roll-ok">Roll in</button> <button class="btn sm" id="roll-auto">Roll for me</button></span>`;
   const go_=v=>{v=+v;if(!(v>=1&&v<=100)){toast('Rolls are 1 to 100.','warn');return;}M.rollIn=v;M.needRoll=null;step(M,'ball');};
@@ -3240,7 +3348,7 @@ function toggleWatch(M){
   if(M.manual){toast('Watch mode needs automatic dice (Settings).','warn');return;}
   const tick=()=>{
     if(VIEW!=='match'||M.state!=='live'||M.pending){stopWatch();rerender();return;}
-    FX.allow=true;const b=bowlBall(M);fxBall(M,b);voiceBall(M,b);rerender();
+    FX.allow=true;M.askRev=true;const b=bowlBall(M);fxBall(M,b);voiceBall(M,b);rerender();
     WATCH=setTimeout(tick,S.settings.ballDelay);
   };
   WATCH=setTimeout(tick,10);rerender();
@@ -3290,6 +3398,7 @@ function scorecardHTML(E,M){
     </div>`;
   }).join('')+(E.inns.length?'':'<div class="muted">No play yet.</div>')+(E.result&&E.motm&&(!M||M.state==='done')?`<div class="banner">Man of the Match: <b>${plink(E.motm)}</b></div>`:'')
   +superOverHTML(E)+(E.dl?`<div class="muted" style="margin-top:6px">Rain: target revised by the D/L method to ${E.dl.target} from ${E.dl.overs} overs.</div>`:'')
+  +(E.drs?`<div class="muted" style="margin-top:6px">📺 Reviews: ${esc(drsSummary(E))}</div>`:'')
   +(!M||M.state==='done'?realHTML(E)+realBlock(E):'');   // no spoilers mid-match
 }
 function superOverHTML(E){
@@ -3873,6 +3982,7 @@ function fxEvent(M,e){
     case'100':tvBanner('ms','HUNDRED',`${esc(pName(e.pid))} · ${e.balls} balls`,I.bat);SFX.applause(2.4);return true;
     case'200':tvBanner('ms','DOUBLE HUNDRED',esc(pName(e.pid)),I.bat);SFX.applause(3);return true;
     case'5w':tvBanner('ms','FIVE WICKETS',`${esc(pName(e.pid))} · ${e.w}/${e.r}`,I.bowl);SFX.applause(1.8);return true;
+    case'drs':tvBanner(e.code==='M'?'inn':e.code==='O'&&e.out?'wkt':'ms',e.code==='M'?'BAD CALL':e.code==='U'?"UMPIRE'S CALL":e.code==='O'?(e.out?'OUT!':'NOT OUT'):'REVIEW LOST','📺 '+esc(drsText(e)),e.rev?e.side:I.bowl);if(e.code==='O')SFX.roar(.8,1.2);return true;
     case'hat':tvBanner('ms','HAT-TRICK!',esc(pName(e.pid)),I.bowl);SFX.applause(3);return true;
     case'innsEnd':tvBanner('inn','INNINGS',`${esc(teamName(e.bat))} ${e.runs}${e.wkts<10?'/'+e.wkts:''} · ${esc(e.why)}`,e.bat);return true;
     case'result':tvBanner('res','RESULT',esc(e.text),M.result&&M.result.winner);SFX.applause(2.5);return true;
@@ -4273,6 +4383,7 @@ function voiceEvent(M,e){
     case'100':say(`That's his hundred! What an innings from ${surname(e.pid)}.`,true);break;
     case'200':say(`Double hundred for ${surname(e.pid)}! Extraordinary.`,true);break;
     case'5w':say(`Five wickets for ${surname(e.pid)}!`,true);break;
+    case'drs':if(e.rev)say(e.code==='O'?`And it's been overturned! ${e.out?'He has to go.':'He survives.'}`:e.code==='U'?"Umpire's call. The decision stands.":'The decision stands. Review lost.',true);break;
     case'hat':say(`Hat-trick! ${surname(e.pid)} has a hat-trick!`,true);break;
     case'innsEnd':say(`That's the end of the innings. ${teamName(e.bat)}, ${e.runs}${e.wkts<10?' for '+e.wkts:' all out'}.`,true);break;
     case'result':say(e.text+'.',true);break;
@@ -4434,6 +4545,10 @@ They're a stand-in until you design real ones. Bowlers get 4 overs; innings aver
 <p><b>Captain:</b> Settings → Captaincy → Me, and you captain the team you follow (or both sides): choose who bowls each over (the real bowler of that over is marked),
 who goes in next, and whether to attack or defend - attack moves the over one card faster, defend one slower. A batter sent up the order gains at most one colour.</p>
 <p><b>Saving:</b> your career lives in this browser (three slots). Back it up from Settings - a reminder appears every ${BACKUP_EVERY} matches - or, in Chrome/Edge on a computer, auto-save to a file. Hosted on a website (e.g. GitHub Pages), the game installs like an app and plays offline.</p>
+<p><b>Umpires and DRS:</b> the card is the truth, but the umpire can get an lbw or a caught-behind wrong, or give out a batter the card's colour saved.
+The side the call went against may review (Tests 2 an innings, ODIs and T20s 1; one more each from mid-2020; DRS arrives in Tests in 2009, ODIs in 2011, T20s in 2017).
+An lbw review rolls 1-100 for <b>umpire's call</b>: 25 or under and the on-field decision stands. A failed review is lost; umpire's call keeps it from October 2017.
+As captain you're asked when you play ball by ball or over by over. Settings → Umpires &amp; DRS can turn reviews on for every era, or give you perfect umpires.</p>
 <p><b>Knockouts</b> are re-seeded from your own tables once a tournament's league stage is finished (Settings to follow history instead).</p>`;
 function openGuide(){openModal(GUIDE);}
 
@@ -4448,6 +4563,7 @@ RENDER.settings=(el)=>{
     <div class="spread"><span>Ratings &amp; colours</span>${seg('ratings',[['era','By era (form)'],['career','Whole career']])}</div>
     ${S.coach?'':`<div class="spread"><span>Pick squads for the team you follow</span>${seg('selection',[['auto','No (real XIs)'],['me','Yes']])}</div>`}
     <div class="spread"><span>Form (hot and cold streaks change the cards)</span>${seg('form',[['on','On'],['off','Off']])}</div>
+    <div class="spread"><span>Umpires &amp; DRS</span>${seg('drs',[['era','Real dates'],['on','DRS always'],['off','Perfect umpires']])}</div>
     <div class="spread"><span>Batting colours</span>${seg('batColours',[['player','Player'],['position','Classic (by position)']])}</div>
     <div class="spread"><span>After the real calendar (2026)</span>${seg('future',[['on','Carry on into the future'],['off','Stop']])}</div>
     <div class="spread"><span>Tournament knockouts</span>${seg('knockouts',[['timeline','My timeline'],['history','History']])}</div>
@@ -4516,7 +4632,8 @@ function showSplash(){
 uiMatchHook=(M,e,fast)=>{
   if(M.sim||VIEW!=='match')return;
   const shown=fxEvent(M,e);voiceEvent(M,e);
-  if(!shown&&['50','100','200','5w','hat','rain','rainlo','dl','followon'].includes(e.t))toast((/rain|dl/.test(e.t)?'🌧 ':e.t==='followon'?'':'🏏 ')+esc(evText(e)),/rain|dl/.test(e.t)?'warn':'ms');
+  if(e.t==='drs'&&e.code==='O'&&M.manualCaptain?.[e.side])achieve('drs');
+  if(!shown&&['50','100','200','5w','hat','rain','rainlo','dl','followon','drs'].includes(e.t))toast((/rain|dl/.test(e.t)?'🌧 ':e.t==='followon'?'':'🏏 ')+esc(evText(e)),/rain|dl/.test(e.t)?'warn':'ms');
   if(!shown&&e.t==='innsEnd'&&M.state==='live')toast(esc(evText(e)));
   if(fast)toast('🏆 '+esc(pName(fast.pid))+': '+esc(fast.text),'ms');
 };

@@ -38,8 +38,10 @@ const resultPill=(E,t)=>!E.result||!E.result.winner?`<span class="pill">${E.resu
 function innsShort(I,fmt){return`${I.runs}${I.wkts<10?'/'+I.wkts:''}${I.why==='declared'?'d':''}${fmt!=='TEST'||I.why!=='all out'?` <span class="muted">(${oversTxt(I.lb)})</span>`:''}`;}
 function matchLine(E){
   const sc=t=>E.inns.filter(I=>I.bat===t).map(I=>innsShort(I,E.fmt)).join(' &amp; ')||'-';
+  // batting order, so a rain-revised chase reads as one; the chasing side shows its D/L target
+  const order=E.inns.length?[E.inns[0].bat,...E.teams.filter(t=>t!==E.inns[0].bat)]:E.teams;
   return`<div class="spread" data-mid="${E.id}" style="cursor:pointer">
-    <div>${E.teams.map(t=>`<div class="row">${badge(t)} <span>${sc(t)}</span></div>`).join('')}</div>
+    <div>${order.map((t,i)=>`<div class="row">${badge(t)} <span>${sc(t)}</span>${i===1&&E.dl?`<span class="muted" style="font-size:12px">target ${E.dl.target} (D/L)</span>`:''}</div>`).join('')}</div>
     <div style="text-align:right"><div class="${E.result.winner?'green':'sub'}">${esc(E.result.text)}</div><div class="muted" style="font-size:12px">${fmtDate(E.date)} · ${FMT_NAME[E.fmt]}${E.stage?' · '+esc(E.stage):''}</div></div></div>`;
 }
 

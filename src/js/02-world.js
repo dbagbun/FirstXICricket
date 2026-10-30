@@ -87,7 +87,7 @@ for(const f of FIX)for(const t of[f.a,f.b])if(WORLD.xi[f.cid]&&WORLD.xi[f.cid][t
 const DEBUT=new Map();
 for(const f of FIX)if(WORLD.xi[f.cid])for(const t in WORLD.xi[f.cid])for(const p of WORLD.xi[f.cid][t].slice(0,11))if(!DEBUT.has(p))DEBUT.set(p,f.date);
 function nearestXI(tid,date,opts={}){
-  if(isFranchise(tid))return leagueXI(+tid,date);
+  if(typeof isFranchise==='function'&&isFranchise(tid))return leagueXI(+tid,date);   // (engine-only runs don't load the league)
   if(typeof S!=='undefined'&&S&&S.gen&&isFuture(date)){const x=genXI(+tid,date);if(x)return x;}
   const games=TEAM_GAMES.get(+tid)||[];
   let best=null,bd=1e9;

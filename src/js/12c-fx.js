@@ -64,6 +64,7 @@ function fxEvent(M,e){
     case'100':tvBanner('ms','HUNDRED',`${esc(pName(e.pid))} · ${e.balls} balls`,I.bat);SFX.applause(2.4);return true;
     case'200':tvBanner('ms','DOUBLE HUNDRED',esc(pName(e.pid)),I.bat);SFX.applause(3);return true;
     case'5w':tvBanner('ms','FIVE WICKETS',`${esc(pName(e.pid))} · ${e.w}/${e.r}`,I.bowl);SFX.applause(1.8);return true;
+    case'drs':tvBanner(e.code==='M'?'inn':e.code==='O'&&e.out?'wkt':'ms',e.code==='M'?'BAD CALL':e.code==='U'?"UMPIRE'S CALL":e.code==='O'?(e.out?'OUT!':'NOT OUT'):'REVIEW LOST','📺 '+esc(drsText(e)),e.rev?e.side:I.bowl);if(e.code==='O')SFX.roar(.8,1.2);return true;
     case'hat':tvBanner('ms','HAT-TRICK!',esc(pName(e.pid)),I.bowl);SFX.applause(3);return true;
     case'innsEnd':tvBanner('inn','INNINGS',`${esc(teamName(e.bat))} ${e.runs}${e.wkts<10?'/'+e.wkts:''} · ${esc(e.why)}`,e.bat);return true;
     case'result':tvBanner('res','RESULT',esc(e.text),M.result&&M.result.winner);SFX.applause(2.5);return true;

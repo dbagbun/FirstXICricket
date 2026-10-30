@@ -40,6 +40,7 @@ function voiceEvent(M,e){
     case'100':say(`That's his hundred! What an innings from ${surname(e.pid)}.`,true);break;
     case'200':say(`Double hundred for ${surname(e.pid)}! Extraordinary.`,true);break;
     case'5w':say(`Five wickets for ${surname(e.pid)}!`,true);break;
+    case'drs':if(e.rev)say(e.code==='O'?`And it's been overturned! ${e.out?'He has to go.':'He survives.'}`:e.code==='U'?"Umpire's call. The decision stands.":'The decision stands. Review lost.',true);break;
     case'hat':say(`Hat-trick! ${surname(e.pid)} has a hat-trick!`,true);break;
     case'innsEnd':say(`That's the end of the innings. ${teamName(e.bat)}, ${e.runs}${e.wkts<10?' for '+e.wkts:' all out'}.`,true);break;
     case'result':say(e.text+'.',true);break;

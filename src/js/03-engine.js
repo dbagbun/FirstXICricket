@@ -409,6 +409,7 @@ function testWeather(M){
 function bowlBall(M,manualRoll){
   if(M.state!=='live'||M.pending)return null;
   const I=curInn(M);
+  if(M.cur&&M.cur.rev)return reviewStep(M,I,manualRoll);
   if(!M.cur){
     const over=Math.floor(I.lb/6)+1,bi=captainBowler(M,I,over)??chooseBowler(M,I,over),b=I.eng.B[bi];
     const card=pickCard(applyShift(wearWeights(M,b,baseWeights(M.fmt,b.rating)),situationShift(M,I,over)),cardCodes(M));
@@ -430,8 +431,15 @@ function bowlBall(M,manualRoll){
   const tok=WORLD.cards[C.card][roll-1][col-1];
   const t=parseToken(tok);
   const striker=I.st,pos=I.order.indexOf(striker)+1;
-  let voided=false;const bcol=batColour(M,striker,pos,I.bowl);
+  let voided=false;const bcol=batColour(M,striker,pos,I.bowl),how0=t.how;
   if(t.w&&!wicketCounts(bcol,t.color)){voided=true;Object.assign(t,{w:false,color:'',how:'',bat:0,ex:0,exType:''});}
+  const D={roll,col,tok,t,voided,bcol};
+  if(M.drs){const R=umpireCheck(M,I,t,how0,voided);if(R){C.rev={...R,D};return reviewStep(M,I,null);}}
+  return applyBall(M,I,D);
+}
+// The rest of a delivery, once its outcome (and any umpire's decision) is settled.
+function applyBall(M,I,D){
+  const C=M.cur,{roll,col,tok,t,voided,bcol}=D,striker=I.st;
   const illegal=t.exType==='wd'||t.exType==='nb';
   const runs=t.bat+t.ex,B=I.bt[striker],W=I.bw[C.bowler];
   C.n++;
@@ -447,6 +455,7 @@ function bowlBall(M,manualRoll){
   if(striker===P.a)P.ra+=t.bat;else P.rb+=t.bat;
   const ball={inn:I.no,over:C.over,n:C.n,legal:0,card:C.card,roll,col,tok,st:striker,ns:I.ns,bowler:C.bowler,
     bat:t.bat,ex:t.ex,exType:t.exType,w:0,how:'',fielder:0,out:0,runs:I.runs,wkts:I.wkts,voided,bcol,ev:[]};
+  if(D.ump){ball.ump=D.ump;fire(M,ball,{t:'drs',...D.ump,pid:striker,bowler:C.bowler});}
   if(illegal){
     C.comp=true;
   }else{
@@ -618,4 +627,4 @@ function finishMatch(M){
 // Fast-forward helpers (auto dice only)
 function bowlOver(M){if(!M.cur&&M.state==='live'){bowlBall(M);}while(M.cur&&M.state==='live'&&!M.pending){const r=bowlBall(M);if(!r||r.need)return r;}return true;}
 function simInnings(M){const n=M.inns.length;let g=0;while(M.state==='live'&&!M.pending&&M.inns.length===n&&g++<20000){const r=bowlBall(M);if(!r||r.need)return r;}return true;}
-function simMatch(M){let g=0;while(M.state==='live'&&g++<40000){if(M.pending){if(M.pending.type==='followon')decideFollowOn(M,aiFollowOn(M,M.pending.lead));continue;}const r=bowlBall(M);if(!r||r.need)return r;}return true;}
+function simMatch(M){let g=0;while(M.state==='live'&&g++<40000){if(M.pending){if(M.pending.type==='followon')decideFollowOn(M,aiFollowOn(M,M.pending.lead));else if(M.pending.type==='review')decideReview(M,aiReview(M,curInn(M),M.cur.rev));continue;}const r=bowlBall(M);if(!r||r.need)return r;}return true;}

@@ -10,6 +10,7 @@ const ACHIEVEMENTS=[
   ['ton','💯','Three figures','See a hundred scored.'],['dbl','🌟','Double top','An ODI double hundred.'],['t20ton','🚀','Short-form century','A T20 hundred.'],['triple','👑','Triple','A Test triple hundred.'],
   ['big400','🔥','Four hundred','A team makes 400 in an ODI.'],['under50','🧊','Collapse','A side bowled out for under 50.'],['chase350','🏃','Mountain climbed','Chase down 350 or more.'],
   ['hat','🎩','Hat-trick','Witness a hat-trick.'],['seven','7️⃣','Seventh heaven','Seven wickets in an innings.'],['tenfor','🔟','Ten in the match','Ten wickets in a Test.'],
+  ['drs','📺','Upstairs','Win a review as captain.'],
   ['tie','🟰','Honours even','A tied match.'],['so','⏱️','Super over','A super over decides it.'],['dl','🌧️','Duckworth what?','A rain-affected D/L result.'],
   ['draw','🛡️','Rain-soaked stalemate','A drawn Test.'],['inns','🧱','Innings and plenty','An innings victory.'],
   ['assocWC','😲','Giant-killers','An associate nation wins a World Cup final.'],['no1','🥇','Top of the world','The team you follow goes No.1 in the ODI rankings.'],

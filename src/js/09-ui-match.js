@@ -47,6 +47,7 @@ function evText(e){
     case'rain':return`Rain: ${e.lost} overs lost on day ${e.day}`;
     case'rainlo':return`Rain! ${plural(e.lost,'over')} lost - ${e.inn===1?'the match is':'the chase is'} cut to ${e.overs} overs a side`;
     case'dl':return`D/L: revised target ${e.target} from ${e.overs} overs`;
+    case'drs':return drsText(e);
     case'followon':return`${teamName(e.team)} enforce the follow-on`;
     case'innsEnd':return`End of innings: ${teamName(e.bat)} ${e.runs}${e.wkts<10?'/'+e.wkts:''} (${e.why})`;
     case'result':return e.text;
@@ -201,7 +202,7 @@ function renderLive(el,M){
   const thisOver=I.balls.filter(b=>b.over===ovNo).slice(-12);
   const lastOvers=I.balls.slice(-18);
   const P=I.part;
-  const pend=M.pending&&M.pending.type==='followon';
+  const pend=M.pending&&M.pending.type==='followon',prev=M.pending&&M.pending.type==='review'&&M.pending;
   el.innerHTML=`<div class="stack">
   <div class="sub">${esc(M.series)}${M.stage?' · <span class="gold">'+esc(M.stage)+'</span>':''} · ${esc(M.venue)}</div>
   ${S.settings.broadcast&&S.settings.broadcast!=='standard'?scorebugHTML(M):`<div class="scorebar">
@@ -222,7 +223,7 @@ function renderLive(el,M){
       <div class="ticker" style="margin-top:10px;opacity:.75">${lastOvers.map(ballChip).join('')}</div>
     </div></div>
   <div class="card"><div class="row" id="controls">
-    ${pend?`<b>${esc(teamName(M.pending.team))} lead by ${M.pending.lead}.</b> Enforce the follow-on? <button class="btn pri" id="fo-yes">Enforce</button><button class="btn" id="fo-no">Bat again</button>`:`
+    ${pend?`<b>${esc(teamName(M.pending.team))} lead by ${M.pending.lead}.</b> Enforce the follow-on? <button class="btn pri" id="fo-yes">Enforce</button><button class="btn" id="fo-no">Bat again</button>`:prev?reviewAsk(M,prev):`
     <button class="btn" id="c-ball">Next ball</button><button class="btn pri" id="c-over">Bowl over</button>
     <button class="btn" id="c-5">5 overs</button><button class="btn" id="c-inn">End of innings</button>
     <button class="btn" id="c-watch">${WATCH?'❚❚ Pause':'▶ Watch'}</button><button class="btn" id="c-sim">Sim match</button>
@@ -235,6 +236,7 @@ function renderLive(el,M){
   drawMatchTab(M);
   $$('[data-tab]').forEach(b=>b.onclick=()=>{MATCH_TAB=b.dataset.tab;$$('[data-tab]').forEach(x=>x.classList.toggle('on',x===b));drawMatchTab(M);});
   if(done){$('#d-next')&&($('#d-next').onclick=()=>{const n=nextFixture();LM=null;if(n)startFixture(n.key);else go('home');});return;}
+  if(prev){$('#rv-yes').onclick=()=>{decideReview(M,true);step(M,'ball');};$('#rv-no').onclick=()=>{decideReview(M,false);step(M,'ball');};return;}
   if(pend){$('#fo-yes').onclick=()=>{decideFollowOn(M,true);afterStep(M);};$('#fo-no').onclick=()=>{decideFollowOn(M,false);afterStep(M);};return;}
   $('#c-ball').onclick=()=>step(M,'ball');$('#c-over').onclick=()=>step(M,'over');$('#c-5').onclick=()=>step(M,'5');
   $('#c-inn').onclick=()=>step(M,'inn');$('#c-sim').onclick=()=>step(M,'match');$('#c-watch').onclick=()=>toggleWatch(M);
@@ -242,6 +244,13 @@ function renderLive(el,M){
   wireCaptain(M);fxDice(M);
   $('#c-snd')&&($('#c-snd').onclick=()=>{S.settings.sound=!S.settings.sound;if(S.settings.sound)SFX.crack(.8);saveGame();rerender();});
   if(M.needRoll)askRoll(M);
+}
+function reviewAsk(M,P){
+  const how=P.how==='lbw'?'lbw':'caught behind',who=M.h2h?`<b>${esc(M.h2h[P.side])}</b>: `:'';
+  const q=P.field?`<span class="red"><b>OUT!</b></span> ${esc(pName(P.pid))} is given out ${how}. ${who}Review it?`
+    :`Big ${how} appeal from ${esc(pName(P.bowler))} - <b>not out</b>. ${who}Review it?`;
+  return`<span>📺 ${q}</span><button class="btn pri" id="rv-yes">Review (${P.left} left)</button><button class="btn" id="rv-no">${P.field?'Walk off':'Accept it'}</button>
+    <span class="muted" style="font-size:12px">${P.how==='lbw'?"An lbw review rolls for umpire's call (25 or under: the on-field decision stands).":'Caught behind: the replay always finds the truth.'}</span>`;
 }
 function diceBlock(M,C){
   const row=WORLD.cards[C.card][(C.roll||1)-1];
@@ -263,10 +272,10 @@ function step(M,kind){
   let g=0;
   const target=kind==='over'?1:kind==='5'?5:0;
   let overs=0;
-  FX.allow=kind==='ball'||kind==='over';
+  FX.allow=kind==='ball'||kind==='over';M.askRev=FX.allow;
   while(M.state==='live'&&!M.pending&&g++<50000){
     const r=bowlBall(M,M.rollIn);M.rollIn=null;
-    if(r&&r.need){M.needRoll=r.need;break;}
+    if(r&&r.need){if(r.need!=='review')M.needRoll=r.need;break;}
     M.needRoll=null;
     if(kind==='ball'){fxBall(M,r);voiceBall(M,r);break;}
     if(!M.cur&&target){overs++;if(overs>=target)break;}
@@ -279,7 +288,7 @@ function afterStep(M){
   rerender();
 }
 function askRoll(M){
-  const C=M.cur,what=M.needRoll==='comp'?'a fresh roll for the re-bowled ball':'the roll for this over';
+  const C=M.cur,what=M.needRoll==='comp'?'a fresh roll for the re-bowled ball':M.needRoll==='uc'?"the umpire's call roll (25 or under: the decision stands)":'the roll for this over';
   const who=M.h2h?`<b>${esc(M.h2h[curInn(M).bowl])}</b>, `:'';
   $('#dice-in').innerHTML=`<span class="dice">🎲 ${who}${who?'enter':'Enter'} ${what} (RR_${C?C.card:'?'}): <input type="number" id="roll-v" min="1" max="100" style="width:70px"> <button class="btn sm pri" id="roll-ok">Roll in</button> <button class="btn sm" id="roll-auto">Roll for me</button></span>`;
   const go_=v=>{v=+v;if(!(v>=1&&v<=100)){toast('Rolls are 1 to 100.','warn');return;}M.rollIn=v;M.needRoll=null;step(M,'ball');};
@@ -293,7 +302,7 @@ function toggleWatch(M){
   if(M.manual){toast('Watch mode needs automatic dice (Settings).','warn');return;}
   const tick=()=>{
     if(VIEW!=='match'||M.state!=='live'||M.pending){stopWatch();rerender();return;}
-    FX.allow=true;const b=bowlBall(M);fxBall(M,b);voiceBall(M,b);rerender();
+    FX.allow=true;M.askRev=true;const b=bowlBall(M);fxBall(M,b);voiceBall(M,b);rerender();
     WATCH=setTimeout(tick,S.settings.ballDelay);
   };
   WATCH=setTimeout(tick,10);rerender();
@@ -343,6 +352,7 @@ function scorecardHTML(E,M){
     </div>`;
   }).join('')+(E.inns.length?'':'<div class="muted">No play yet.</div>')+(E.result&&E.motm&&(!M||M.state==='done')?`<div class="banner">Man of the Match: <b>${plink(E.motm)}</b></div>`:'')
   +superOverHTML(E)+(E.dl?`<div class="muted" style="margin-top:6px">Rain: target revised by the D/L method to ${E.dl.target} from ${E.dl.overs} overs.</div>`:'')
+  +(E.drs?`<div class="muted" style="margin-top:6px">📺 Reviews: ${esc(drsSummary(E))}</div>`:'')
   +(!M||M.state==='done'?realHTML(E)+realBlock(E):'');   // no spoilers mid-match
 }
 function superOverHTML(E){

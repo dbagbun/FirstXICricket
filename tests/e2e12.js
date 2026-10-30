@@ -41,7 +41,7 @@ ok(G(`Object.keys(S.form.ODI).length`)>20,'form tracked');
 const pace=G(`(()=>{const E=S.matches.filter(m=>m.teams.includes(4)).pop();const I=E.inns.find(i=>i.bowl===4);return I.bw.sort((a,b)=>b[1]-a[1])[0][0];})()`);
 ok(G(`fatigueOf(${pace},careerDate())`)>0,'a bowler who just bowled carries fatigue');
 // the sack
-G(`S.coach.conf=12`);
+G(`S.coach.conf=8`);   // low enough to be sacked even after a win (+4) and the drift towards 55
 const loss=G(`(()=>{const E=S.matches.filter(m=>m.teams.includes(4)).pop();return coachAfter(E);})()`);
 ok(G('S.coach.team')===0&&G(`S.coach.history.at(-1).why`)==='sacked','sacked below the threshold');
 ok(G('S.coach.offers.length')>0,'job offers after the sack');

@@ -97,7 +97,7 @@ function buildMatch(fx){
 function selectAndMods(M,fx){
   const my=managedTeam();
   if(my&&!fx.friendly&&M.teams.includes(my)&&M.xi[my]){const r=pickXI(fx,my,M.xi[my]);M.xi[my]=r.xi;M.selNotes=r.notes;}
-  M.mods=matchMods(M);
+  M.mods=matchMods(M);drsSetup(M);
 }
 
 // ---------- end of match ----------
