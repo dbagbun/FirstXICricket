@@ -175,6 +175,9 @@ tbody tr:hover td{background:rgba(30,41,59,.6)}
 .paper-n{font:600 10px/1.2 var(--font);text-transform:uppercase;letter-spacing:.12em;color:#6b5f48}
 .paper-h{font:900 17px/1.1 Georgia,"Times New Roman",serif;margin:3px 0;letter-spacing:.01em}.paper.big .paper-h{font-size:23px}
 .paper-s{font-size:12px;color:#3d3628}
+.cal{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}.cal-m{border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.cal-h{font:700 12px/1 var(--head);text-transform:uppercase;letter-spacing:.12em;color:var(--sub);margin-bottom:6px}.cal-s{margin-bottom:8px}
+.wl-grid td.c,.wl-grid th.c{text-align:center;padding:3px 4px;font-size:12px}.btn.wl{min-width:34px;padding:3px 6px;font-variant-numeric:tabular-nums}.btn.wl.rest{background:var(--line);color:var(--sub)}
 @media (max-width:600px){
   main{padding:12px}
   #top{flex-wrap:wrap;gap:6px;padding:8px 12px}
@@ -314,7 +317,7 @@ const oversTxt=b=>Math.floor(b/6)+(b%6?'.'+(b%6):'');
 const oversDec=b=>b/6;
 const f1=v=>isFinite(v)?v.toFixed(1):'-';
 const f2=v=>isFinite(v)?v.toFixed(2):'-';
-const plural=(n,w)=>n+' '+w+(n===1?'':'s');
+const plural=(n,w,many)=>n+' '+(n===1?w:many||w+'s');
 const ordinal=n=>n+(['th','st','nd','rd'][(n%100>10&&n%100<14)?0:n%10]||'th');
 const fmtDate=d=>{if(!d)return'';const[y,m,dd]=d.split('-');return +dd+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m-1]+' '+y;};
 const daysBetween=(a,b)=>Math.round((Date.parse(b)-Date.parse(a))/864e5);
@@ -1822,7 +1825,7 @@ function onMatchDone(M){
   applyStats(E);
   applyRankings(E);
   updateForm(E);
-  const cn=coachAfter(E);pressAfter(E);
+  const cn=coachAfter(E);pressAfter(E);restAfter(M);
   const ms=checkMilestones(E),pos=playerOfSeries(E.sid),aw=yearEnd(E);
   if(S.live&&S.live.id===M.id)S.live=null;
   achCheck(E,M);
@@ -2180,7 +2183,7 @@ function squadFor(sid,team,date){
 // Your XI: the real XI where those men are in the squad and fit, the gaps filled from the squad like for like.
 function pickXI(fx,team,base){
   const squad=squadFor(fx.sid,team,fx.date),date=fx.date;
-  const ok=p=>squad.includes(p)&&!isInjured(p,date);
+  const ok=p=>squad.includes(p)&&!isInjured(p,date)&&!isRested(fx,p);
   const bat=base.bat.slice(),used=new Set(bat.filter(ok));
   const notes=[];
   for(let i=0;i<11;i++){
@@ -2190,7 +2193,7 @@ function pickXI(fx,team,base){
     const like=cands.filter(p=>keeper?true:(pAttr(p,date).style==='N')===(a.style==='N'));
     const inn=(like[0]??cands[0]);
     if(inn==null)continue;
-    used.add(inn);bat[i]=inn;notes.push({out,inn,why:isInjured(out,date)?'injured':'not in your squad'});
+    used.add(inn);bat[i]=inn;notes.push({out,inn,why:isInjured(out,date)?'injured':isRested(fx,out)?'rested':'not in your squad'});
   }
   const wk=bat.includes(base.wk)?base.wk:bat[6],cap=bat.includes(base.cap)?base.cap:bat[0];
   return{xi:{bat,wk,cap},notes};
@@ -2548,6 +2551,7 @@ const ACHIEVEMENTS=[
   ['awards','🎤','Awards night','Reach an end-of-year awards ceremony.'],
   ['league','💼','Owner','Found a franchise league.'],['leagueWin','🏆','Franchise champions','Win the Franchise League with your franchise.'],
   ['press','🎙️','Face the press','Answer a press conference as coach.'],
+  ['rotate','🔄','Rotation policy','Rest a player for a match.'],
   ['coach1','📋','The job','Take a coaching job.'],['target10','🎯','Delivering','Meet 10 board targets.'],['sacked','📦','Clear your desk','Get sacked.'],
   ['nations3','✈️','Journeyman','Coach three different nations.'],['coachWC','🏆','World champion coach','Win a World Cup final as coach.'],
   ['challenge1','🧩','Up for it','Complete a challenge.'],['challenge3','⭐','Three stars','Three-star a challenge.'],
@@ -3089,6 +3093,76 @@ function pressAnswer(qi,oi){
   return out;
 }
 
+// ═══ SEASON PLANNER & WORKLOAD — the year ahead, projected fatigue, resting players ═══
+// S.rest = {fixtureKey:[pid]}: men you rest for one match (pickXI leaves them out like an injury; the entry
+// goes once the match is played). Fatigue is projected through the fixtures ahead with fatigueOf's own rules:
+// each match he's expected to play in the 10 days before adds a match's load, and his usual overs in the 14 days before.
+const PLAN_N=8;
+const restFor=key=>(S.rest&&S.rest[key])||[];
+const isRested=(fx,pid)=>!!fx&&restFor(fx.key).includes(+pid);
+function toggleRest(key,pid){
+  S.rest=S.rest||{};const L=S.rest[key]=S.rest[key]||[],i=L.indexOf(+pid);
+  if(i>=0)L.splice(i,1);else L.push(+pid);
+  if(!L.length)delete S.rest[key];
+  if(i<0&&typeof achieve==='function')achieve('rotate');
+  return i<0;
+}
+function restAfter(M){if(S.rest&&M.key)delete S.rest[M.key];}
+function myUpcoming(team,days=365){
+  const d=careerDate(),to=addDays(d,days);
+  return allFixtures().filter(x=>x.playable&&!S.done[x.key]&&x.date<=to&&(x.a===team||x.b===team));
+}
+// The XI you'd field: the real one where there is one, through your squad, injuries and rest.
+function probableXI(fx,team){
+  const base=(fx.f&&WORLD.xi[fx.f.cid]&&WORLD.xi[fx.f.cid][team]&&fixtureXI(fx.f.cid,team))||(fx.real&&testXI(fx.f.cid,team,fx.date))||nearestXI(team,fx.date);
+  return pickXI(fx,team,base).xi.bat;
+}
+const statFmtOf=fx=>fx.cup&&cupById(fx.sid)?.league?'LEAGUE':fx.fmt;
+function usualOvers(pid,fmt,date){
+  const s=S.stats[fmt]&&S.stats[fmt][pid],st=pAttr(pid,date).style;
+  if(st==='N')return 0;
+  if(s&&s.m>=3)return s.bb/6/s.m;
+  return fmt==='TEST'?22:fmt==='ODI'?8:3;
+}
+const styleLoad=st=>st==='P'?1.3:st==='M'?1:.7;
+// Projected fatigue for every player in the XIs of the next fixtures: {fx, xi, f:{pid:fatigue}}.
+function workloadPlan(team,n=PLAN_N){
+  const list=myUpcoming(team).slice(0,n),rows=list.map(fx=>({fx,xi:probableXI(fx,team),f:{}}));
+  for(let j=0;j<rows.length;j++){
+    const R=rows[j],date=R.fx.date;
+    for(const pid of R.xi){
+      let ov=0,m=0;
+      for(let i=0;i<j;i++){const P=rows[i],d=daysBetween(P.fx.date,date);if(!P.xi.includes(pid)||d>21)continue;
+        if(d<=10)m+=P.fx.fmt==='TEST'?3:1;if(d<=14)ov+=usualOvers(pid,statFmtOf(P.fx),date);}
+      R.f[pid]=clamp(fatigueOf(pid,date)+Math.round(ov*styleLoad(pAttr(pid,date).style)+m*5),0,100);
+    }
+  }
+  return rows;
+}
+const injRisk=(pid,fmt,f,date)=>((fmt==='TEST'?.006:.003)+f/100*.03*(pAttr(pid,date).style==='P'?2:1))*100;
+// Recent load: matches in 90 days, overs in 30.
+function recentLoad(pid,date){
+  let m=0,ov=0;
+  for(let i=S.matches.length-1;i>=0;i--){const E=S.matches[i],d=daysBetween(E.date,date);if(d>90)break;if(d<0)continue;
+    if(!E.teams.some(t=>E.xi[t].slice(0,11).includes(pid)))continue;m++;
+    if(d<=30)for(const I of E.inns){const w=I.bw.find(x=>x[0]===pid);if(w)ov+=w[1]/6;}}
+  return{m,ov:Math.round(ov)};
+}
+// Rest whoever is projected at 60+ (two a match at most, never in a knockout); returns how many were rested.
+function autoRotate(team){
+  let n=0;
+  for(let pass=0;pass<PLAN_N;pass++){
+    const rows=workloadPlan(team);let changed=false;
+    for(const R of rows){
+      const ko=/final|semi|quarter|play-off/i.test(R.fx.stage||R.fx.label||'');if(ko)continue;
+      const tired=R.xi.filter(p=>R.f[p]>=60&&!isRested(R.fx,p)).sort((a,b)=>R.f[b]-R.f[a]);
+      if(tired.length&&restFor(R.fx.key).length<2){toggleRest(R.fx.key,tired[0]);n++;changed=true;break;}
+    }
+    if(!changed)break;
+  }
+  return n;
+}
+
 // ═══ UI SHELL — navigation, views, modal, shared widgets ═══
 const TEAM_COL={AUS:'#c9a400',IND:'#1f4fbf',ENG:'#1d3a8a',RSA:'#0f7a3e',PAK:'#0b6e2e',SL:'#173f8f',WI:'#7a1f2b',NZ:'#222',ZIM:'#b8341b',
   BAN:'#05683f',KEN:'#9c1b1b',IRE:'#169b62',NED:'#e8601c',SCO:'#1b3f94',CAN:'#c8102e',UAE:'#00732f',NAM:'#003580',USA:'#3c3b6e',NEP:'#dc143c',
@@ -3097,7 +3171,7 @@ for(const f of FRANCHISES)TEAM_COL[f[2]]=f[3];
 const badge=t=>`<span class="tbadge" style="background:${TEAM_COL[teamShort(t)]||'#334155'}">${esc(teamShort(t))}</span>`;
 const tlabel=t=>`${badge(t)} ${esc(teamName(t))}`;
 const plink=pid=>`<span class="plink" data-pid="${pid}">${esc(pName(pid))}</span>`;
-const VIEWS=[['home','Dashboard'],['match','Match'],['coach','Coach'],['play','Challenges'],['league','League'],['fixtures','Fixtures'],['tour','Tournament Centre'],['rank','Rankings'],['records','Records'],['query','Stats lab'],['players','Players'],['history','Results'],['miles','Milestones'],['settings','Settings']];
+const VIEWS=[['home','Dashboard'],['match','Match'],['coach','Coach'],['plan','Planner'],['play','Challenges'],['league','League'],['fixtures','Fixtures'],['tour','Tournament Centre'],['rank','Rankings'],['records','Records'],['query','Stats lab'],['players','Players'],['history','Results'],['miles','Milestones'],['settings','Settings']];
 let VIEW='home',VIEW_ARG=null;
 const RENDER={};
 
@@ -4681,6 +4755,54 @@ function backPagesHTML(n=3){
   return H.length?`<div class="card"><h3>Back pages</h3><div class="stack" style="gap:8px">${H.map((h,i)=>headHTML(h,i===0)).join('')}</div></div>`:'';
 }
 
+// ═══ SEASON PLANNER SCREEN — the calendar, the workload grid, rest and rotation ═══
+const fatCol=f=>f>=60?'var(--red)':f>=35?'var(--gold)':'var(--green)';
+function calendarHTML(list,team){
+  const by=new Map();
+  for(const fx of list){const k=fx.sid||fx.key;if(!by.has(k))by.set(k,{fx,n:0,from:fx.date,to:fx.date});const s=by.get(k);s.n++;s.to=fx.date;}
+  const months=new Map();
+  for(const s of by.values()){const m=s.from.slice(0,7);if(!months.has(m))months.set(m,[]);months.get(m).push(s);}
+  const obj=sid=>S.coach&&S.coach.objs.find(o=>o.sid===sid&&o.status==='open');
+  return[...months.entries()].map(([m,ss])=>`<div class="cal-m"><div class="cal-h">${fmtDate(m+'-01').replace(/^\d+ /,'')}</div>
+    ${ss.map(s=>{const opp=team?[...new Set(list.filter(x=>(x.sid||x.key)===(s.fx.sid||s.fx.key)).map(x=>x.a===team?x.b:x.a))]:[];const o=obj(s.fx.sid);
+      return`<div class="cal-s"><span class="pill ${s.fx.fmt==='TEST'?'test':''}">${FMT_NAME[statFmtOf(s.fx)]||s.fx.fmt}</span> <b>${esc(s.fx.title)}</b>
+      <div class="muted" style="font-size:12px">${fmtDate(s.from)}${s.to!==s.from?' - '+fmtDate(s.to):''} · ${plural(s.n,'match','matches')}${opp.length&&opp.length<=3?' v '+opp.map(t=>esc(teamShort(t))).join(', '):''}</div>
+      ${o?`<div style="font-size:12px">🎯 ${esc(o.text)}</div>`:''}</div>`;}).join('')}</div>`).join('');
+}
+RENDER.plan=(el)=>{
+  const team=managedTeam(),date=careerDate();
+  if(!team){
+    const list=allFixtures().filter(x=>x.playable&&!S.done[x.key]&&x.date<=addDays(date,180));
+    el.innerHTML=`<div class="stack"><div class="card"><h2 style="margin:0">Season planner</h2><p class="sub">Coach a nation, or pick squads for the team you follow (Settings → Pick squads), to plan workloads and rest players. Here's the next six months.</p></div>
+      <div class="card"><div class="cal">${calendarHTML(list,0)||'<span class="muted">Nothing scheduled.</span>'}</div></div></div>`;
+    return;
+  }
+  const list=myUpcoming(team),rows=workloadPlan(team),nx=rows[0];
+  const ids=[...new Set(rows.flatMap(R=>R.xi))];
+  const sq=nx?squadFor(nx.fx.sid,team,nx.fx.date):[],pool=[...new Set([...ids,...sq])];
+  const bowl=p=>pAttr(p,date).style!=='N';
+  pool.sort((a,b)=>bowl(b)-bowl(a)||(rows[0]&&(rows[0].f[b]||0)-(rows[0].f[a]||0)));
+  const cell=(R,p)=>{
+    const rest=isRested(R.fx,p),inj=isInjured(p,R.fx.date),f=R.f[p];
+    if(inj)return`<td class="c muted" title="injured">🩹</td>`;
+    if(rest)return`<td class="c"><button class="btn sm wl rest" data-rest="${R.fx.key}:${p}" title="Rested - click to pick him again">R</button></td>`;
+    if(f==null)return`<td class="c"><button class="btn sm wl" data-rest="${R.fx.key}:${p}" title="Not in the XI - click to rest him anyway" style="opacity:.35">·</button></td>`;
+    return`<td class="c"><button class="btn sm wl" data-rest="${R.fx.key}:${p}" title="Projected fatigue ${f} (injury risk ${injRisk(p,R.fx.fmt,f,R.fx.date).toFixed(1)}%) - click to rest" style="color:${fatCol(f)}">${f}</button></td>`;
+  };
+  el.innerHTML=`<div class="stack">
+    <div class="card"><div class="spread"><div><h2 style="margin:0">Season planner</h2><div class="sub">${tlabel(team)} · the next ${plural(list.length,'match','matches')} in twelve months</div></div>
+      <div class="row"><button class="btn pri" id="pl-auto">Rest anyone at 60+</button><button class="btn" id="pl-clear">Clear all rests</button></div></div>
+      <p class="muted" style="font-size:12px;margin:8px 0 0">Fatigue 60+ costs a bowler a rating step and raises the injury risk (pace bowlers twice as much). Each cell is his projected fatigue going into that match - click to rest him for it; the squad fills the gap.</p></div>
+    ${rows.length?`<div class="card"><h3>Workload - next ${rows.length} matches</h3><div class="tbl-wrap"><table class="num wl-grid">
+      <tr><th>Player</th><th class="r hide-sm">90d M</th><th class="r hide-sm">30d ov</th>${rows.map(R=>`<th class="c" title="${esc(R.fx.title)}">${fmtDate(R.fx.date).replace(/ \d{4}$/,'')}<br><span class="muted">${esc(teamShort(R.fx.a===team?R.fx.b:R.fx.a))} ${R.fx.fmt==='TEST'?'T':R.fx.fmt==='T20'?'20':''}</span></th>`).join('')}</tr>
+      ${pool.map(p=>{const L=recentLoad(p,date),a=pAttr(p,date);return`<tr><td>${plink(p)} <span class="muted" style="font-size:11px">${a.style==='N'?'bat':STYLE_NAME[a.style]}</span></td><td class="r hide-sm">${L.m}</td><td class="r hide-sm">${L.ov}</td>${rows.map(R=>cell(R,p)).join('')}</tr>`;}).join('')}
+    </table></div></div>`:''}
+    <div class="card"><h3>The year ahead</h3><div class="cal">${calendarHTML(list,team)||'<span class="muted">Nothing scheduled.</span>'}</div></div></div>`;
+  $$('[data-rest]').forEach(b=>b.onclick=()=>{const[k,p]=b.dataset.rest.split(':');const on=toggleRest(k,+p);toast(`${esc(pName(+p))} ${on?'rested':'back in contention'}.`);saveGame();rerender();});
+  $('#pl-auto').onclick=()=>{const n=autoRotate(team);toast(n?`Rested ${plural(n,'player')}.`:'Nobody is projected at 60+.');saveGame();rerender();};
+  $('#pl-clear').onclick=()=>{for(const R of myUpcoming(team))if(S.rest)delete S.rest[R.key];saveGame();rerender();};
+};
+
 // ═══ SETTINGS, SPLASH, LIVE HOOKS & INIT ═══
 const GUIDE=`<h2>How First XI works</h2>
 <p><b>Every over</b> the bowler's rating picks one of six run-rate cards - RR_3 (tight) up to RR_7 (carnage) - shifted by the match situation:
@@ -4708,6 +4830,8 @@ As captain you're asked when you play ball by ball or over by over. Settings →
 <p><b>Press and media:</b> the papers write up every match of the team you follow (the Back pages). As a coach you face the press after every match and before every series:
 talk up the board's target and the stakes rise both ways; praise or question a player and he may play a form step up (or down) next time; what you say moves the dressing room and the media pressure.
 A buzzing dressing room (75+) lifts a top-order batter a form step, an unhappy one (25 or under) drops one; with pressure at 70+ every defeat costs extra board confidence.</p>
+<p><b>Season planner:</b> the year ahead for the side you coach (or pick squads for), and a grid of each man's projected fatigue going into the next eight matches.
+Click a cell to rest him for that match - the squad fills the gap and he comes back fresher; "Rest anyone at 60+" does it for you (never in a knockout).</p>
 <p><b>Knockouts</b> are re-seeded from your own tables once a tournament's league stage is finished (Settings to follow history instead).</p>`;
 function openGuide(){openModal(GUIDE);}
 

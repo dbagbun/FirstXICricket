@@ -25,6 +25,8 @@ As captain you're asked when you play ball by ball or over by over. Settings →
 <p><b>Press and media:</b> the papers write up every match of the team you follow (the Back pages). As a coach you face the press after every match and before every series:
 talk up the board's target and the stakes rise both ways; praise or question a player and he may play a form step up (or down) next time; what you say moves the dressing room and the media pressure.
 A buzzing dressing room (75+) lifts a top-order batter a form step, an unhappy one (25 or under) drops one; with pressure at 70+ every defeat costs extra board confidence.</p>
+<p><b>Season planner:</b> the year ahead for the side you coach (or pick squads for), and a grid of each man's projected fatigue going into the next eight matches.
+Click a cell to rest him for that match - the squad fills the gap and he comes back fresher; "Rest anyone at 60+" does it for you (never in a knockout).</p>
 <p><b>Knockouts</b> are re-seeded from your own tables once a tournament's league stage is finished (Settings to follow history instead).</p>`;
 function openGuide(){openModal(GUIDE);}
 

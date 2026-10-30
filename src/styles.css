@@ -156,6 +156,9 @@ tbody tr:hover td{background:rgba(30,41,59,.6)}
 .paper-n{font:600 10px/1.2 var(--font);text-transform:uppercase;letter-spacing:.12em;color:#6b5f48}
 .paper-h{font:900 17px/1.1 Georgia,"Times New Roman",serif;margin:3px 0;letter-spacing:.01em}.paper.big .paper-h{font-size:23px}
 .paper-s{font-size:12px;color:#3d3628}
+.cal{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}.cal-m{border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.cal-h{font:700 12px/1 var(--head);text-transform:uppercase;letter-spacing:.12em;color:var(--sub);margin-bottom:6px}.cal-s{margin-bottom:8px}
+.wl-grid td.c,.wl-grid th.c{text-align:center;padding:3px 4px;font-size:12px}.btn.wl{min-width:34px;padding:3px 6px;font-variant-numeric:tabular-nums}.btn.wl.rest{background:var(--line);color:var(--sub)}
 @media (max-width:600px){
   main{padding:12px}
   #top{flex-wrap:wrap;gap:6px;padding:8px 12px}

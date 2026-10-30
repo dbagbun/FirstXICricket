@@ -124,7 +124,7 @@ function onMatchDone(M){
   applyStats(E);
   applyRankings(E);
   updateForm(E);
-  const cn=coachAfter(E);pressAfter(E);
+  const cn=coachAfter(E);pressAfter(E);restAfter(M);
   const ms=checkMilestones(E),pos=playerOfSeries(E.sid),aw=yearEnd(E);
   if(S.live&&S.live.id===M.id)S.live=null;
   achCheck(E,M);

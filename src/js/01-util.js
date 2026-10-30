@@ -18,7 +18,7 @@ const oversTxt=b=>Math.floor(b/6)+(b%6?'.'+(b%6):'');
 const oversDec=b=>b/6;
 const f1=v=>isFinite(v)?v.toFixed(1):'-';
 const f2=v=>isFinite(v)?v.toFixed(2):'-';
-const plural=(n,w)=>n+' '+w+(n===1?'':'s');
+const plural=(n,w,many)=>n+' '+(n===1?w:many||w+'s');
 const ordinal=n=>n+(['th','st','nd','rd'][(n%100>10&&n%100<14)?0:n%10]||'th');
 const fmtDate=d=>{if(!d)return'';const[y,m,dd]=d.split('-');return +dd+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m-1]+' '+y;};
 const daysBetween=(a,b)=>Math.round((Date.parse(b)-Date.parse(a))/864e5);

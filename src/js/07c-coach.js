@@ -84,7 +84,7 @@ function squadFor(sid,team,date){
 // Your XI: the real XI where those men are in the squad and fit, the gaps filled from the squad like for like.
 function pickXI(fx,team,base){
   const squad=squadFor(fx.sid,team,fx.date),date=fx.date;
-  const ok=p=>squad.includes(p)&&!isInjured(p,date);
+  const ok=p=>squad.includes(p)&&!isInjured(p,date)&&!isRested(fx,p);
   const bat=base.bat.slice(),used=new Set(bat.filter(ok));
   const notes=[];
   for(let i=0;i<11;i++){
@@ -94,7 +94,7 @@ function pickXI(fx,team,base){
     const like=cands.filter(p=>keeper?true:(pAttr(p,date).style==='N')===(a.style==='N'));
     const inn=(like[0]??cands[0]);
     if(inn==null)continue;
-    used.add(inn);bat[i]=inn;notes.push({out,inn,why:isInjured(out,date)?'injured':'not in your squad'});
+    used.add(inn);bat[i]=inn;notes.push({out,inn,why:isInjured(out,date)?'injured':isRested(fx,out)?'rested':'not in your squad'});
   }
   const wk=bat.includes(base.wk)?base.wk:bat[6],cap=bat.includes(base.cap)?base.cap:bat[0];
   return{xi:{bat,wk,cap},notes};
