@@ -41,6 +41,8 @@ Call one up into your next squad and he gets first chance when the XI needs his 
 <p><b>Be a player:</b> start a career as one young cricketer for the team you follow - top-order batter, all-rounder, fast bowler, spinner or keeper-batter.
 You play domestic cricket between your side's matches; your selection standing follows your form, and at 70 the selectors pick you (you take the place of the like-for-like man). Below 45 in the side and you're dropped.
 Your intent - defend, normal or attack - moves the cards one step for the overs you face and the overs you bowl. Experience turns a GREEN batter BLUE and brings a bowler's rating down towards 1; age takes it back from 34. My player has it all.</p>
+<p><b>Dream XIs:</b> Challenges → Dream XIs. Draft two elevens from any era - search any player, or load a nation's best - and every man plays at his peak: his best bowling rating and his best batting colour.
+Play it (you captain the first side) or sim it, in ODI, T20 or Test form, at Lord's. Share the matchup as a code. It runs in the sandbox, so your career is untouched.</p>
 <p><b>Knockouts</b> are re-seeded from your own tables once a tournament's league stage is finished (Settings to follow history instead).</p>`;
 function openGuide(){
   openModal(GUIDE+(S&&!S.sandbox?`<div class="row" style="margin-top:12px"><button class="btn" id="g-start">Show the Start here checklist</button><button class="btn" id="g-keys">Keyboard shortcuts</button></div>`:''));

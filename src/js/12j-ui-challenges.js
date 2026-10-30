@@ -32,6 +32,7 @@ RENDER.play=(el)=>{
   let body='';
   if(PLAY_TAB==='list')body=`<div class="grid g3">${CHALLENGES.map(c=>challengeCard(c,st)).join('')}</div>`;
   else if(PLAY_TAB==='relive')body=reliveHTML();
+  else if(PLAY_TAB==='dream')body=dreamHTML();
   else if(PLAY_TAB==='build'){
     const opts=sel=>ALL_TEAMS.filter(t=>!COMPOSITE.has(t)).map(t=>`<option value="${t}" ${t===sel?'selected':''}>${esc(teamName(t))}</option>`).join('');
     body=`<div class="card stack" style="max-width:720px"><h3>Build a scenario</h3>
@@ -51,11 +52,12 @@ RENDER.play=(el)=>{
       <div class="bar" style="margin:8px 0 14px"><i style="width:${100*got/ACHIEVEMENTS.length}%"></i></div>
       <div class="grid g4">${ACHIEVEMENTS.map(a=>`<div class="card" style="padding:10px;${A[a[0]]?'':'opacity:.4;filter:grayscale(1)'}"><div style="font-size:26px">${a[1]}</div><b>${esc(a[2])}</b><div class="sub" style="font-size:12px">${esc(a[3])}</div>${A[a[0]]?`<div class="muted" style="font-size:11px">${fmtDate(A[a[0]])}</div>`:''}</div>`).join('')}</div></div>`;
   }
-  el.innerHTML=sandboxBanner()+`<div class="card"><div class="seg">${[['list','Challenges'],['relive','Relive history'],['build','Build your own'],['ach','Achievements']].map(([k,n])=>`<button data-pt="${k}" class="${PLAY_TAB===k?'on':''}">${n}</button>`).join('')}</div></div>
+  el.innerHTML=sandboxBanner()+`<div class="card"><div class="seg">${[['list','Challenges'],['relive','Relive history'],['dream','Dream XIs'],['build','Build your own'],['ach','Achievements']].map(([k,n])=>`<button data-pt="${k}" class="${PLAY_TAB===k?'on':''}">${n}</button>`).join('')}</div></div>
     <div style="margin-top:14px">${body}</div>`;
   $$('[data-pt]').forEach(b=>b.onclick=()=>{PLAY_TAB=b.dataset.pt;rerender();});
   $$('[data-chal]').forEach(b=>b.onclick=()=>startChallenge(challengeById(b.dataset.chal)));
   $$('[data-code]').forEach(b=>b.onclick=()=>showCode(challengeById(b.dataset.code)));
+  if(PLAY_TAB==='dream')dreamWire();
   $('#rl-team')&&($('#rl-team').onchange=e=>{RELIVE.team=+e.target.value;rerender();});
   $$('[data-rls]').forEach(b=>b.onclick=()=>{RELIVE.side=b.dataset.rls;rerender();});
   $$('[data-rl]').forEach(b=>b.onclick=()=>{const[cid,bl]=b.dataset.rl.split(':'),f=FIX.find(x=>x.cid===cid),R=WORLD.real[cid],p=R.pos.find(x=>x[0]===+bl);startChallenge(reliveDef(f,R,p,RELIVE.side));});

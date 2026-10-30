@@ -24,7 +24,7 @@ const challengeById=id=>CHALLENGES.find(c=>c.id===id)||null;
 function challengeCode(def){return'FXI1.'+btoa(unescape(encodeURIComponent(JSON.stringify(def))));}
 function parseChallengeCode(code){
   try{const t=String(code).trim();if(!t.startsWith('FXI1.'))return null;const d=JSON.parse(decodeURIComponent(escape(atob(t.slice(5)))));
-    if(!d||!['chase','defend','survive','bowlout','cup'].includes(d.kind))return null;d.id=d.id||'code-'+Math.abs([...t].reduce((h,c)=>(h*31+c.charCodeAt(0))|0,7));return d;}catch(e){return null;}
+    if(!d||!['chase','defend','survive','bowlout','cup','dream'].includes(d.kind))return null;d.id=d.id||'code-'+Math.abs([...t].reduce((h,c)=>(h*31+c.charCodeAt(0))|0,7));return d;}catch(e){return null;}
 }
 function readStars(){try{return JSON.parse(localStorage.getItem(CH_STARS_KEY)||'{}');}catch(e){return{};}}
 function writeStars(o){try{localStorage.setItem(CH_STARS_KEY,JSON.stringify(o));}catch(e){}}
@@ -118,7 +118,7 @@ function leaveSandbox(){
 function startChallenge(def){
   enterSandbox(def);
   if(def.kind==='cup'){go('tour',S.sandbox.cup);return;}
-  LM=buildChallengeMatch(def);S.live=LM;saveGame();go('match');
+  LM=def.kind==='dream'?buildDreamMatch(def):buildChallengeMatch(def);S.live=LM;saveGame();go('match');
 }
 // Stars: 0 lost, 1 close, 2 done, 3 done in style.
 function judgeChallenge(def,E,M){
@@ -130,13 +130,14 @@ function judgeChallenge(def,E,M){
   else if(def.kind==='defend'){ok=r.winner===def.bowl;const I=E.inns[E.inns.length-1];
     stars=ok?(r.margin>=Math.max(4,def.need*.3)||I.wkts>=10?3:2):((I.mo||50)*6-I.lb<=1?1:0);text=ok?`Defended - won by ${plural(r.margin,'run')}.`:'They got there.';}
   else if(def.kind==='survive'){const I=E.inns[3];ok=r.type==='draw'||r.winner===def.bat;stars=ok?(I&&10-I.wkts>=3?3:2):(I&&I.wkts>=10&&testOversLeft(M)<=5?1:0);text=ok?'Saved it.':'Bowled out.';}
+  else if(def.kind==='dream'){ok=r.winner===def.ta;stars=ok?3:0;text=r.winner?`${teamName(r.winner)}'s dream XI wins: ${r.text}.`:r.text+'.';}
   else if(def.kind==='bowlout'){ok=r.winner===def.bowl;stars=ok?3:0;text=ok?'Bowled them out.':'They survived.';}
   return{ok,stars,text,you};
 }
 // after each match in the sandbox: a scenario is judged at once, a cup when its last game is done
 function challengeAfter(M,E){
   const def=S.sandbox.def;
-  if(M.challenge){S.sandbox.res=judgeChallenge(def,E,M);recordChallenge(def,S.sandbox.res);return;}
+  if(M.challenge){S.sandbox.res=judgeChallenge(def,E,M);if(def.kind==='dream')achieve('dream');else recordChallenge(def,S.sandbox.res);return;}
   if(def.kind==='cup'&&S.sandbox.cup){
     const cup=cupById(S.sandbox.cup);if(!cup.fix.every(f=>S.done[f.key])||S.sandbox.res)return;
     const champ=cupChampion(cup),mine=cupMatches(cup).filter(x=>x.teams.includes(def.team));

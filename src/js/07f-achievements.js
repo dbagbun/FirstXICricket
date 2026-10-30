@@ -22,6 +22,7 @@ const ACHIEVEMENTS=[
   ['callup','📞','The call-up','Call up an uncapped prospect.'],
   ['meStart','🧢','A dream','Start a career as a player.'],['meDebut','🎽','Capped','Make your international debut as a player.'],['meTon','💯','My hundred','Your player scores an international hundred.'],
   ['meFive','🖐️','Five-for','Your player takes five wickets in an international.'],['meFifty','5️⃣','Fifty caps','Your player wins 50 caps.'],
+  ['dream','🌟','Dream team','Play a Dream XI match.'],
   ['coach1','📋','The job','Take a coaching job.'],['target10','🎯','Delivering','Meet 10 board targets.'],['sacked','📦','Clear your desk','Get sacked.'],
   ['nations3','✈️','Journeyman','Coach three different nations.'],['coachWC','🏆','World champion coach','Win a World Cup final as coach.'],
   ['challenge1','🧩','Up for it','Complete a challenge.'],['challenge3','⭐','Three stars','Three-star a challenge.'],
