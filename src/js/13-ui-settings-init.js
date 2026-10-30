@@ -6,7 +6,8 @@ death overs and steep chases push towards the faster cards, a long tail pulls ba
 <p><b>Wicket colours.</b> A wicket on the card only counts if its colour can get that batter out. Every batter has a colour:
 <span style="color:#60a5fa">BLUE</span> batters fall only to BLUE wickets, <span style="color:#4ade80">GREEN</span> to BLUE or GREEN, <span style="color:#f87171">RED</span> to anything. Otherwise it's a dot ball.</p>
 <p>Colours come from your workbook's BatGroup where set; otherwise from where he usually bats and his caps. A derived colour is never weaker than his batting position (Nos. 1-6 BLUE, 7-9 GREEN, 10-11 RED),
-except that associate batters not yet proven against Test nations are GREEN against them. Settings → Batting colours → Classic plays the original position-only rule.</p>
+except that associate batters not yet proven against Test nations are GREEN against them.
+The weakest associates (Namibia, Canada, the USA, the UAE, Bermuda, Hong Kong, Nepal, Oman, PNG, Jersey; Kenya from 2008; Ireland before 2007) bat a colour lower again against Test nations, so they win a few in a hundred - Settings can switch it off. Settings → Batting colours → Classic plays the original position-only rule.</p>
 <p><b>Bowlers</b> follow the real bowling plan of the match where Cricsheet has it, then a spell engine (pace with the new ball and at the death, spin through the middle).
 Ratings 1 (elite) to 5 (part-timer) come from your Excel ratings where you set them, otherwise from each bowler's real spells. Edit any of them on a player's card.</p>
 <p><b>Rain in ODIs:</b> some matches lose overs. Targets are revised with a Duckworth-Lewis-style resource model (overs left and wickets down; an approximation of the published table), and if fewer than 20 overs are possible for the chasing side it's a no result. A tied knockout goes to a <b>super over</b>.</p>
@@ -66,6 +67,7 @@ RENDER.settings=(el)=>{
     ${S.coach?'':`<div class="spread"><span>Pick squads for the team you follow</span>${seg('selection',[['auto','No (real XIs)'],['me','Yes']])}</div>`}
     <div class="spread"><span>Form (hot and cold streaks change the cards)</span>${seg('form',[['on','On'],['off','Off']])}</div>
     <div class="spread"><span>Umpires &amp; DRS</span>${seg('drs',[['era','Real dates'],['on','DRS always'],['off','Perfect umpires']])}</div>
+    <div class="spread"><span>Weakest associates (Namibia, Canada, USA ...) a colour lower v Test nations</span>${seg('assocTiers',[['on','On'],['off','Off']])}</div>
     <div class="spread"><span>Batting colours</span>${seg('batColours',[['player','Player'],['position','Classic (by position)']])}</div>
     <div class="spread"><span>After the real calendar (2026)</span>${seg('future',[['on','Carry on into the future'],['off','Stop']])}</div>
     ${HAS_T20_DESIGN?`<div class="spread"><span>T20 run-rate cards</span>${seg('t20cards',[['designed','Designed (RR_T6-T12)'],['provisional','Provisional (ODI cards + RR_8/9)']])}</div>`:''}
@@ -93,7 +95,7 @@ RENDER.settings=(el)=>{
   </div>
   <div class="card" style="margin-top:14px"><h3>Data</h3><p class="sub">${FIX.length.toLocaleString()} ODI fixtures from Cricsheet (${fmtDate(FIX[0].date)} - ${fmtDate(FIX[FIX.length-1].date)}), ${Object.keys(WORLD.xi).length.toLocaleString()} real XIs and bowling plans, ${Object.keys(WORLD.players).length.toLocaleString()} players. Built from ${esc(WORLD.source||'the First XI workbook')}.</p></div>`;
   $$('[data-set]').forEach(b=>b.onclick=()=>{const k=b.dataset.set,v=b.dataset.val;st[k]=k==='ballDelay'?+v:v==='true'?true:v==='false'?false:v;
-    if(S.live&&S.live.state!=='done'){if(k==='dice')S.live.manual=v==='manual';if(k==='captain')S.live.manualCaptain=v==='manual'?captainOf(S.live):null;if(k==='batColours')S.live.batMode=v;if(k==='t20cards')S.live.t20cards=v;}
+    if(S.live&&S.live.state!=='done'){if(k==='dice')S.live.manual=v==='manual';if(k==='captain')S.live.manualCaptain=v==='manual'?captainOf(S.live):null;if(k==='batColours')S.live.batMode=v;if(k==='t20cards')S.live.t20cards=v;if(k==='assocTiers')S.live.assocTiers=v!=='off';}
     if(k==='broadcast'||k==='font')applyBroadcast();
     if(k==='t20wc')iccToggle(v==='on');
     saveGame();rerender();});

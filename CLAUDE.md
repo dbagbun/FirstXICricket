@@ -70,6 +70,7 @@ The repo root holds a prebuilt `first-xi.html` (double-click to open). **After a
 - Compare & graphs (`12s-compare.js`, Stats lab mode `cmp`, player-card button): `compareHTML(a,b,fmt)` side-by-side table (better figure gold) and `lineChart` SVGs from `careerSeries(pid,fmt)` (cumulative runs and wickets, rolling 10-innings average).
 - Theme & a11y: `applyTheme()` sets `html[data-theme]` from the device preference `fxi_theme` (dark/light/auto); light-theme overrides at the top of styles.css. Player links are focusable (`tabindex`, Enter opens), `:focus-visible` rings, a brighter dark-theme `--muted` for contrast.
 - Replay: `replayMatch(E)` (scorecard modal button) builds a friendly `M.replayOf` from the archived XIs, ground, date and format; the result popup compares it with the first time round.
+- Associate tiers (03-engine `batColour`): `WEAK_ASSOC` {team:[from,to]} / `weakAssoc(t,date)` - against Test nations those sides' batters play one colour lower (after the position lift, before form), unless `M.assocTiers===false` (Settings `assocTiers`, set in `selectAndMods`). Measured: weak associates 1-3% v full members (avg ~95), Kenya 2003 / Ireland 2007+ / Netherlands / Scotland 5-13%, associate v associate unchanged.
 
 ## Layout
 - `src/template.html` - page shell with `/*@@CSS@@*/`, `/*@@DATA@@*/`, `/*@@JS@@*/`

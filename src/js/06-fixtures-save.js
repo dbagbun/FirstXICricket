@@ -119,6 +119,7 @@ function selectAndMods(M,fx){
   const my=managedTeam();
   if(my&&!fx.friendly&&M.teams.includes(my)&&M.xi[my]){const r=pickXI(fx,my,M.xi[my]);M.xi[my]=r.xi;M.selNotes=r.notes;}
   meIntoXI(M);
+  M.assocTiers=S.settings.assocTiers!=='off';
   M.mods=matchMods(M);drsSetup(M);M.t20cards=S.settings.t20cards||'designed';
 }
 

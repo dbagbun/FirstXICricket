@@ -192,6 +192,12 @@ function parseToken(tok){
 }
 const wicketCounts=(group,color)=>group==='B'?color==='BLUE':group==='G'?(color==='BLUE'||color==='GREEN'):color!=='';
 const COL_RANK={B:0,G:1,R:2};
+// The weakest associates, by era: their batters play a colour lower against Test nations (BLUE plays GREEN,
+// GREEN plays RED), so a Namibia or a USA beats a full member a few times in a hundred, not one in five.
+// Kenya until 2007 and Ireland from 2007 (and the Netherlands and Scotland throughout) keep their colours.
+const WEAK_ASSOC={12:['2008-01-01','9999'],13:['0','2006-12-31'],16:['0','9999'],17:['0','9999'],18:['0','9999'],19:['0','9999'],
+  20:['0','9999'],21:['0','9999'],22:['0','9999'],23:['0','9999'],24:['0','9999'],25:['0','9999']};
+const weakAssoc=(t,date)=>{const w=WEAK_ASSOC[+t];return!!w&&!!date&&date>=w[0]&&date<=w[1];};
 function batColour(M,pid,pos,bowlTeam){
   const pc=posColour(pos);
   if(M.batMode==='position')return pc;
@@ -199,6 +205,8 @@ function batColour(M,pid,pos,bowlTeam){
   const vsFull=!!TEAMS.get(+bowlTeam)?.full;
   const own=c.length===2?c[vsFull?1:0]:c;
   let col=!a.bat||a.batSrc==='h'||a.batSrc==='e'||a.batSrc==='c'||(c.length===2&&vsFull)?own:COL_RANK[pc]<COL_RANK[own]?'BGR'[COL_RANK[own]-1]:own;
+  const batTeam=M.teams?M.teams.find(t=>t!==+bowlTeam):0;
+  if(vsFull&&batTeam&&weakAssoc(batTeam,M.date)&&M.assocTiers!==false)col='BGR'[Math.min(2,COL_RANK[col]+1)];
   const f=M.mods&&M.mods.bat[pid];   // form: hot +1 (GREEN plays BLUE), cold -1 (BLUE plays GREEN)
   if(f)col='BGR'[clamp(COL_RANK[col]-f,0,2)];
   return col;
