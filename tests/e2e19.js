@@ -40,7 +40,7 @@ setTimeout(()=>{
   G(`simCup(cupById(S.sandbox.cup))`);
   ok(G('S.sandbox.res')&&G('S.sandbox.res').text.length>5,'cup challenge judged: '+G('S.sandbox.res.text'));
   G('leaveSandbox()');
-  ok(G('S.matches.length')===n0&&!G('S.cups.length'),'career untouched by the cup challenge');
+  ok(G('S.matches.length')===n0&&!G(`S.cups.filter(c=>!/ICC T20/.test(c.name)).length`),'career untouched by the cup challenge');
   // codes
   const d=G(`(()=>{const c=challengeCode(challengeById('big435'));return parseChallengeCode(c);})()`);
   ok(d.kind==='chase'&&d.target===435,'share codes round-trip');

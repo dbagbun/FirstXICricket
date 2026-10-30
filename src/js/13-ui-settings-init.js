@@ -32,6 +32,8 @@ They're drawn from each ball but never change it - the card and the roll decide 
 <p><b>Relive history:</b> with Cricsheet's ODI data (tools/cricsheet_odis.py), Challenges → Relive history lists the famous real chases - close finishes, ties, 300+ chases and knockouts.
 Start one from the first ball of the chase or from ten, five, two or one overs left, with the real XIs, the real target and the real pair at the crease, batting or bowling - then see what really happened.
 tools/cricsheet_batting.py goes further: batting colours from real averages, year by year (BLUE from 30, GREEN from 15), with no lift for batting position.</p>
+<p><b>ICC events:</b> the real 50-over World Cups and Champions Trophies are in the ODI calendar; the real T20 World Cups (2007-2024) are added with their real hosts and the teams in the game (Settings to switch them off).
+The <b>World Test Championship</b> runs from August 2019 in two-year cycles: every Test between the nine full members counts (12 points a win, 4 a draw, 6 a tie), the table is ranked on the percentage of points available, and the top two meet in a one-off final in England (a draw shares the title). Rankings → Test Championship.</p>
 <p><b>Knockouts</b> are re-seeded from your own tables once a tournament's league stage is finished (Settings to follow history instead).</p>`;
 function openGuide(){
   openModal(GUIDE+(S&&!S.sandbox?`<div class="row" style="margin-top:12px"><button class="btn" id="g-start">Show the Start here checklist</button><button class="btn" id="g-keys">Keyboard shortcuts</button></div>`:''));
@@ -53,6 +55,7 @@ RENDER.settings=(el)=>{
     <div class="spread"><span>Umpires &amp; DRS</span>${seg('drs',[['era','Real dates'],['on','DRS always'],['off','Perfect umpires']])}</div>
     <div class="spread"><span>Batting colours</span>${seg('batColours',[['player','Player'],['position','Classic (by position)']])}</div>
     <div class="spread"><span>After the real calendar (2026)</span>${seg('future',[['on','Carry on into the future'],['off','Stop']])}</div>
+    <div class="spread"><span>T20 World Cups (real years, 2007-2024)</span>${seg('t20wc',[['on','On'],['off','Off']])}</div>
     <div class="spread"><span>Tournament knockouts</span>${seg('knockouts',[['timeline','My timeline'],['history','History']])}</div>
     ${HAS_REAL?`<div class="spread"><span>Real results (after you play a match)</span>${seg('history',[['after','Show'],['off','Hide']])}</div>`:''}
     <div class="spread"><span>App font</span>${seg('font',APP_FONTS)}</div>
@@ -77,6 +80,7 @@ RENDER.settings=(el)=>{
   $$('[data-set]').forEach(b=>b.onclick=()=>{const k=b.dataset.set,v=b.dataset.val;st[k]=k==='ballDelay'?+v:v==='true'?true:v==='false'?false:v;
     if(S.live&&S.live.state!=='done'){if(k==='dice')S.live.manual=v==='manual';if(k==='captain')S.live.manualCaptain=v==='manual'?captainOf(S.live):null;if(k==='batColours')S.live.batMode=v;}
     if(k==='broadcast'||k==='font')applyBroadcast();
+    if(k==='t20wc')iccToggle(v==='on');
     saveGame();rerender();});
   $('#st-team').onchange=e=>{st.myTeam=+e.target.value;saveGame();};
   $('#st-voice')&&($('#st-voice').onchange=e=>{st.voiceName=e.target.value;saveGame();voiceTest();});

@@ -69,6 +69,7 @@ function fixtureByKey(key){
 }
 function nextFixture(){
   if(typeof ensureLeague==='function')ensureLeague();
+  if(typeof ensureIcc==='function')ensureIcc();
   // a cursor past the played (and unplayable) fixtures; a new fixture list (fxDirty) starts it again
   const find=()=>{const L=allFixtures(),C=FX_CACHE;let i=C.next||0;while(i<L.length&&(!L[i].playable||S.done[L[i].key]))i++;C.next=i;return L[i]||null;};
   let n=find();

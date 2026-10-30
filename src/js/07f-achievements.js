@@ -11,6 +11,7 @@ const ACHIEVEMENTS=[
   ['big400','🔥','Four hundred','A team makes 400 in an ODI.'],['under50','🧊','Collapse','A side bowled out for under 50.'],['chase350','🏃','Mountain climbed','Chase down 350 or more.'],
   ['hat','🎩','Hat-trick','Witness a hat-trick.'],['seven','7️⃣','Seventh heaven','Seven wickets in an innings.'],['tenfor','🔟','Ten in the match','Ten wickets in a Test.'],
   ['drs','📺','Upstairs','Win a review as captain.'],
+  ['wtc','🏛️','Test champions','The team you follow wins the World Test Championship.'],['t20wc','🌍','T20 world champions','The team you follow wins a T20 World Cup.'],
   ['tie','🟰','Honours even','A tied match.'],['so','⏱️','Super over','A super over decides it.'],['dl','🌧️','Duckworth what?','A rain-affected D/L result.'],
   ['draw','🛡️','Rain-soaked stalemate','A drawn Test.'],['inns','🧱','Innings and plenty','An innings victory.'],
   ['assocWC','😲','Giant-killers','An associate nation wins a World Cup final.'],['no1','🥇','Top of the world','The team you follow goes No.1 in the ODI rankings.'],
@@ -53,6 +54,7 @@ function achCheck(E,M){
   const final=/^final/i.test(E.stage||'')&&/World Cup/i.test(E.series||'')&&!/Qualif|League/i.test(E.series||'');
   if(final&&r.winner&&!TEAMS.get(r.winner)?.full&&!COMPOSITE.has(r.winner))a('assocWC');
   if(final&&S.coach&&S.coach.team&&r.winner===S.coach.team)a('coachWC');
+  if(/^final$/i.test(E.stage||'')&&/T20 World Cup/.test(E.series)&&r.winner&&r.winner===S.settings.myTeam)a('t20wc');
   const my=S.settings.myTeam;if(my&&teamRanking('ODI')[0]?.team===my&&S.matches.length>30)a('no1');
   if(S.rk&&Object.keys(S.rk.awards).length)a('awards');
   if(S.coach){if(S.coach.objs.filter(o=>o.status==='met').length>=10)a('target10');if(S.coach.history.some(h=>h.why==='sacked'))a('sacked');

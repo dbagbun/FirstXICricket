@@ -27,7 +27,7 @@ ok(G(`cupById(league().seasons[2008].cup).fix.length`)===31,'a 31-match season s
 G(`simCup(cupById(league().seasons[2008].cup));ensureLeague()`);
 ok(G(`league().seasons[2008].champ`)>0,'champions crowned');
 const lm=G(`S.matches.filter(E=>E.fmt==='LEAGUE')`);
-ok(lm.length===31&&!G(`S.matches.some(E=>E.fmt==='T20')`),'league matches kept in their own format');
+ok(lm.length===31&&!G(`S.matches.some(E=>E.fmt==='T20'&&!/T20 World Cup/.test(E.series))`),'league matches kept in their own format');
 ok(lm.every(E=>E.teams.every(t=>E.xi[t].slice(0,11).filter(p=>G(`overseas(${t},${p})`)).length<=4)),'at most four overseas in an XI');
 w.go('league');ok($('#view').innerHTML.includes('Retain up to four'),'retention offered when the season ends');
 const keep=G('league().teams[105].squad.slice(0,3)');

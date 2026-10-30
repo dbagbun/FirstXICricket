@@ -38,8 +38,8 @@ w.go('tour',rr.id);ok($('#view').innerHTML.includes('Champions')&&$('#view').inn
 w.go('fixtures');w.eval(`FX_F.year='2003';FX_F.status='all';rerender()`);ok($('#view').innerHTML.includes(G(`cupById('${rr.id}').name`)),'cup fixtures in the fixture list');
 // create through the dialog
 w.go('tour');$('#tc-new').click();$('[data-pick="8"]').click();$('#cu-format').value='groups2';$('#cu-go').click();
-ok(G('S.cups.length')===6&&G('VIEW')==='tour','tournament created from the dialog');
+ok(G(`S.cups.filter(c=>!/ICC T20/.test(c.name)).length`)===6&&G('VIEW')==='tour','tournament created from the dialog');   // (the real T20 World Cups are cups too)
 $('[data-playkey]')&&$('[data-playkey]').click();
-ok(G('VIEW')==='match'&&G('LM.sid')===G('S.cups[5].id'),'play the first match of your tournament');
+ok(G('VIEW')==='match'&&G('LM.sid')===G('S.cups.at(-1).id'),'play the first match of your tournament');
 console.log(fail?`e2e14: ${fail} failing`:'e2e14 ok');
 process.exit(fail?1:0);

@@ -12,12 +12,13 @@ w.document.querySelector('#sp-go').click();
 G(`S.settings.future='off'`);   // this test is about the real calendar
 const t0=Date.now();
 G(`for(let y=2003;y<=2025;y++)createTestSeries({a:TEST_TEAMS[y%TEST_TEAMS.length],b:TEST_TEAMS[(y*3+1)%TEST_TEAMS.length]===TEST_TEAMS[y%TEST_TEAMS.length]?TEST_TEAMS[(y+2)%TEST_TEAMS.length]:TEST_TEAMS[(y*3+1)%TEST_TEAMS.length],n:3,start:y+'-07-15'})`);
-const n=G(`(()=>{let n=0;for(const fx of allFixtures())if(fx.playable&&!S.done[fx.key]){simFixture(fx);n++;}return n;})()`);
+const n=G(`(()=>{let n=0,fx;while((fx=nextFixture())&&n<20000){simFixture(fx);n++;}return n;})()`);
 const secs=(Date.now()-t0)/1000;
 console.log(`simmed ${n} matches in ${secs.toFixed(0)}s`);
 ok(n>2500,'whole career simmed');
 ok(!G('nextFixture()'),'nothing left to play');
-ok(G(`S.matches.filter(m=>m.fmt==='TEST').length`)===69,'all Tests played');
+ok(G(`S.matches.filter(m=>m.fmt==='TEST'&&!isWtcFinal(m)).length`)===69,'all Tests played');
+ok(G(`S.matches.filter(m=>isWtcFinal(m)).length`)<=3,'and at most three WTC finals ('+G(`S.matches.filter(m=>isWtcFinal(m)).length`)+')');
 ok(G('saveGame()'),'career saves');
 const raw=w.localStorage.getItem('fxi_save_1');
 console.log(`save ${(raw.length/1024).toFixed(0)}K chars (json ${(G('JSON.stringify(S).length')/1024).toFixed(0)}K)`);

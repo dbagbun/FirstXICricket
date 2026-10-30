@@ -10,13 +10,14 @@ function honoursHTML(years){
 }
 RENDER.rank=(el)=>{
   const R=R_(),f=RK_F.fmt;
-  const tabs=[['teams','Teams'],['bat','Batting'],['bowl','Bowling'],['ar','All-rounders'],['honours','Honours'],['legends','Legends'],['pos','Players of the series']];
+  const tabs=[['teams','Teams'],['bat','Batting'],['bowl','Bowling'],['ar','All-rounders'],['wtc','Test Championship'],['honours','Honours'],['legends','Legends'],['pos','Players of the series']];
   let body='';
   if(RK_F.tab==='teams'){
     const L=teamRanking(f);
     body=L.length?`<table class="num"><tr><th>#</th><th>Team</th><th class="r">Matches</th><th class="r">Rating</th><th class="r">This year</th></tr>
       ${L.map((r,i)=>`<tr class="${r.team===S.settings.myTeam?'me':''}"><td class="muted">${i+1}</td><td>${tlabel(r.team)}</td><td class="r">${r.p}</td><td class="r"><b>${r.pts}</b></td>
       <td class="r ${r.was==null?'muted':r.pts>r.was?'green':r.pts<r.was?'red':'muted'}">${r.was==null?'new':(r.pts>=r.was?'+':'')+(r.pts-r.was)}</td></tr>`).join('')}</table>`:'<div class="empty">Play some matches to see the rankings.</div>';
+  }else if(RK_F.tab==='wtc'){body=wtcHTML();
   }else if(['bat','bowl','ar'].includes(RK_F.tab)){
     const L=playerRanking(f,RK_F.tab);
     body=L.length?`<table class="num"><tr><th>#</th><th>Player</th><th class="r">Points</th></tr>${L.map((r,i)=>`<tr><td class="muted">${i+1}</td><td>${plink(r.pid)} <span class="muted" style="font-size:11px">${(S.stats[f][r.pid]?.teams||[]).map(teamShort).join('/')}</span></td><td class="r"><b>${r.v}</b></td></tr>`).join('')}</table>
