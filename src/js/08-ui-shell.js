@@ -26,7 +26,7 @@ function renderNav(){
   $('#clock').textContent=S?fmtDate(careerDate()):'';
 }
 document.addEventListener('click',e=>{
-  const g=e.target.closest('[data-go]');if(g){go(g.dataset.go,g.dataset.arg);return;}
+  const g=e.target.closest('[data-go]');if(g){if(g.closest('#modal'))closeModal();go(g.dataset.go,g.dataset.arg);return;}
   const p=e.target.closest('[data-pid]');if(p&&!e.target.closest('button')){openPlayer(+p.dataset.pid);return;}
   const m=e.target.closest('[data-mid]');if(m&&!e.target.closest('button')){openScorecard(m.dataset.mid);return;}
   const si=e.target.closest('[data-simg]');if(si){downloadCanvas(seasonImage(si.dataset.simg),`first-xi-${si.dataset.simg}-season.png`);return;}
@@ -56,7 +56,7 @@ function openPlayer(pid){
   openModal(`<h2>${esc(pName(pid))}</h2>
   ${gp?`<div class="sub" style="margin:-6px 0 8px">Age ${ageOf(gp,careerDate())} · ${esc(teamName(gp.t))}${gp.real?'':` · potential ${'★'.repeat(6-gp.pot)}`}${gp.ret&&gp.ret<=careerDate()?` · <span class="red">retired ${gp.ret.slice(0,4)}</span>`:''}</div>`:''}
   <div class="row muted" style="margin-bottom:10px">${rows.length?rows[0][1].teams.map(badge).join(' '):''}
-    <span>Batting: <b>${esc(a.bat?BAT_NAME[a.bat]:'by position')}</b> <span class="pill">${a.batSrc==='h'?'from your Excel BatGroup':a.batSrc==='e'?'edited':'derived'}</span></span>
+    <span>Batting: <b>${esc(a.bat?BAT_NAME[a.bat]:'by position')}</b> <span class="pill">${a.batSrc==='h'?'from your Excel BatGroup':a.batSrc==='e'?'edited':a.batSrc==='c'?'from real averages':a.batSrc==='g'?'new player':'derived'}</span></span>
     <span>Bowling: ${a.style==='N'?'does not bowl':`${STYLE_NAME[a.style]}, rating ${a.rating}${a.rating>=5?' (part-timer)':a.rating===1?' (elite)':''}`}
     <span class="pill">${a.src==='h'?'from your Excel ratings':a.src==='e'?'edited':'from real spells'}</span></span>
     <button class="btn sm" id="pa-edit">Edit</button></div>
@@ -72,6 +72,7 @@ function openPlayer(pid){
     <tr><td>${s.m}</td><td>${s.inn}</td><td>${s.no}</td><td>${s.r}</td><td>${s.hs}${s.hsNo?'*':''}</td><td>${f2(batAvg(s))}</td><td>${f1(batSR(s))}</td><td>${s.c100}</td><td>${s.c50}</td><td>${s.bw}</td><td>${s.best[0]}/${s.best[1]}</td><td>${f2(bowlAvg(s))}</td><td>${f2(bowlEcon(s))}</td><td>${s.w5}</td><td>${s.ct}</td><td>${s.st}</td><td>${s.motm}</td></tr></table></div>`).join(''):'<p class="muted">Hasn\'t played in this career yet.</p>'}
   ${recent.length?`<h3>Recent matches</h3><table>${recent.map(E=>`<tr data-mid="${E.id}" style="cursor:pointer"><td>${fmtDate(E.date)}</td><td>${E.fmt}</td><td>v ${badge(otherOf(E,E.teams.find(t=>E.xi[t].slice(0,11).includes(pid))))}</td><td class="r num">${line(E)}</td></tr>`).join('')}</table>`:''}
   ${(()=>{const h=playerHonours(pid);return h.ranks.length||h.awards.length?`<h3>Rankings &amp; honours</h3>${h.ranks.map(x=>`<span class="pill" style="margin:0 4px 4px 0">${esc(x)}</span>`).join('')}${h.awards.map(x=>`<div>🏆 ${esc(x)}</div>`).join('')}`:'';})()}
+  ${playerShotsHTML(pid)}
   ${nemesisHTML(pid)}
   ${(()=>{const st=storyOf(pid);return st.length>1?`<details style="margin-top:10px"><summary class="muted" style="cursor:pointer">Career story</summary>${st.map(([d,t])=>`<div><span class="muted">${fmtDate(d)}</span> ${esc(t)}</div>`).join('')}</details>`:'';})()}
   ${ms.length?`<h3>Milestones</h3>${ms.map(m=>`<div>🏅 ${esc(m.text)} <span class="muted">${fmtDate(m.date)} · ${m.fmt}</span></div>`).join('')}`:''}`);

@@ -29,7 +29,7 @@ RENDER.home=(el)=>{
       ${C.team?`<div style="width:220px;margin-top:6px">${confBar(C.conf)}</div><span class="muted" style="font-size:12px">Board confidence ${Math.round(C.conf)}</span>${C.pc&&C.pc.qs.some(q=>q.a==null)?' <span class="pill live">press conference</span>':''}`:`<div class="muted">${plural(C.offers.length,'offer')} waiting</div>`}</div>
       <div class="row">${cnx?(nextFixture()&&nextFixture().key===cnx.key?`<button class="btn pri" data-playkey="${cnx.key}">Play ${esc(teamShort(cnx.a))} v ${esc(teamShort(cnx.b))}</button>`:`<button class="btn pri" id="h-simto">Sim to my next match (${fmtDate(cnx.date)})</button>`):''}<button class="btn" data-go="coach">Coach</button></div></div></div>`:'';
   const futureNote=S.gen&&careerDate()>LAST_REAL?`<div class="banner" style="margin-bottom:14px">🔭 <b>The future, ${careerDate().slice(0,4)}.</b> <span class="sub">The real calendar ended in ${fmtDate(LAST_REAL)}. Fixtures are now generated a year at a time; veterans age and retire and new players come through.</span></div>`:'';
-  el.innerHTML=backupBanner()+startHereHTML()+futureNote+coachCard+`<div class="grid g3 home-grid" style="${C?';margin-top:14px':''}">
+  el.innerHTML=backupBanner()+startHereHTML()+seasonNudgeHTML()+futureNote+coachCard+`<div class="grid g3 home-grid" style="${C?';margin-top:14px':''}">
     <div class="stack">
       ${live&&(!n||live.key!==n.key)?`<div class="card"><div class="spread"><div><span class="pill live">LIVE</span> <b>${esc(teamName(live.teams[0]))} v ${esc(teamName(live.teams[1]))}</b></div><button class="btn pri" data-go="match">Resume</button></div></div>`:''}
       ${nextCard}${tourn}
@@ -44,6 +44,7 @@ RENDER.home=(el)=>{
       ${myT?`<div class="card"><h3>${badge(my)} ${esc(teamName(my))}</h3>${FORMATS.filter(f=>S.teams[f][my]).map(f=>{const T=S.teams[f][my];return`<div class="spread"><span class="sub">${f}</span><span class="num">P${T.p} W${T.w} L${T.l}${T.d?' D'+T.d:''}${T.t?' T'+T.t:''}</span></div>`;}).join('')}</div>`:''}
       <div class="card"><h3>Latest milestones</h3>${S.ms.slice(-6).reverse().map(m=>`<div style="margin-bottom:6px">🏅 ${plink(m.pid)} <span class="sub">${esc(m.text)}</span></div>`).join('')||'<p class="muted">None yet.</p>'}
         <button class="btn sm" data-go="miles">All milestones</button></div>
+      ${hofCardHTML()}
       <div class="card"><h3>Tests &amp; T20s</h3><p class="sub" style="margin-top:0">The fixture list is the real ODI calendar. Schedule Test, ODI or T20 series between any two sides and they slot into your career by date.</p><button class="btn" id="h-test">Schedule a series</button> <button class="btn" id="h-friendly">Friendly / head-to-head</button></div>
     </div></div>`;
   if(n){
@@ -53,6 +54,7 @@ RENDER.home=(el)=>{
     $('#h-simn').onclick=openSimMore;
   }
   startHereWire();
+  $('#hof-go')&&($('#hof-go').onclick=()=>{RK_F.tab='legends';go('rank');});
   $('#h-test').onclick=()=>openTestCreator();
   $('#h-friendly').onclick=openFriendly;
   $('#h-simto')&&($('#h-simto').onclick=simToMyMatch);

@@ -107,6 +107,8 @@ function pressPre(fx,o){
 function pressAnswer(qi,oi){
   const C=S.coach,P=C&&C.pc,q=P&&P.qs[qi];if(!q||q.a!=null||!q.o[oi])return null;
   q.a=oi;const fx=q.o[oi][1],out=[];moraleOf(C);
+  const PR=press();(PR.quotes=PR.quotes||[]).push({date:careerDate(),team:C.team,q:q.t,a:q.o[oi][0],bold:Math.abs(fx.c||0)+Math.abs(fx.h||0)+Math.abs(fx.m||0)+(fx.ob?3:0)+(fx.p?2:0)});
+  if(PR.quotes.length>60)PR.quotes.shift();
   C.conf=clamp(C.conf+(fx.c||0),0,100);C.morale=clamp(C.morale+(fx.m||0),0,100);C.heat=clamp(C.heat+(fx.h||0),0,100);
   if(fx.p){const r=rnd(),b=r<(fx.up||0)?1:r<(fx.up||0)+(fx.dn||0)?-1:0;
     if(b){(C.boost=C.boost||{})[fx.p]=b;out.push(`${pName(fx.p)} ${b>0?'is fired up by your words.':'looks rattled.'}`);}}

@@ -3117,6 +3117,8 @@ function pressPre(fx,o){
 function pressAnswer(qi,oi){
   const C=S.coach,P=C&&C.pc,q=P&&P.qs[qi];if(!q||q.a!=null||!q.o[oi])return null;
   q.a=oi;const fx=q.o[oi][1],out=[];moraleOf(C);
+  const PR=press();(PR.quotes=PR.quotes||[]).push({date:careerDate(),team:C.team,q:q.t,a:q.o[oi][0],bold:Math.abs(fx.c||0)+Math.abs(fx.h||0)+Math.abs(fx.m||0)+(fx.ob?3:0)+(fx.p?2:0)});
+  if(PR.quotes.length>60)PR.quotes.shift();
   C.conf=clamp(C.conf+(fx.c||0),0,100);C.morale=clamp(C.morale+(fx.m||0),0,100);C.heat=clamp(C.heat+(fx.h||0),0,100);
   if(fx.p){const r=rnd(),b=r<(fx.up||0)?1:r<(fx.up||0)+(fx.dn||0)?-1:0;
     if(b){(C.boost=C.boost||{})[fx.p]=b;out.push(`${pName(fx.p)} ${b>0?'is fired up by your words.':'looks rattled.'}`);}}
@@ -3416,7 +3418,7 @@ function renderNav(){
   $('#clock').textContent=S?fmtDate(careerDate()):'';
 }
 document.addEventListener('click',e=>{
-  const g=e.target.closest('[data-go]');if(g){go(g.dataset.go,g.dataset.arg);return;}
+  const g=e.target.closest('[data-go]');if(g){if(g.closest('#modal'))closeModal();go(g.dataset.go,g.dataset.arg);return;}
   const p=e.target.closest('[data-pid]');if(p&&!e.target.closest('button')){openPlayer(+p.dataset.pid);return;}
   const m=e.target.closest('[data-mid]');if(m&&!e.target.closest('button')){openScorecard(m.dataset.mid);return;}
   const si=e.target.closest('[data-simg]');if(si){downloadCanvas(seasonImage(si.dataset.simg),`first-xi-${si.dataset.simg}-season.png`);return;}
@@ -3446,7 +3448,7 @@ function openPlayer(pid){
   openModal(`<h2>${esc(pName(pid))}</h2>
   ${gp?`<div class="sub" style="margin:-6px 0 8px">Age ${ageOf(gp,careerDate())} · ${esc(teamName(gp.t))}${gp.real?'':` · potential ${'★'.repeat(6-gp.pot)}`}${gp.ret&&gp.ret<=careerDate()?` · <span class="red">retired ${gp.ret.slice(0,4)}</span>`:''}</div>`:''}
   <div class="row muted" style="margin-bottom:10px">${rows.length?rows[0][1].teams.map(badge).join(' '):''}
-    <span>Batting: <b>${esc(a.bat?BAT_NAME[a.bat]:'by position')}</b> <span class="pill">${a.batSrc==='h'?'from your Excel BatGroup':a.batSrc==='e'?'edited':'derived'}</span></span>
+    <span>Batting: <b>${esc(a.bat?BAT_NAME[a.bat]:'by position')}</b> <span class="pill">${a.batSrc==='h'?'from your Excel BatGroup':a.batSrc==='e'?'edited':a.batSrc==='c'?'from real averages':a.batSrc==='g'?'new player':'derived'}</span></span>
     <span>Bowling: ${a.style==='N'?'does not bowl':`${STYLE_NAME[a.style]}, rating ${a.rating}${a.rating>=5?' (part-timer)':a.rating===1?' (elite)':''}`}
     <span class="pill">${a.src==='h'?'from your Excel ratings':a.src==='e'?'edited':'from real spells'}</span></span>
     <button class="btn sm" id="pa-edit">Edit</button></div>
@@ -3462,6 +3464,7 @@ function openPlayer(pid){
     <tr><td>${s.m}</td><td>${s.inn}</td><td>${s.no}</td><td>${s.r}</td><td>${s.hs}${s.hsNo?'*':''}</td><td>${f2(batAvg(s))}</td><td>${f1(batSR(s))}</td><td>${s.c100}</td><td>${s.c50}</td><td>${s.bw}</td><td>${s.best[0]}/${s.best[1]}</td><td>${f2(bowlAvg(s))}</td><td>${f2(bowlEcon(s))}</td><td>${s.w5}</td><td>${s.ct}</td><td>${s.st}</td><td>${s.motm}</td></tr></table></div>`).join(''):'<p class="muted">Hasn\'t played in this career yet.</p>'}
   ${recent.length?`<h3>Recent matches</h3><table>${recent.map(E=>`<tr data-mid="${E.id}" style="cursor:pointer"><td>${fmtDate(E.date)}</td><td>${E.fmt}</td><td>v ${badge(otherOf(E,E.teams.find(t=>E.xi[t].slice(0,11).includes(pid))))}</td><td class="r num">${line(E)}</td></tr>`).join('')}</table>`:''}
   ${(()=>{const h=playerHonours(pid);return h.ranks.length||h.awards.length?`<h3>Rankings &amp; honours</h3>${h.ranks.map(x=>`<span class="pill" style="margin:0 4px 4px 0">${esc(x)}</span>`).join('')}${h.awards.map(x=>`<div>🏆 ${esc(x)}</div>`).join('')}`:'';})()}
+  ${playerShotsHTML(pid)}
   ${nemesisHTML(pid)}
   ${(()=>{const st=storyOf(pid);return st.length>1?`<details style="margin-top:10px"><summary class="muted" style="cursor:pointer">Career story</summary>${st.map(([d,t])=>`<div><span class="muted">${fmtDate(d)}</span> ${esc(t)}</div>`).join('')}</details>`:'';})()}
   ${ms.length?`<h3>Milestones</h3>${ms.map(m=>`<div>🏅 ${esc(m.text)} <span class="muted">${fmtDate(m.date)} · ${m.fmt}</span></div>`).join('')}`:''}`);
@@ -3907,7 +3910,7 @@ RENDER.home=(el)=>{
       ${C.team?`<div style="width:220px;margin-top:6px">${confBar(C.conf)}</div><span class="muted" style="font-size:12px">Board confidence ${Math.round(C.conf)}</span>${C.pc&&C.pc.qs.some(q=>q.a==null)?' <span class="pill live">press conference</span>':''}`:`<div class="muted">${plural(C.offers.length,'offer')} waiting</div>`}</div>
       <div class="row">${cnx?(nextFixture()&&nextFixture().key===cnx.key?`<button class="btn pri" data-playkey="${cnx.key}">Play ${esc(teamShort(cnx.a))} v ${esc(teamShort(cnx.b))}</button>`:`<button class="btn pri" id="h-simto">Sim to my next match (${fmtDate(cnx.date)})</button>`):''}<button class="btn" data-go="coach">Coach</button></div></div></div>`:'';
   const futureNote=S.gen&&careerDate()>LAST_REAL?`<div class="banner" style="margin-bottom:14px">🔭 <b>The future, ${careerDate().slice(0,4)}.</b> <span class="sub">The real calendar ended in ${fmtDate(LAST_REAL)}. Fixtures are now generated a year at a time; veterans age and retire and new players come through.</span></div>`:'';
-  el.innerHTML=backupBanner()+startHereHTML()+futureNote+coachCard+`<div class="grid g3 home-grid" style="${C?';margin-top:14px':''}">
+  el.innerHTML=backupBanner()+startHereHTML()+seasonNudgeHTML()+futureNote+coachCard+`<div class="grid g3 home-grid" style="${C?';margin-top:14px':''}">
     <div class="stack">
       ${live&&(!n||live.key!==n.key)?`<div class="card"><div class="spread"><div><span class="pill live">LIVE</span> <b>${esc(teamName(live.teams[0]))} v ${esc(teamName(live.teams[1]))}</b></div><button class="btn pri" data-go="match">Resume</button></div></div>`:''}
       ${nextCard}${tourn}
@@ -3922,6 +3925,7 @@ RENDER.home=(el)=>{
       ${myT?`<div class="card"><h3>${badge(my)} ${esc(teamName(my))}</h3>${FORMATS.filter(f=>S.teams[f][my]).map(f=>{const T=S.teams[f][my];return`<div class="spread"><span class="sub">${f}</span><span class="num">P${T.p} W${T.w} L${T.l}${T.d?' D'+T.d:''}${T.t?' T'+T.t:''}</span></div>`;}).join('')}</div>`:''}
       <div class="card"><h3>Latest milestones</h3>${S.ms.slice(-6).reverse().map(m=>`<div style="margin-bottom:6px">🏅 ${plink(m.pid)} <span class="sub">${esc(m.text)}</span></div>`).join('')||'<p class="muted">None yet.</p>'}
         <button class="btn sm" data-go="miles">All milestones</button></div>
+      ${hofCardHTML()}
       <div class="card"><h3>Tests &amp; T20s</h3><p class="sub" style="margin-top:0">The fixture list is the real ODI calendar. Schedule Test, ODI or T20 series between any two sides and they slot into your career by date.</p><button class="btn" id="h-test">Schedule a series</button> <button class="btn" id="h-friendly">Friendly / head-to-head</button></div>
     </div></div>`;
   if(n){
@@ -3931,6 +3935,7 @@ RENDER.home=(el)=>{
     $('#h-simn').onclick=openSimMore;
   }
   startHereWire();
+  $('#hof-go')&&($('#hof-go').onclick=()=>{RK_F.tab='legends';go('rank');});
   $('#h-test').onclick=()=>openTestCreator();
   $('#h-friendly').onclick=openFriendly;
   $('#h-simto')&&($('#h-simto').onclick=simToMyMatch);
@@ -4218,7 +4223,7 @@ RENDER.records=(el)=>{
   el.innerHTML=`<div class="card"><div class="row"><div class="seg">${FORMATS.map(f=>`<button data-rf="${f}" class="${REC_F.fmt===f?'on':''}">${FMT_PLURAL[f]}</button>`).join('')}</div>
     <div class="seg">${REC_GROUPS.map(g=>`<button data-rg="${g[0]}" class="${REC_F.grp===g[0]?'on':''}">${g[0]}</button>`).join('')}</div></div>
     <div class="muted" style="font-size:12px;margin-top:6px">Qualification: averages ${min.inn}+ innings, strike rate ${min.balls}+ balls, bowling averages ${min.wkts}+ wickets, economy ${min.bb}+ balls, captaincy ${min.cap}+ matches.</div></div>
-    <div class="grid g3" style="margin-top:14px">${keys.map(block).join('')}</div>`;
+    <div class="grid g3" style="margin-top:14px">${keys.map(block).join('')}</div>${drsRecordsHTML(REC_F.fmt)}`;
   $$('[data-rf]').forEach(b=>b.onclick=()=>{REC_F.fmt=b.dataset.rf;rerender();});
   $$('[data-rg]').forEach(b=>b.onclick=()=>{REC_F.grp=b.dataset.rg;rerender();});
 };
@@ -4286,7 +4291,7 @@ function awardLine(A,k,unit){
   return`${plink(x.pid)} <span class="muted">${unit?x.v+' '+unit:Math.round(x.v)+' pts'}</span>`;
 }
 function honoursHTML(years){
-  return years.map(y=>{const A=S.rk.awards[y];return`<div class="card"><div class="spread"><h3 style="margin:0">${y}</h3><button class="btn sm" data-simg="${y}">Save as image</button></div><table>${AWARD_NAMES.filter(([k])=>A[k]).map(([k,n,u])=>`<tr><td class="sub">${n}</td><td>${awardLine(A,k,u)}</td></tr>`).join('')}
+  return years.map(y=>{const A=S.rk.awards[y];return`<div class="card"><div class="spread"><h3 style="margin:0">${y}</h3><span class="row"><button class="btn sm pri" data-go="season" data-arg="${y}">Full review</button><button class="btn sm" data-simg="${y}">Save as image</button></span></div><table>${AWARD_NAMES.filter(([k])=>A[k]).map(([k,n,u])=>`<tr><td class="sub">${n}</td><td>${awardLine(A,k,u)}</td></tr>`).join('')}
     ${A.team?`<tr><td class="sub">Team of the Year</td><td>${tlabel(A.team.team)} <span class="muted">${A.team.w} wins from ${A.team.p}</span></td></tr>`:''}</table></div>`;}).join('');
 }
 RENDER.rank=(el)=>{
@@ -4698,12 +4703,6 @@ function scorecardImage(E){
       ...I.bw.slice().sort((a,b)=>b[4]-a[4]||a[3]-b[3]).slice(0,2).map(w=>[pName(w[0])+' (bowling)',w[4]+'/'+w[3]])]}));
   if(E.motm)blocks.push({head:'Man of the Match',rows:[[pName(E.motm),null]]});
   return canvasCard(E.result.text,`${E.series||'Friendly'}${E.stage?' · '+E.stage:''} · ${E.venue} · ${fmtDate(E.date)}`,blocks,'First XI Cricket · your timeline');
-}
-function seasonImage(year){
-  const A=R_().awards[year];if(!A)return null;
-  const rows=AWARD_NAMES.filter(([k])=>A[k]).map(([k,n,u])=>[n+': '+pName(A[k].pid),u?A[k].v+' '+u:null]);
-  if(A.team)rows.push(['Team of the Year: '+teamName(A.team.team),A.team.w+' wins']);
-  return canvasCard(`${year} season review`,`${A.matches} matches in your timeline`,[{head:'Awards',rows}],'First XI Cricket');
 }
 
 // ═══ APP: install when hosted, backups, auto-save to a file, storage ═══
@@ -5268,6 +5267,133 @@ function keyHandler(e){
 }
 document.addEventListener('keydown',keyHandler);
 
+// ═══ PROFILES & RECORDS FOR THE NEWER SYSTEMS — shot maps on player cards, review records, the Hall of Fame card ═══
+// A player's balls from the kept ball logs (S.logs, the last LOG_KEEP matches): {bat:[balls faced], bowl:[balls bowled]}.
+function playerBalls(pid){
+  const out={bat:[],bowl:[],n:0};
+  for(const E of S.matches){
+    if(!S.logs[E.id]||!E.teams.some(t=>E.xi[t].slice(0,11).includes(pid)))continue;out.n++;
+    E.inns.forEach((I,k)=>{const B=inningsBalls(E,null,k)||[];for(const b of B){if(b.st===pid)out.bat.push(b);if(b.bowler===pid)out.bowl.push(b);}});
+  }
+  return out;
+}
+function playerShotsHTML(pid){
+  const P=playerBalls(pid);if(!P.bat.some(b=>b.bat>0)&&P.bowl.length<12)return'';
+  const date=careerDate();
+  return`<details style="margin-top:10px"><summary class="muted" style="cursor:pointer">Shots &amp; pitch map (his last ${plural(P.n,'match','matches')} with a ball log)</summary>
+    <div class="grid g2" style="align-items:start;margin-top:8px">${P.bat.some(b=>b.bat>0)?`<div><h3>Where he scores</h3>${wagonHTML(P.bat,null,date)}</div>`:''}
+    ${P.bowl.length>=12?`<div><h3>Where he lands it</h3>${pitchMapHTML(P.bowl,date)}</div>`:''}</div></details>`;
+}
+// ---------- reviews & umpires, from the archived E.drs: [inn, side, batter, how, code, out] ----------
+function drsRecords(fmt){
+  const T={},bat={};
+  for(const E of S.matches){if(!E.drs||(fmt&&E.fmt!==fmt))continue;
+    for(const[,side,pid,,code]of E.drs){
+      if(code==='M'){const b=E.inns.find(I=>I.bt.some(r=>r[0]===pid));const t=b?b.bat:0;if(t){(T[t]=T[t]||{t,rev:0,won:0,uc:0,err:0}).err++;}continue;}
+      const r=T[side]=T[side]||{t:side,rev:0,won:0,uc:0,err:0};r.rev++;if(code==='O')r.won++;if(code==='U')r.uc++;
+      if(code==='O'){const x=bat[pid]=bat[pid]||{pid,n:0};x.n++;}
+    }}
+  return{teams:Object.values(T).filter(r=>r.rev>=3).sort((a,b)=>b.won/b.rev-a.won/a.rev),bat:Object.values(bat).sort((a,b)=>b.n-a.n).slice(0,5)};
+}
+function drsRecordsHTML(fmt){
+  const R=drsRecords(fmt);if(!R.teams.length)return'';
+  return`<div class="card" style="margin-top:14px"><h3>Reviews</h3><div class="tbl-wrap"><table class="num"><tr><th>Team</th><th class="r">Reviews</th><th class="r">Overturned</th><th class="r">%</th><th class="r hide-sm">Umpire's call</th><th class="r hide-sm">Errors that stood</th></tr>
+    ${R.teams.map(r=>`<tr><td>${tlabel(r.t)}</td><td class="r">${r.rev}</td><td class="r">${r.won}</td><td class="r"><b>${Math.round(100*r.won/r.rev)}</b></td><td class="r hide-sm">${r.uc}</td><td class="r hide-sm">${r.err}</td></tr>`).join('')}</table></div>
+    ${R.bat.length?`<div class="muted" style="font-size:12px;margin-top:6px">Most often saved (or sent off) by a review: ${R.bat.map(x=>`${esc(pName(x.pid))} ${x.n}`).join(', ')}</div>`:''}</div>`;
+}
+// ---------- the Hall of Fame on the dashboard ----------
+function hofCardHTML(){
+  if(!S.hof)return'';
+  const ind=Object.entries(S.hof.inducted).sort((a,b)=>b[1].year-a[1].year||b[1].pct-a[1].pct);if(!ind.length)return'';
+  const y=ind[0][1].year,cls=ind.filter(([,x])=>x.year===y);
+  return`<div class="card"><h3>Hall of Fame</h3><div class="sub" style="margin-bottom:6px">The class of ${y}</div>${cls.map(([p,x])=>`<div>🏛️ ${plink(+p)} <span class="muted">${x.pct}%</span></div>`).join('')}
+    <div class="muted" style="font-size:12px;margin-top:6px">${plural(ind.length,'member')} in all.</div><button class="btn sm" style="margin-top:6px" id="hof-go">Legends</button></div>`;
+}
+
+// ═══ SEASON REVIEW — a year of your timeline on one page, and as an image ═══
+// seasonData(year) gathers it from the archive: your side's record and trophies, the champions crowned, the
+// year's best performers and performances, the tightest finishes, awards, back pages, your best quote (coach),
+// targets, milestones and the Hall of Fame class. View 'season' (arg: year); seasonImage(year) draws it.
+const isFinalStage=E=>/^final$/i.test(E.stage||'');
+function seasonYears(){return[...new Set(S.matches.map(E=>+E.date.slice(0,4)))].sort((a,b)=>a-b);}
+function seasonData(year){
+  const y=String(year),M=S.matches.filter(E=>E.date.startsWith(y));if(!M.length)return null;
+  const my=pressTeam()||0;
+  const rec={};
+  if(my)for(const E of M){if(!E.teams.includes(my))continue;const r=rec[E.fmt]=rec[E.fmt]||{p:0,w:0,l:0,d:0};r.p++;
+    if(E.result.winner===my)r.w++;else if(E.result.winner)r.l++;else r.d++;}
+  const champs=M.filter(E=>isFinalStage(E)&&E.result.winner).map(E=>({title:E.series,team:E.result.winner,E}));
+  if(S.wtc&&S.wtc[year]&&S.wtc[year].champ)champs.push({title:`World Test Championship ${year-2}-${y.slice(2)}`,team:S.wtc[year].champ[0],shared:S.wtc[year].champ.length>1});
+  const sids=my?[...new Set(M.filter(E=>E.teams.includes(my)&&E.sid).map(E=>E.sid))]:[];
+  const series=sids.map(sid=>{const r=seriesRecord(sid,my),E=M.find(x=>x.sid===sid);return{sid,title:E.series,...r};}).filter(s=>s.p>=2);
+  const runs={},wk={};
+  for(const E of M)for(const I of E.inns){for(const r of I.bt)runs[r[0]]=(runs[r[0]]||0)+r[1];for(const w of I.bw)wk[w[0]]=(wk[w[0]]||0)+w[4];}
+  const top=(o,n)=>Object.entries(o).sort((a,b)=>b[1]-a[1]).slice(0,n).map(([p,v])=>({pid:+p,v}));
+  let hs=null,bb=null;
+  for(const E of M)for(const I of E.inns){
+    for(const r of I.bt)if(!hs||r[1]>hs.v)hs={pid:r[0],v:r[1],no:!r[5],E};
+    for(const w of I.bw)if(!bb||w[4]>bb.w||(w[4]===bb.w&&w[3]<bb.r))bb={pid:w[0],w:w[4],r:w[3],E};}
+  const close=M.filter(E=>E.result.type==='tie'||E.result.type==='so'||(E.result.type==='runs'&&E.result.margin<=3)||(E.result.type==='wkts'&&E.result.margin===1)).slice(-5);
+  const heads=S.press?S.press.heads.filter(h=>h.date.startsWith(y)):[];
+  // the big stories first (titles, shocks, finals), one of each headline, newest first
+  const weight=h=>/CHAMPIONS|GLORY|CONQUER/.test(h.h)?3:/SHOCK|GIANT|HUMILIATION|TIED/.test(h.h)?2:/FINAL|HEARTBREAK|NAIL|THRILLER/.test(h.h)?1:0,seen=new Set();
+  const pickHeads=heads.slice().reverse().sort((a,b)=>weight(b)-weight(a)).filter(h=>{const k=h.h.replace(/^FINAL /,'');if(seen.has(k))return false;seen.add(k);return true;}).slice(0,4).sort((a,b)=>a.date<b.date?1:-1);
+  const quotes=(S.press&&S.press.quotes||[]).filter(q=>q.date.startsWith(y));
+  const quote=quotes.slice().sort((a,b)=>(b.bold||0)-(a.bold||0))[0]||null;
+  const objs=S.coach?S.coach.objs.filter(o=>(o.status==='met'||o.status==='failed')&&(o.created||'').startsWith(y)):[];
+  const ms=S.ms.filter(m=>m.date.startsWith(y));
+  const hofc=S.hof?Object.entries(S.hof.inducted).filter(([,x])=>x.year===+year).map(([p])=>+p):[];
+  return{year:+year,n:M.length,my,rec,champs,series,topRuns:top(runs,3),topWk:top(wk,3),hs,bb,close,heads:pickHeads,quote,objs,ms,hofc,awards:R_().awards[year]||null,
+    done:+y<+careerDate().slice(0,4)};
+}
+RENDER.season=(el,arg)=>{
+  const years=seasonYears();if(!years.length){el.innerHTML='<div class="card empty">Play a season first.</div>';return;}
+  const done=years.filter(y=>y<+careerDate().slice(0,4)),year=+arg||done[done.length-1]||years[years.length-1],D=seasonData(year);
+  S.seasonSeen=Math.max(S.seasonSeen||0,year);
+  const link=E=>`<span data-mid="${E.id}" style="cursor:pointer;text-decoration:underline dotted">${esc(teamShort(E.teams[0]))} v ${esc(teamShort(E.teams[1]))}</span>`;
+  const card=(t,b)=>b?`<div class="card"><h3>${t}</h3>${b}</div>`:'';
+  el.innerHTML=`<div class="stack"><div class="card hi"><div class="spread"><div><div class="sub">Season review</div><h2 style="margin:2px 0">${year}${D.done?'':' (so far)'}</h2>
+      <div class="muted">${plural(D.n,'match','matches')} in your timeline${D.my?' · '+esc(teamName(D.my)):''}</div></div>
+      <div class="row"><select id="sr-y">${years.map(y=>`<option ${y===year?'selected':''}>${y}</option>`).join('')}</select><button class="btn" id="sr-img">Save as image</button></div></div></div>
+    <div class="grid g2" style="align-items:start"><div class="stack">
+      ${D.my&&Object.keys(D.rec).length?card(`${esc(teamName(D.my))}'s year`,`${Object.entries(D.rec).map(([f,r])=>`<div class="spread"><span>${FMT_PLURAL[f]}</span><span class="num">P${r.p} W${r.w} L${r.l}${r.d?' D/NR'+r.d:''}</span></div>`).join('')}
+        ${D.series.length?`<div style="margin-top:8px">${D.series.map(s=>`<div class="spread"><span class="muted" style="font-size:12px">${esc(s.title)}</span><span class="pill ${s.w>s.l?'win':s.l>s.w?'loss':''}">W${s.w} L${s.l}</span></div>`).join('')}</div>`:''}`):''}
+      ${card('Champions',D.champs.map(c=>`<div>🏆 ${tlabel(c.team)} <span class="muted">${esc(c.title)}${c.shared?' (shared)':''}</span></div>`).join(''))}
+      ${card('Performers',`<div class="grid g2"><div><div class="sub">Most runs</div>${D.topRuns.map(x=>`<div>${plink(x.pid)} <b class="num">${x.v}</b></div>`).join('')}</div>
+        <div><div class="sub">Most wickets</div>${D.topWk.map(x=>`<div>${plink(x.pid)} <b class="num">${x.v}</b></div>`).join('')}</div></div>
+        ${D.hs?`<div style="margin-top:8px">Highest score: ${plink(D.hs.pid)} <b>${D.hs.v}${D.hs.no?'*':''}</b> <span class="muted">${link(D.hs.E)}</span></div>`:''}
+        ${D.bb?`<div>Best bowling: ${plink(D.bb.pid)} <b>${D.bb.w}/${D.bb.r}</b> <span class="muted">${link(D.bb.E)}</span></div>`:''}`)}
+      ${D.awards?card('Awards',`<table>${AWARD_NAMES.filter(([k])=>D.awards[k]).map(([k,n,u])=>`<tr><td class="sub">${n}</td><td>${awardLine(D.awards,k,u)}</td></tr>`).join('')}</table>`):''}
+    </div><div class="stack">
+      ${D.heads.length?card('Back pages',`<div class="stack" style="gap:8px">${D.heads.map((h,i)=>headHTML(h,i===0)).join('')}</div>`):''}
+      ${D.quote?card('Quote of the year',`<div style="font-size:18px">“${esc(D.quote.a)}”</div><div class="muted" style="font-size:12px;margin-top:4px">Asked: ${esc(D.quote.q)} · ${fmtDate(D.quote.date)}</div>`):''}
+      ${D.objs.length?card("The board's verdict",D.objs.map(o=>`<div class="spread"><span>${esc(o.text)} <span class="muted">${esc(o.title)}</span></span><span class="pill ${o.status==='met'?'win':'loss'}">${o.status}</span></div>`).join('')):''}
+      ${D.close.length?card('Edge of the seat',D.close.map(E=>`<div class="spread"><span>${link(E)} <span class="muted" style="font-size:12px">${esc(E.series)}</span></span><span>${esc(E.result.text)}</span></div>`).join('')):''}
+      ${D.hofc.length?card('Into the Hall of Fame',D.hofc.map(p=>`<div>🏛️ ${plink(p)}</div>`).join('')):''}
+      ${D.ms.length?card('Milestones',`${D.ms.slice(-8).reverse().map(m=>`<div>🏅 ${plink(m.pid)} <span class="sub">${esc(m.text)}</span></div>`).join('')}${D.ms.length>8?`<div class="muted" style="font-size:12px">and ${D.ms.length-8} more</div>`:''}`):''}
+    </div></div></div>`;
+  $('#sr-y').onchange=e=>go('season',+e.target.value);
+  $('#sr-img').onclick=()=>downloadCanvas(seasonImage(year),`first-xi-season-${year}.png`);
+};
+// The shareable image: the headline facts of the year.
+function seasonImage(year){
+  const D=seasonData(year);if(!D)return null;
+  const blocks=[];
+  if(D.my&&Object.keys(D.rec).length)blocks.push({head:teamName(D.my)+"'s year",rows:Object.entries(D.rec).map(([f,r])=>[FMT_PLURAL[f],`W${r.w} L${r.l}${r.d?' D'+r.d:''}`])});
+  if(D.champs.length)blocks.push({head:'Champions',rows:D.champs.slice(0,6).map(c=>[c.title,teamShort(c.team)])});
+  blocks.push({head:'Performers',rows:[...D.topRuns.slice(0,2).map(x=>[pName(x.pid)+' (runs)',x.v]),...D.topWk.slice(0,2).map(x=>[pName(x.pid)+' (wickets)',x.v]),
+    ...(D.hs?[['Highest score: '+pName(D.hs.pid),D.hs.v+(D.hs.no?'*':'')]]:[]),...(D.bb?[['Best bowling: '+pName(D.bb.pid),D.bb.w+'/'+D.bb.r]]:[])]});
+  if(D.awards)blocks.push({head:'Awards',rows:AWARD_NAMES.filter(([k])=>D.awards[k]).slice(0,4).map(([k,n])=>[n,pName(D.awards[k].pid)])});
+  if(D.heads.length)blocks.push({head:'Back page',rows:[[D.heads[0].h.slice(0,52),null]]});
+  if(D.quote)blocks.push({head:'Quote of the year',rows:[['"'+D.quote.a.slice(0,60)+'"',null]]});
+  return canvasCard(`${year} season review`,`${D.n} matches in your timeline${D.my?' · '+teamName(D.my):''}`,blocks,'First XI Cricket · your timeline');
+}
+// A dashboard nudge once a year is over and its review unread.
+function seasonNudgeHTML(){
+  const y=+careerDate().slice(0,4)-1;if(!S.matches.length||(S.seasonSeen||0)>=y||!S.matches.some(E=>E.date.startsWith(String(y))))return'';
+  return`<div class="banner" style="margin-bottom:14px"><div class="spread"><span>📰 <b>The ${y} season review is in</b> <span class="sub">champions, performers, back pages and more.</span></span><button class="btn sm pri" data-go="season" data-arg="${y}">Read it</button></div></div>`;
+}
+
 // ═══ SETTINGS, SPLASH, LIVE HOOKS & INIT ═══
 const GUIDE=`<h2>How First XI works</h2>
 <p><b>Every over</b> the bowler's rating picks one of six run-rate cards - RR_3 (tight) up to RR_7 (carnage) - shifted by the match situation:
@@ -5306,6 +5432,7 @@ tools/cricsheet_batting.py goes further: batting colours from real averages, yea
 The <b>World Test Championship</b> runs from August 2019 in two-year cycles: every Test between the nine full members counts (12 points a win, 4 a draw, 6 a tie), the table is ranked on the percentage of points available, and the top two meet in a one-off final in England (a draw shares the title). Rankings → Test Championship.</p>
 <p><b>Scouting:</b> as a coach you get six uncapped prospects a year and four scouting reports to reveal their true potential (until then it's a range).
 Call one up into your next squad and he gets first chance when the XI needs his role. Young players grow into their potential with age - and with caps.</p>
+<p><b>Season review:</b> every finished year gets a review - your side's record, the champions, the performers, the awards, the back pages, your quote of the year and the board's verdict - on the dashboard, under Rankings → Honours, and as an image to share.</p>
 <p><b>Knockouts</b> are re-seeded from your own tables once a tournament's league stage is finished (Settings to follow history instead).</p>`;
 function openGuide(){
   openModal(GUIDE+(S&&!S.sandbox?`<div class="row" style="margin-top:12px"><button class="btn" id="g-start">Show the Start here checklist</button><button class="btn" id="g-keys">Keyboard shortcuts</button></div>`:''));

@@ -125,9 +125,3 @@ function scorecardImage(E){
   if(E.motm)blocks.push({head:'Man of the Match',rows:[[pName(E.motm),null]]});
   return canvasCard(E.result.text,`${E.series||'Friendly'}${E.stage?' · '+E.stage:''} · ${E.venue} · ${fmtDate(E.date)}`,blocks,'First XI Cricket · your timeline');
 }
-function seasonImage(year){
-  const A=R_().awards[year];if(!A)return null;
-  const rows=AWARD_NAMES.filter(([k])=>A[k]).map(([k,n,u])=>[n+': '+pName(A[k].pid),u?A[k].v+' '+u:null]);
-  if(A.team)rows.push(['Team of the Year: '+teamName(A.team.team),A.team.w+' wins']);
-  return canvasCard(`${year} season review`,`${A.matches} matches in your timeline`,[{head:'Awards',rows}],'First XI Cricket');
-}

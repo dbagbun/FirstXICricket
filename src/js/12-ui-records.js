@@ -17,7 +17,7 @@ RENDER.records=(el)=>{
   el.innerHTML=`<div class="card"><div class="row"><div class="seg">${FORMATS.map(f=>`<button data-rf="${f}" class="${REC_F.fmt===f?'on':''}">${FMT_PLURAL[f]}</button>`).join('')}</div>
     <div class="seg">${REC_GROUPS.map(g=>`<button data-rg="${g[0]}" class="${REC_F.grp===g[0]?'on':''}">${g[0]}</button>`).join('')}</div></div>
     <div class="muted" style="font-size:12px;margin-top:6px">Qualification: averages ${min.inn}+ innings, strike rate ${min.balls}+ balls, bowling averages ${min.wkts}+ wickets, economy ${min.bb}+ balls, captaincy ${min.cap}+ matches.</div></div>
-    <div class="grid g3" style="margin-top:14px">${keys.map(block).join('')}</div>`;
+    <div class="grid g3" style="margin-top:14px">${keys.map(block).join('')}</div>${drsRecordsHTML(REC_F.fmt)}`;
   $$('[data-rf]').forEach(b=>b.onclick=()=>{REC_F.fmt=b.dataset.rf;rerender();});
   $$('[data-rg]').forEach(b=>b.onclick=()=>{REC_F.grp=b.dataset.rg;rerender();});
 };

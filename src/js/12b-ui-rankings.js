@@ -5,7 +5,7 @@ function awardLine(A,k,unit){
   return`${plink(x.pid)} <span class="muted">${unit?x.v+' '+unit:Math.round(x.v)+' pts'}</span>`;
 }
 function honoursHTML(years){
-  return years.map(y=>{const A=S.rk.awards[y];return`<div class="card"><div class="spread"><h3 style="margin:0">${y}</h3><button class="btn sm" data-simg="${y}">Save as image</button></div><table>${AWARD_NAMES.filter(([k])=>A[k]).map(([k,n,u])=>`<tr><td class="sub">${n}</td><td>${awardLine(A,k,u)}</td></tr>`).join('')}
+  return years.map(y=>{const A=S.rk.awards[y];return`<div class="card"><div class="spread"><h3 style="margin:0">${y}</h3><span class="row"><button class="btn sm pri" data-go="season" data-arg="${y}">Full review</button><button class="btn sm" data-simg="${y}">Save as image</button></span></div><table>${AWARD_NAMES.filter(([k])=>A[k]).map(([k,n,u])=>`<tr><td class="sub">${n}</td><td>${awardLine(A,k,u)}</td></tr>`).join('')}
     ${A.team?`<tr><td class="sub">Team of the Year</td><td>${tlabel(A.team.team)} <span class="muted">${A.team.w} wins from ${A.team.p}</span></td></tr>`:''}</table></div>`;}).join('');
 }
 RENDER.rank=(el)=>{

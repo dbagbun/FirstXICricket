@@ -36,6 +36,7 @@ tools/cricsheet_batting.py goes further: batting colours from real averages, yea
 The <b>World Test Championship</b> runs from August 2019 in two-year cycles: every Test between the nine full members counts (12 points a win, 4 a draw, 6 a tie), the table is ranked on the percentage of points available, and the top two meet in a one-off final in England (a draw shares the title). Rankings → Test Championship.</p>
 <p><b>Scouting:</b> as a coach you get six uncapped prospects a year and four scouting reports to reveal their true potential (until then it's a range).
 Call one up into your next squad and he gets first chance when the XI needs his role. Young players grow into their potential with age - and with caps.</p>
+<p><b>Season review:</b> every finished year gets a review - your side's record, the champions, the performers, the awards, the back pages, your quote of the year and the board's verdict - on the dashboard, under Rankings → Honours, and as an image to share.</p>
 <p><b>Knockouts</b> are re-seeded from your own tables once a tournament's league stage is finished (Settings to follow history instead).</p>`;
 function openGuide(){
   openModal(GUIDE+(S&&!S.sandbox?`<div class="row" style="margin-top:12px"><button class="btn" id="g-start">Show the Start here checklist</button><button class="btn" id="g-keys">Keyboard shortcuts</button></div>`:''));
