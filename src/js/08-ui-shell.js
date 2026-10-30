@@ -5,7 +5,8 @@ const TEAM_COL={AUS:'#c9a400',IND:'#1f4fbf',ENG:'#1d3a8a',RSA:'#0f7a3e',PAK:'#0b
 for(const f of FRANCHISES)TEAM_COL[f[2]]=f[3];
 const badge=t=>`<span class="tbadge" style="background:${TEAM_COL[teamShort(t)]||'#334155'}">${esc(teamShort(t))}</span>`;
 const tlabel=t=>`${badge(t)} ${esc(teamName(t))}`;
-const plink=pid=>`<span class="plink" data-pid="${pid}">${esc(pName(pid))}</span>`;
+const plink=pid=>`<span class="plink" data-pid="${pid}" tabindex="0" role="link">${esc(pName(pid))}</span>`;
+document.addEventListener('keydown',e=>{if(e.key!=='Enter')return;const t=e.target;if(t&&t.matches&&t.matches('.plink,[data-mid]')){e.preventDefault();t.click();}});
 const VIEWS=[['home','Dashboard'],['match','Match'],['me','My player'],['coach','Coach'],['plan','Planner'],['play','Challenges'],['league','League'],['fixtures','Fixtures'],['tour','Tournament Centre'],['rank','Rankings'],['records','Records'],['query','Stats lab'],['players','Players'],['history','Results'],['miles','Milestones'],['settings','Settings']];
 let VIEW='home',VIEW_ARG=null;
 const RENDER={};
@@ -59,7 +60,7 @@ function openPlayer(pid){
     <span>Batting: <b>${esc(a.bat?BAT_NAME[a.bat]:'by position')}</b> <span class="pill">${a.batSrc==='h'?'from your Excel BatGroup':a.batSrc==='e'?'edited':a.batSrc==='c'?'from real averages':a.batSrc==='g'?'new player':'derived'}</span></span>
     <span>Bowling: ${a.style==='N'?'does not bowl':`${STYLE_NAME[a.style]}, rating ${a.rating}${a.rating>=5?' (part-timer)':a.rating===1?' (elite)':''}`}
     <span class="pill">${a.src==='h'?'from your Excel ratings':a.src==='e'?'edited':'from real spells'}</span></span>
-    <button class="btn sm" id="pa-edit">Edit</button></div>
+    <button class="btn sm" id="pa-edit">Edit</button><button class="btn sm" id="pa-cmp">Compare / graphs</button></div>
   ${era.length>1&&!S.attrEdits[pid]?`<div class="muted" style="font-size:12px;margin:-4px 0 10px">By season: ${era.map(e=>`${e[0]} ${bowls&&(WORLD.players[pid][4]!=='h')?'r'+e[1]+' ':''}${e[2]?batChip(e[2].length===2?e[2][0]:e[2]):''}`).join(' · ')}${a.era?' (as of '+fmtDate(careerDate()).slice(-4)+')':''}</div>`:''}
   <div id="pa-form" class="hidden card" style="margin-bottom:10px"><div class="row">
     <label>Style <select id="pa-style">${['P','S','M','N'].map(s=>`<option value="${s}" ${a.style===s?'selected':''}>${s==='N'?'Does not bowl':STYLE_NAME[s]}</option>`).join('')}</select></label>
@@ -77,6 +78,7 @@ function openPlayer(pid){
   ${(()=>{const st=storyOf(pid);return st.length>1?`<details style="margin-top:10px"><summary class="muted" style="cursor:pointer">Career story</summary>${st.map(([d,t])=>`<div><span class="muted">${fmtDate(d)}</span> ${esc(t)}</div>`).join('')}</details>`:'';})()}
   ${ms.length?`<h3>Milestones</h3>${ms.map(m=>`<div>🏅 ${esc(m.text)} <span class="muted">${fmtDate(m.date)} · ${m.fmt}</span></div>`).join('')}`:''}`);
   $('#pa-edit').onclick=()=>$('#pa-form').classList.toggle('hidden');
+  $('#pa-cmp').onclick=()=>{Q_F.mode='cmp';Q_F.c1=pName(pid);Q_F.c2='';const f=FORMATS.find(f=>S.stats[f][pid]);if(f)Q_F.fmt=f;closeModal();go('query');};
   $('#pa-save').onclick=()=>{S.attrEdits[pid]={style:$('#pa-style').value,rating:+$('#pa-rating').value,max:clamp(+$('#pa-max').value,0,10),bat:$('#pa-bat').value};if(S.attrEdits[pid].style==='N')Object.assign(S.attrEdits[pid],{rating:7,max:0});saveGame();openPlayer(pid);};
   $('#pa-reset').onclick=()=>{delete S.attrEdits[pid];saveGame();openPlayer(pid);};
 }

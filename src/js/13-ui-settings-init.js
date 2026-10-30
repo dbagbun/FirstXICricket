@@ -45,6 +45,8 @@ Your intent - defend, normal or attack - moves the cards one step for the overs 
 Play it (you captain the first side) or sim it, in ODI, T20 or Test form, at Lord's. Share the matchup as a code. It runs in the sandbox, so your career is untouched.</p>
 <p><b>Test tactics:</b> a new ball helps the seamers for its first 10 overs and an old one (60+ overs) the spinners; bowlers are fresh in the first overs of a day.
 As captain you choose when to take the new ball (it's due after 80 overs), whether to send a nightwatchman in near the close, and when to declare - the captain panel shows what most captains would do.</p>
+<p><b>Replay:</b> any match on a scorecard can be replayed from the first ball - the same XIs, ground and date - as a friendly that doesn't touch your career; the result tells you whether history repeated.
+<b>Compare:</b> Stats lab → Compare puts two players side by side, with career graphs (runs, wickets and a rolling average) - or open one player's graphs from his card.</p>
 <p><b>Knockouts</b> are re-seeded from your own tables once a tournament's league stage is finished (Settings to follow history instead).</p>`;
 function openGuide(){
   openModal(GUIDE+(S&&!S.sandbox?`<div class="row" style="margin-top:12px"><button class="btn" id="g-start">Show the Start here checklist</button><button class="btn" id="g-keys">Keyboard shortcuts</button></div>`:''));
@@ -70,6 +72,7 @@ RENDER.settings=(el)=>{
     <div class="spread"><span>T20 World Cups (real years, 2007-2024)</span>${seg('t20wc',[['on','On'],['off','Off']])}</div>
     <div class="spread"><span>Tournament knockouts</span>${seg('knockouts',[['timeline','My timeline'],['history','History']])}</div>
     ${HAS_REAL?`<div class="spread"><span>Real results (after you play a match)</span>${seg('history',[['after','Show'],['off','Hide']])}</div>`:''}
+    <div class="spread"><span>Theme (this device)</span><div class="seg">${[['dark','Dark'],['light','Light'],['auto','Auto']].map(([v,n])=>`<button data-thm="${v}" class="${themePref()===v?'on':''}">${n}</button>`).join('')}</div></div>
     <div class="spread"><span>App font</span>${seg('font',APP_FONTS)}</div>
     <div class="spread"><span>Broadcast style</span>${seg('broadcast',BROADCASTS)}</div>
     ${SPEECH?`<div class="spread"><span>Commentator voice</span>${seg('voice',[['false','Off'],['true','On']])}</div>
@@ -95,6 +98,7 @@ RENDER.settings=(el)=>{
     if(k==='t20wc')iccToggle(v==='on');
     saveGame();rerender();});
   $('#st-team').onchange=e=>{st.myTeam=+e.target.value;saveGame();};
+  $$('[data-thm]').forEach(b=>b.onclick=()=>{try{localStorage.setItem(THEME_KEY,b.dataset.thm);}catch(e){}applyTheme();rerender();});
   $('#st-voice')&&($('#st-voice').onchange=e=>{st.voiceName=e.target.value;saveGame();voiceTest();});
   $('#st-rate')&&($('#st-rate').onchange=e=>{st.voiceRate=+e.target.value;saveGame();voiceTest();});
   $('#st-say')&&($('#st-say').onclick=()=>{if(!voiceTest())toast('No voice available in this browser.','warn');});
@@ -155,7 +159,9 @@ uiDoneHook=(M,E,ms,pos,aw,cn)=>{
   const ss=E.sid?seriesStatus(E.sid):null;
   setTimeout(()=>{
     if(VIEW==='match')rerender();
+    const first=M.replayOf&&S.matches.find(x=>x.id===M.replayOf);
     openModal(`<div class="sub">${esc(E.series)}${E.stage?' · '+esc(E.stage):''}</div><div class="result-big" style="margin:6px 0">${esc(E.result.text)}</div>
+      ${first?`<div class="banner" style="margin-bottom:8px">↺ First time round: <b>${esc(first.result.text)}</b>${first.result.winner===E.result.winner?' - history repeats.':' - a different ending.'}</div>`:''}
       ${E.inns.map(I=>`<div class="spread"><span>${badge(I.bat)} ${esc(teamName(I.bat))}</span><b class="num">${innsShort(I,E.fmt)}</b></div>`).join('')}
       ${E.motm?`<div class="banner" style="margin-top:10px">Man of the Match: <b>${plink(E.motm)}</b></div>`:''}
       ${ss&&SERIES.get(E.sid)?.kind!=='tournament'?`<p class="sub">${esc(ss.text)}</p>`:''}
@@ -176,7 +182,15 @@ uiDoneHook=(M,E,ms,pos,aw,cn)=>{
   },50);
 };
 
+// Theme: per device (THEME_KEY): dark, light or auto (the system's choice).
+const THEME_KEY='fxi_theme';
+const themePref=()=>{try{return localStorage.getItem(THEME_KEY)||'dark';}catch(e){return'dark';}};
+function applyTheme(){
+  const p=themePref(),light=p==='light'||(p==='auto'&&typeof matchMedia==='function'&&matchMedia('(prefers-color-scheme: light)').matches);
+  document.documentElement.dataset.theme=light?'light':'dark';
+}
 function init(){
+  applyTheme();
   appInit();
   try{localStorage.removeItem(SANDBOX_KEY);}catch(e){}   // a challenge left mid-way doesn't come back
   setTimeout(applyBroadcast,0);

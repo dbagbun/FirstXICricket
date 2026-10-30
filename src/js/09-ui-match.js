@@ -169,8 +169,8 @@ function renderPre(el,M){
       <select id="toss-c"><option value="">Captain decides</option><option value="bat">and bat</option><option value="bowl">and bowl</option></select>
       <button class="btn pri" id="toss-go">Toss &amp; start</button>
       <button class="btn" id="pre-sim">Quick sim</button></div>
-      <div class="row" style="margin-top:10px"><label class="row" style="gap:6px"><input type="checkbox" id="h2h" ${M.friendly?'checked':''}> Two players (head-to-head)</label>
-        <span id="h2h-names" class="row ${M.friendly?'':'hidden'}">${M.teams.map((t,i)=>`<label>${badge(t)} <input type="text" id="h2h-${i}" value="Player ${i+1}" style="width:120px"></label>`).join('')}
+      <div class="row" style="margin-top:10px"><label class="row" style="gap:6px"><input type="checkbox" id="h2h" ${M.friendly&&!M.replayOf?'checked':''}> Two players (head-to-head)</label>
+        <span id="h2h-names" class="row ${M.friendly&&!M.replayOf?'':'hidden'}">${M.teams.map((t,i)=>`<label>${badge(t)} <input type="text" id="h2h-${i}" value="Player ${i+1}" style="width:120px"></label>`).join('')}
         <label class="row" style="gap:6px"><input type="checkbox" id="h2h-dice" checked> roll real dice</label></span></div>
       <div class="muted" style="margin-top:6px;font-size:12px">Dice: ${S.settings.dice==='manual'?'you roll (enter each 1-100 roll)':'automatic'} · Captain: ${M.manualCaptain?(Object.keys(M.manualCaptain).length>1?'you, for both sides':'you, for '+esc(teamName(+Object.keys(M.manualCaptain)[0]))):'AI'} - change in Settings.</div></div>
   </div>`;
@@ -410,16 +410,28 @@ function chartsHTML(E){
   }).join('');
   return`<div class="chart"><div class="row" style="font-size:12px">${E.inns.map((I,k)=>`<span><span style="display:inline-block;width:10px;height:10px;background:${col[k]};border-radius:2px"></span> ${esc(teamShort(I.bat))} ${ordinal(k+1)} inns</span>`).join('')}<span class="muted">● wicket</span></div>${wormSvg}${man}</div>`;
 }
+// Replay an archived match as a friendly: the same XIs, ground, date and format, from the first ball.
+function replayMatch(E){
+  if(S.live&&S.live.state!=='done'&&!confirm('A match is in progress. Abandon it and replay this one?'))return null;
+  const fmt=E.fmt==='LEAGUE'?'T20':E.fmt,xi=t=>({bat:E.xi[t].slice(0,11),wk:E.xi[t][11],cap:E.xi[t][12]});
+  const M=newMatch({fmt,a:E.teams[0],b:E.teams[1],date:E.date,venue:E.venue,city:E.city,series:'Replay: '+(E.series||'friendly'),stage:E.stage,
+    xiA:xi(E.teams[0]),xiB:xi(E.teams[1]),home:VENUE_HOME.get(E.venue)||E.teams[0],maxOv:E.maxOv});
+  M.friendly=true;M.replayOf=E.id;M.key='RP.'+E.id;M.batMode=S.settings.batColours;M.mods={bat:{},bowl:{}};drsSetup(M);M.t20cards=S.settings.t20cards||'designed';
+  if(S.settings.captain==='manual')M.manualCaptain=captainOf(M);
+  M.manual=S.settings.dice==='manual';
+  S.live=M;LM=M;saveGame();go('match');return M;
+}
 function openScorecard(mid){
   const E=S.matches.find(x=>x.id===mid);if(!E)return;
   openModal(`<div class="sub">${esc(E.series)}${E.stage?' · '+esc(E.stage):''} · ${esc(E.venue)} · ${fmtDate(E.date)}</div>
     <h2 style="margin:6px 0">${tlabel(E.teams[0])} v ${tlabel(E.teams[1])}</h2><div class="result-big" style="margin-bottom:10px">${esc(E.result.text)}</div>
     <div class="muted" style="margin-bottom:10px">Toss: ${esc(teamName(E.toss[0]))}, chose to ${E.toss[1]}${E.pitch?' · '+PITCHES[E.pitch].name:''}${E.reseeded?' · re-seeded knockout':''}</div>
-    <div class="row" style="margin-bottom:10px"><button class="btn sm" id="sc-hl">▶ Highlights</button><button class="btn sm" id="sc-img">Save as image</button></div>
+    <div class="row" style="margin-bottom:10px"><button class="btn sm" id="sc-hl">▶ Highlights</button><button class="btn sm" id="sc-img">Save as image</button><button class="btn sm" id="sc-replay">↺ Replay this match</button></div>
     ${scorecardHTML(E)}<h3 style="margin-top:14px">Charts</h3>${chartsHTML(E)}
     ${S.logs[E.id]?'<h3 style="margin-top:14px">Shots &amp; pitch maps</h3><div id="sc-field"></div>':''}
     <details style="margin-top:12px"><summary class="muted" style="cursor:pointer">Key moments</summary>${highlightsListHTML(E)}</details>`);
   const fe=$('#sc-field');if(fe){FIELD_SEL={inn:-1,bat:0,bowl:0};fe.innerHTML=fieldTabHTML(E,null);wireFieldTab(E,null,fe);}
   $('#sc-hl').onclick=()=>{closeModal();playHighlights(E);};
+  $('#sc-replay').onclick=()=>{closeModal();replayMatch(E);};
   $('#sc-img').onclick=()=>downloadCanvas(scorecardImage(E),`first-xi-${E.date}-${teamShort(E.teams[0])}-v-${teamShort(E.teams[1])}.png`);
 }
