@@ -162,6 +162,7 @@ tbody tr:hover td{background:rgba(30,41,59,.6)}
 .ground{width:100%;max-width:300px;display:block;margin:0 auto}.ground .g-out{fill:#14532d;stroke:#e2e8f0;stroke-width:1.2}.ground .g-in{fill:none;stroke:#bbf7d0;stroke-dasharray:3 4;opacity:.5}
 .g-pitch{fill:#d6c79a;opacity:.9}.g-lab{font-size:8px;fill:var(--muted);text-transform:uppercase;letter-spacing:.1em}.pitchmap{width:100%;max-width:150px;display:block;margin:0 auto}.pm-band{fill:#000;opacity:.12}
 .f-man{fill:#f8fafc;stroke:#0f172a}.f-bowl{fill:#facc15;stroke:#0f172a}.f-keep{fill:#38bdf8;stroke:#0f172a}.f-lab{font-size:6.5px;fill:#ecfdf5;opacity:.9}
+.kbd{display:inline-block;min-width:22px;padding:1px 7px;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;font:600 12px/1.6 var(--mono);text-align:center;background:var(--card)}
 @media (max-width:600px){
   main{padding:12px}
   #top{flex-wrap:wrap;gap:6px;padding:8px 12px}

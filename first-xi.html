@@ -181,6 +181,7 @@ tbody tr:hover td{background:rgba(30,41,59,.6)}
 .ground{width:100%;max-width:300px;display:block;margin:0 auto}.ground .g-out{fill:#14532d;stroke:#e2e8f0;stroke-width:1.2}.ground .g-in{fill:none;stroke:#bbf7d0;stroke-dasharray:3 4;opacity:.5}
 .g-pitch{fill:#d6c79a;opacity:.9}.g-lab{font-size:8px;fill:var(--muted);text-transform:uppercase;letter-spacing:.1em}.pitchmap{width:100%;max-width:150px;display:block;margin:0 auto}.pm-band{fill:#000;opacity:.12}
 .f-man{fill:#f8fafc;stroke:#0f172a}.f-bowl{fill:#facc15;stroke:#0f172a}.f-keep{fill:#38bdf8;stroke:#0f172a}.f-lab{font-size:6.5px;fill:#ecfdf5;opacity:.9}
+.kbd{display:inline-block;min-width:22px;padding:1px 7px;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;font:600 12px/1.6 var(--mono);text-align:center;background:var(--card)}
 @media (max-width:600px){
   main{padding:12px}
   #top{flex-wrap:wrap;gap:6px;padding:8px 12px}
@@ -3248,6 +3249,7 @@ function go(v,arg){
   const el=$('#view');el.innerHTML='';
   try{RENDER[v](el,arg);}catch(e){console.error(e);el.innerHTML=`<div class="card red">Something went wrong drawing this screen: ${esc(e.message)}</div>`;}
   if(S&&S.sandbox&&v!=='play')el.insertAdjacentHTML('afterbegin',sandboxBanner());
+  if(S)tourSeen(v);
   window.scrollTo?.(0,0);
 }
 function rerender(){go(VIEW,VIEW_ARG);}
@@ -3542,7 +3544,7 @@ function renderLive(el,M){
     <button class="btn" id="c-watch">${WATCH?'❚❚ Pause':'▶ Watch'}</button><button class="btn" id="c-sim">Sim match</button>
     <button class="btn" id="c-snd" aria-label="${S.settings.sound?'Sound off':'Sound on'}" title="Sound">${S.settings.sound?'🔊':'🔇'}</button>
     ${M.fmt==='TEST'&&I.no<4?`<button class="btn warn" id="c-dec">Declare</button>`:''}`}
-    <span id="dice-in"></span></div>${captainPanel(M)}</div>`}
+    <span id="dice-in"></span><span class="muted hide-sm kbd-hint" style="font-size:11px;margin-left:auto">Press ? for keys</span></div>${captainPanel(M)}</div>`}
   <div class="card"><div class="seg" style="margin-bottom:10px">${[['card','Scorecard'],['comm','Ball by ball'],['charts','Charts'],['field','Field &amp; shots'],['rr','Run-rate card']].map(([k,n])=>`<button data-tab="${k}" class="${MATCH_TAB===k?'on':''}">${n}</button>`).join('')}</div>
     <div id="mtab"></div></div>
   </div>`;
@@ -3614,6 +3616,7 @@ function askRoll(M){
 function toggleWatch(M){
   if(WATCH){stopWatch();rerender();return;}
   if(M.manual){toast('Watch mode needs automatic dice (Settings).','warn');return;}
+  tourDid('watch');
   const tick=()=>{
     if(VIEW!=='match'||M.state!=='live'||M.pending){stopWatch();rerender();return;}
     FX.allow=true;M.askRev=true;const b=bowlBall(M);fxBall(M,b);voiceBall(M,b);rerender();
@@ -3631,7 +3634,7 @@ function drawMatchTab(M){
     el.innerHTML=`<div class="commentary">${commentaryHTML(M)||'<span class="muted">No balls yet.</span>'}</div>`;
   }else if(MATCH_TAB==='charts')el.innerHTML=chartsHTML(E);
   else if(MATCH_TAB==='field'){el.innerHTML=fieldTabHTML(E,M);wireFieldTab(E,M,el);}
-  else el.innerHTML=rrCardHTML(M);
+  else{el.innerHTML=rrCardHTML(M);tourDid('rrcard');}
 }
 function rrCardHTML(M){
   const C=M.cur,code=C?C.card:(curInn(M).overs.slice(-1)[0]||{}).card||'3';
@@ -3747,7 +3750,7 @@ RENDER.home=(el)=>{
       ${C.team?`<div style="width:220px;margin-top:6px">${confBar(C.conf)}</div><span class="muted" style="font-size:12px">Board confidence ${Math.round(C.conf)}</span>${C.pc&&C.pc.qs.some(q=>q.a==null)?' <span class="pill live">press conference</span>':''}`:`<div class="muted">${plural(C.offers.length,'offer')} waiting</div>`}</div>
       <div class="row">${cnx?(nextFixture()&&nextFixture().key===cnx.key?`<button class="btn pri" data-playkey="${cnx.key}">Play ${esc(teamShort(cnx.a))} v ${esc(teamShort(cnx.b))}</button>`:`<button class="btn pri" id="h-simto">Sim to my next match (${fmtDate(cnx.date)})</button>`):''}<button class="btn" data-go="coach">Coach</button></div></div></div>`:'';
   const futureNote=S.gen&&careerDate()>LAST_REAL?`<div class="banner" style="margin-bottom:14px">🔭 <b>The future, ${careerDate().slice(0,4)}.</b> <span class="sub">The real calendar ended in ${fmtDate(LAST_REAL)}. Fixtures are now generated a year at a time; veterans age and retire and new players come through.</span></div>`:'';
-  el.innerHTML=backupBanner()+futureNote+coachCard+`<div class="grid g3 home-grid" style="${C?';margin-top:14px':''}">
+  el.innerHTML=backupBanner()+startHereHTML()+futureNote+coachCard+`<div class="grid g3 home-grid" style="${C?';margin-top:14px':''}">
     <div class="stack">
       ${live&&(!n||live.key!==n.key)?`<div class="card"><div class="spread"><div><span class="pill live">LIVE</span> <b>${esc(teamName(live.teams[0]))} v ${esc(teamName(live.teams[1]))}</b></div><button class="btn pri" data-go="match">Resume</button></div></div>`:''}
       ${nextCard}${tourn}
@@ -3770,6 +3773,7 @@ RENDER.home=(el)=>{
     $('#h-sims').onclick=()=>simMany(fixturesOf(n.sid).filter(x=>x.playable&&!S.done[x.key]),'the rest of the series');
     $('#h-simn').onclick=openSimMore;
   }
+  startHereWire();
   $('#h-test').onclick=()=>openTestCreator();
   $('#h-friendly').onclick=openFriendly;
   $('#h-simto')&&($('#h-simto').onclick=simToMyMatch);
@@ -5044,6 +5048,68 @@ function wireFieldTab(E,M,el){
   q('#fs-bowl')&&(q('#fs-bowl').onchange=e=>{FIELD_SEL.bowl=+e.target.value;re();});
 }
 
+// ═══ START HERE & KEYBOARD SHORTCUTS ═══
+// A new career gets a "Start here" checklist on the dashboard (S.tour {seen:{view:1}, did:{...}, hidden}).
+// Each step reads real state or a flag set as you go; careers already past 20 matches start with it hidden.
+function tourState(){if(!S.tour)S.tour={seen:{},did:{},hidden:S.matches.length>20};return S.tour;}
+function tourSeen(v){if(S&&!S.sandbox)tourState().seen[v]=1;}
+function tourDid(k){if(S&&!S.sandbox&&!tourState().did[k]){S.tour.did[k]=1;}}
+const TOUR_STEPS=[
+  ['play','Play your first match','Toss, then bowl it ball by ball or an over at a time.',()=>S.matches.length>0||!!(S.live&&S.live.inns&&S.live.inns.length),()=>{const n=nextFixture();if(n)startFixture(n.key);}],
+  ['card','Look at the run-rate card','Each over picks a card; one roll of 1-100 reads all six balls across a row.',()=>!!tourState().did.rrcard,()=>{MATCH_TAB='rr';go(S.live&&S.live.state!=='done'?'match':'home');if(!(S.live&&S.live.state!=='done'))toast('Start a match first - the Run-rate card is a tab on the match screen.','warn');}],
+  ['watch','Watch an over, or captain one','Watch mode bowls it for you; Settings → Captaincy → Me lets you choose bowlers and attack or defend.',()=>!!(tourState().did.watch||S.settings.captain==='manual'),()=>go('settings')],
+  ['tour','Open the Tournament Centre','Pools, net run rate and knockout brackets for every series and cup.',()=>!!tourState().seen.tour,()=>go('tour')],
+  ['records','Check the records','Batting, bowling, partnerships and team records, by format.',()=>!!tourState().seen.records,()=>go('records')],
+  ['play2','Try a challenge','Start from a famous situation in a sandbox - your career is safe.',()=>!!tourState().seen.play,()=>go('play')],
+  ['look','Pick a look','Three broadcast styles, a choice of fonts, sound and a commentator voice in Settings.',()=>!!(S.settings.broadcast!=='standard'||S.settings.font!=='barlow'||S.settings.sound||S.settings.voice),()=>go('settings')],
+];
+function startHereHTML(){
+  if(!S||S.sandbox)return'';
+  const T=tourState();if(T.hidden)return'';
+  const done=TOUR_STEPS.filter(s=>s[3]()).length;
+  if(done===TOUR_STEPS.length){T.hidden=true;return'';}
+  return`<div class="card hi" id="start-here" style="margin-bottom:14px"><div class="spread"><h3 style="margin:0">Start here</h3><span class="row"><b class="num">${done}/${TOUR_STEPS.length}</b><button class="btn sm" id="sh-hide">Hide</button></span></div>
+    <div class="bar" style="margin:8px 0 10px"><i style="width:${100*done/TOUR_STEPS.length}%"></i></div>
+    <div class="stack" style="gap:6px">${TOUR_STEPS.map(([k,t,d,ok],i)=>{const y=ok();return`<div class="spread"><span>${y?'✅':'⬜'} <b class="${y?'muted':''}">${esc(t)}</b><span class="hide-sm"><br><span class="muted" style="font-size:12px">${esc(d)}</span></span></span>${y?'':`<button class="btn sm" data-sh="${i}">Show me</button>`}</div>`;}).join('')}</div>
+    <div class="muted" style="font-size:12px;margin-top:8px">Press <b>?</b> any time for keyboard shortcuts. Settings → How to play has the rules.</div></div>`;
+}
+function startHereWire(){
+  $('#sh-hide')&&($('#sh-hide').onclick=()=>{tourState().hidden=true;saveGame();rerender();toast('Hidden - bring it back from Settings → How to play.');});
+  $$('[data-sh]').forEach(b=>b.onclick=()=>TOUR_STEPS[+b.dataset.sh][4]());
+}
+// ---------- keyboard ----------
+const KEYS=[['Space or N','Next ball'],['O','Bowl the over'],['F','Five overs'],['I','To the end of the innings'],['W','Watch / pause'],['Shift+S','Sim the match'],
+  ['R / A','Review / accept the umpire\'s decision'],['E / B','Enforce the follow-on / bat again'],['1-5','Match tabs: scorecard, ball by ball, charts, field, run-rate card'],
+  ['H','Dashboard'],['M','Match'],['?','This list'],['Esc','Close a window']];
+function openKeys(){openModal(`<h2>Keyboard shortcuts</h2><table>${KEYS.map(([k,d])=>`<tr><td><span class="kbd">${esc(k)}</span></td><td>${esc(d)}</td></tr>`).join('')}</table>
+  <p class="muted" style="font-size:12px">Typing in a box (a dice roll, a name) never triggers them.</p>`);}
+function keyHandler(e){
+  if(e.ctrlKey||e.metaKey||e.altKey||!S)return;
+  const tag=(e.target&&e.target.tagName)||'';if(/INPUT|SELECT|TEXTAREA/.test(tag)||e.target.isContentEditable)return;
+  if(/BUTTON|A/.test(tag)&&(e.key===' '||e.key==='Enter'))return;   // a focused button presses itself
+  if(!$('#modal').classList.contains('hidden')){return;}
+  const k=e.key,click=sel=>{const b=$(sel);if(b&&!b.disabled){b.click();return true;}return false;};
+  let used=false;
+  if(k==='?'){openKeys();used=true;}
+  else if(k==='h'||k==='H'){go('home');used=true;}
+  else if((k==='m'||k==='M')&&S.live&&S.live.state!=='done'){go('match');used=true;}
+  else if(VIEW==='match'){
+    if(k===' '||k==='n'||k==='N')used=click('#c-ball');
+    else if(k==='o'||k==='O')used=click('#c-over');
+    else if(k==='f'||k==='F')used=click('#c-5');
+    else if(k==='i'||k==='I')used=click('#c-inn');
+    else if(k==='w'||k==='W')used=click('#c-watch');
+    else if(k==='S'&&e.shiftKey)used=click('#c-sim');
+    else if(k==='r'||k==='R')used=click('#rv-yes');
+    else if(k==='a'||k==='A')used=click('#rv-no');
+    else if(k==='e'||k==='E')used=click('#fo-yes');
+    else if(k==='b'||k==='B')used=click('#fo-no');
+    else if(/^[1-5]$/.test(k)){const t=['card','comm','charts','field','rr'][+k-1];used=click(`[data-tab="${t}"]`);}
+  }
+  if(used)e.preventDefault();
+}
+document.addEventListener('keydown',keyHandler);
+
 // ═══ SETTINGS, SPLASH, LIVE HOOKS & INIT ═══
 const GUIDE=`<h2>How First XI works</h2>
 <p><b>Every over</b> the bowler's rating picks one of six run-rate cards - RR_3 (tight) up to RR_7 (carnage) - shifted by the match situation:
@@ -5079,7 +5145,11 @@ They're drawn from each ball but never change it - the card and the roll decide 
 Start one from the first ball of the chase or from ten, five, two or one overs left, with the real XIs, the real target and the real pair at the crease, batting or bowling - then see what really happened.
 tools/cricsheet_batting.py goes further: batting colours from real averages, year by year (BLUE from 30, GREEN from 15), with no lift for batting position.</p>
 <p><b>Knockouts</b> are re-seeded from your own tables once a tournament's league stage is finished (Settings to follow history instead).</p>`;
-function openGuide(){openModal(GUIDE);}
+function openGuide(){
+  openModal(GUIDE+(S&&!S.sandbox?`<div class="row" style="margin-top:12px"><button class="btn" id="g-start">Show the Start here checklist</button><button class="btn" id="g-keys">Keyboard shortcuts</button></div>`:''));
+  $('#g-start')&&($('#g-start').onclick=()=>{tourState().hidden=false;saveGame();closeModal();go('home');});
+  $('#g-keys')&&($('#g-keys').onclick=openKeys);
+}
 
 RENDER.settings=(el)=>{
   const st=S.settings;

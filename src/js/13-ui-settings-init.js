@@ -33,7 +33,11 @@ They're drawn from each ball but never change it - the card and the roll decide 
 Start one from the first ball of the chase or from ten, five, two or one overs left, with the real XIs, the real target and the real pair at the crease, batting or bowling - then see what really happened.
 tools/cricsheet_batting.py goes further: batting colours from real averages, year by year (BLUE from 30, GREEN from 15), with no lift for batting position.</p>
 <p><b>Knockouts</b> are re-seeded from your own tables once a tournament's league stage is finished (Settings to follow history instead).</p>`;
-function openGuide(){openModal(GUIDE);}
+function openGuide(){
+  openModal(GUIDE+(S&&!S.sandbox?`<div class="row" style="margin-top:12px"><button class="btn" id="g-start">Show the Start here checklist</button><button class="btn" id="g-keys">Keyboard shortcuts</button></div>`:''));
+  $('#g-start')&&($('#g-start').onclick=()=>{tourState().hidden=false;saveGame();closeModal();go('home');});
+  $('#g-keys')&&($('#g-keys').onclick=openKeys);
+}
 
 RENDER.settings=(el)=>{
   const st=S.settings;

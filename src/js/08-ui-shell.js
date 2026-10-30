@@ -16,6 +16,7 @@ function go(v,arg){
   const el=$('#view');el.innerHTML='';
   try{RENDER[v](el,arg);}catch(e){console.error(e);el.innerHTML=`<div class="card red">Something went wrong drawing this screen: ${esc(e.message)}</div>`;}
   if(S&&S.sandbox&&v!=='play')el.insertAdjacentHTML('afterbegin',sandboxBanner());
+  if(S)tourSeen(v);
   window.scrollTo?.(0,0);
 }
 function rerender(){go(VIEW,VIEW_ARG);}

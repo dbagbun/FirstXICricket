@@ -229,7 +229,7 @@ function renderLive(el,M){
     <button class="btn" id="c-watch">${WATCH?'❚❚ Pause':'▶ Watch'}</button><button class="btn" id="c-sim">Sim match</button>
     <button class="btn" id="c-snd" aria-label="${S.settings.sound?'Sound off':'Sound on'}" title="Sound">${S.settings.sound?'🔊':'🔇'}</button>
     ${M.fmt==='TEST'&&I.no<4?`<button class="btn warn" id="c-dec">Declare</button>`:''}`}
-    <span id="dice-in"></span></div>${captainPanel(M)}</div>`}
+    <span id="dice-in"></span><span class="muted hide-sm kbd-hint" style="font-size:11px;margin-left:auto">Press ? for keys</span></div>${captainPanel(M)}</div>`}
   <div class="card"><div class="seg" style="margin-bottom:10px">${[['card','Scorecard'],['comm','Ball by ball'],['charts','Charts'],['field','Field &amp; shots'],['rr','Run-rate card']].map(([k,n])=>`<button data-tab="${k}" class="${MATCH_TAB===k?'on':''}">${n}</button>`).join('')}</div>
     <div id="mtab"></div></div>
   </div>`;
@@ -301,6 +301,7 @@ function askRoll(M){
 function toggleWatch(M){
   if(WATCH){stopWatch();rerender();return;}
   if(M.manual){toast('Watch mode needs automatic dice (Settings).','warn');return;}
+  tourDid('watch');
   const tick=()=>{
     if(VIEW!=='match'||M.state!=='live'||M.pending){stopWatch();rerender();return;}
     FX.allow=true;M.askRev=true;const b=bowlBall(M);fxBall(M,b);voiceBall(M,b);rerender();
@@ -318,7 +319,7 @@ function drawMatchTab(M){
     el.innerHTML=`<div class="commentary">${commentaryHTML(M)||'<span class="muted">No balls yet.</span>'}</div>`;
   }else if(MATCH_TAB==='charts')el.innerHTML=chartsHTML(E);
   else if(MATCH_TAB==='field'){el.innerHTML=fieldTabHTML(E,M);wireFieldTab(E,M,el);}
-  else el.innerHTML=rrCardHTML(M);
+  else{el.innerHTML=rrCardHTML(M);tourDid('rrcard');}
 }
 function rrCardHTML(M){
   const C=M.cur,code=C?C.card:(curInn(M).overs.slice(-1)[0]||{}).card||'3';
