@@ -212,6 +212,10 @@ function batColour(M,pid,pos,bowlTeam){
   return col;
 }
 const BOWLER_CREDIT={b:1,lbw:1,ct:1,ctof:1,ctwk:1,st:1,ro:0};
+// The workbook's ODI and Test cards have no stumpings: a keeper's wicket off a spinner is a stumping STUMP_SPIN
+// of the time (picked by a hash of the ball, so the dice and every other draw are untouched). Only the mode changes.
+const STUMP_SPIN=.28;   // ~3% of ODI dismissals, as in real ODIs
+const stumpOf=(C,roll,col,inn)=>(((C.over*31+C.n*17+roll*7+col*3+inn*11)*2654435761>>>0)%1000)/1000<STUMP_SPIN;
 
 // ---------- match setup ----------
 let MATCH_SEQ=0;
@@ -507,6 +511,7 @@ function applyBall(M,I,D){
   }else{
     C.legal++;I.lb++;W.b++;ball.legal=C.legal;
     if(t.w){
+      if(t.how==='ctwk'&&I.eng&&I.eng.B[C.bi]&&I.eng.B[C.bi].style==='S'&&stumpOf(C,roll,col,I.no))t.how='st';
       const credit=BOWLER_CREDIT[t.how];
       ball.w=1;ball.how=t.how;ball.out=striker;ball.fielder=pickFielder(M,I,t.how,C.bowler);
       B.out={how:t.how,bowler:credit?C.bowler:0,fielder:ball.fielder};
