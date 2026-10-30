@@ -1955,7 +1955,8 @@ function parseSave(raw){try{const d=JSON.parse(saveText(raw));return d&&d.v===1&
 function readSlot(i){try{return parseSave(localStorage.getItem(SLOT_KEYS[i]));}catch(e){return null;}}
 // A slot's name, match count and last date, kept beside it so menus needn't unpack whole careers.
 const metaKey=i=>SLOT_KEYS[i]+'_meta';
-function writeMeta(i,d){try{localStorage.setItem(metaKey(i),JSON.stringify({name:d.name,n:d.matches.length,last:d.matches.length?d.matches[d.matches.length-1].date:CAREER_START}));}catch(e){}}
+function writeMeta(i,d){try{localStorage.setItem(metaKey(i),JSON.stringify({name:d.name,n:d.matches.length,last:d.matches.length?d.matches[d.matches.length-1].date:CAREER_START,
+  mode:d.me?'player':d.coach?'coach':'',team:(d.me&&d.me.team)||(d.coach&&d.coach.team)||(d.settings&&d.settings.myTeam)||0,player:d.me?(d.gen&&d.gen.players[d.me.pid]||{}).n||'':'',saved:d.savedAt||0}));}catch(e){}}
 function slotInfo(i){
   try{const raw=localStorage.getItem(SLOT_KEYS[i]);if(!raw)return null;
     const m=JSON.parse(localStorage.getItem(metaKey(i))||'null');if(m)return m;
@@ -5948,6 +5949,7 @@ RENDER.settings=(el)=>{
     <div class="spread"><span>TV graphics for wickets &amp; milestones</span>${seg('tv',[['true','On'],['false','Off']])}</div>
     <div class="spread"><span>Watch speed</span>${seg('ballDelay',[[600,'Slow'],[250,'Normal'],[60,'Fast']])}</div>
     <div class="spread"><span>Follow a team</span><select id="st-team"><option value="0">None</option>${[...TEAMS.values()].map(t=>`<option value="${t.id}" ${st.myTeam===t.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select></div>
+    <div class="spread"><span>On launch (this device)</span><div class="seg">${[['title','Title screen'],['skip','Straight into my career']].map(([v,n])=>`<button data-intro="${v}" class="${(introSkip()?'skip':'title')===v?'on':''}">${n}</button>`).join('')}</div></div>
     <button class="btn" id="st-guide">How to play</button></div>
   <div class="card stack"><h3>Save slots</h3>
     ${slots.map((d,i)=>`<div class="spread"><div><b>Slot ${i+1}</b>${i===SLOT?' <span class="pill win">active</span>':''}<br><span class="muted">${d?`${esc(d.name)} · ${d.n} matches · ${fmtDate(d.last)}`:'empty'}</span></div>
@@ -5964,6 +5966,7 @@ RENDER.settings=(el)=>{
     if(k==='t20wc')iccToggle(v==='on');
     saveGame();rerender();});
   $('#st-team').onchange=e=>{st.myTeam=+e.target.value;saveGame();};
+  $$('[data-intro]').forEach(b=>b.onclick=()=>{try{localStorage.setItem(INTRO_KEY,b.dataset.intro);}catch(e){}rerender();});
   $$('[data-thm]').forEach(b=>b.onclick=()=>{try{localStorage.setItem(THEME_KEY,b.dataset.thm);}catch(e){}applyTheme();rerender();});
   $('#st-voice')&&($('#st-voice').onchange=e=>{st.voiceName=e.target.value;saveGame();voiceTest();});
   $('#st-rate')&&($('#st-rate').onchange=e=>{st.voiceRate=+e.target.value;saveGame();voiceTest();});
@@ -5971,19 +5974,42 @@ RENDER.settings=(el)=>{
   if(SPEECH&&!voices().length&&!RENDER.settings.waited){RENDER.settings.waited=1;SPEECH.onvoiceschanged=()=>{if(VIEW==='settings')rerender();};}
   $('#st-guide').onclick=openGuide;
   $$('[data-load]').forEach(b=>b.onclick=()=>{saveGame();if(loadSlot(+b.dataset.load)){LM=null;toast('Loaded.');go('home');}});
-  $$('[data-new]').forEach(b=>b.onclick=()=>{saveGame();setSlot(+b.dataset.new);S=null;LM=null;showSplash();});
+  $$('[data-new]').forEach(b=>b.onclick=()=>{saveGame();setSlot(+b.dataset.new);S=null;LM=null;showSplash(+b.dataset.new);});
   $$('[data-del]').forEach(b=>b.onclick=()=>{if(confirm('Delete this save for good?')){clearSlot(+b.dataset.del);rerender();}});
   $('#st-exp').onclick=()=>{backupNow();rerender();};
   $('#st-file')&&($('#st-file').onclick=async()=>{if(await chooseSaveFile())rerender();});
   storageLine().then(t=>{const e=$('#st-storage');if(e&&t)e.textContent+=' '+t;});
   $('#st-imp').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{if(importCareer(t)){LM=null;toast('Career imported.');go('home');}else toast('That file is not a First XI career.','bad');});};
   $('#st-rebuild').onclick=()=>{rebuildStats();REC_CACHE=null;saveGame();toast('Stats rebuilt from '+S.matches.length+' scorecards.');};
-  $('#st-reset').onclick=()=>{if(confirm('Wipe this career and start again from 2002?')){S=null;LM=null;clearSlot(SLOT);showSplash();}};
+  $('#st-reset').onclick=()=>{if(confirm('Wipe this career and start again from 2002?')){S=null;LM=null;clearSlot(SLOT);showSplash(SLOT);}};
 };
 
-function showSplash(){
-  renderNav();
+// ---------- the title screen: continue a save, load another, or start a new career ----------
+const INTRO_KEY='fxi_intro';
+const introSkip=()=>{try{return localStorage.getItem(INTRO_KEY)==='skip';}catch(e){return false;}};
+function slotLine(d){
+  const mode=d.mode==='player'?`Playing for ${teamName(d.team)}${d.player?' as '+d.player:''}`:d.mode==='coach'?`Coaching ${d.team?teamName(d.team):'(out of work)'}`:d.team?`Following ${teamName(d.team)}`:'Following everyone';
+  const ago=d.saved?Math.round((Date.now()-d.saved)/864e5):null;
+  return`${esc(mode)} · ${d.n} matches · ${fmtDate(d.last)}${ago!=null?` · saved ${ago<1?'today':ago===1?'yesterday':ago+' days ago'}`:''}`;
+}
+function showTitle(){
+  $('#nav').innerHTML='';
+  const slots=SLOT_KEYS.map((_,i)=>slotInfo(i)),cur=S&&slots[SLOT];
+  $('#view').innerHTML=`<div class="card hi stack" style="max-width:640px;margin:30px auto" id="title-screen"><h1 style="font-size:32px;margin:0">First XI <span class="cyan">Cricket</span></h1>
+    <p class="sub" style="margin:0">Every ODI from ${fmtDate(FIX[0].date)}, the real XIs and bowling plans, played out with the First XI run-rate cards.</p>
+    ${cur?`<div class="card" style="background:var(--card)"><div class="sub">Continue</div><h2 style="margin:2px 0">${esc(cur.name)}</h2><div class="muted" style="font-size:13px">${slotLine(cur)}</div>
+      <button class="btn pri" id="ti-go" style="margin-top:10px;font-size:18px;padding:10px 28px">Continue</button></div>`:''}
+    ${slots.some((d,i)=>d&&i!==SLOT)?`<div><h3>Other saves</h3>${slots.map((d,i)=>d&&i!==SLOT?`<div class="spread" style="margin-bottom:6px"><span><b>${esc(d.name)}</b> <span class="muted" style="font-size:12px">slot ${i+1} · ${slotLine(d)}</span></span><button class="btn sm" data-ti="${i}">Load</button></div>`:'').join('')}</div>`:''}
+    <div class="row"><button class="btn ${cur?'':'pri'}" id="ti-new">New career</button><button class="btn" id="ti-guide">How to play</button></div></div>`;
+  $('#ti-go')&&($('#ti-go').onclick=()=>{go(S.me&&meP()?'me':'home');});
+  $$('[data-ti]').forEach(b=>b.onclick=()=>{if(loadSlot(+b.dataset.ti)){LM=S.live||null;applyBroadcast();go('home');}});
+  $('#ti-new').onclick=()=>showSplash();
+  $('#ti-guide').onclick=openGuide;
+}
+function showSplash(pref){
+  renderNav();if(S)$('#nav').innerHTML='';
   const slots=SLOT_KEYS.map((_,i)=>slotInfo(i));
+  const pick=pref!=null?pref:slots.findIndex(d=>!d)>=0?slots.findIndex(d=>!d):SLOT;
   $('#view').innerHTML=`<div class="card hi" style="max-width:640px;margin:30px auto"><h1 style="font-size:28px">First XI <span class="cyan">Cricket</span></h1>
     <p class="sub">Every ODI from ${fmtDate(FIX[0].date)} to ${fmtDate(FIX[FIX.length-1].date)}, with the real XIs and bowling plans, played out with the First XI run-rate cards. Add Test series whenever you like.</p>
     <div class="stack"><div class="row"><input type="text" id="sp-name" placeholder="Career name" value="My career"><select id="sp-team"><option value="0">Follow a team (optional)</option>${[...TEAMS.values()].filter(t=>t.full).map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('')}</select>
@@ -5993,17 +6019,22 @@ function showSplash(){
       <div class="row hidden" id="sp-me-f"><input type="text" id="sp-pname" placeholder="Your player's name" value="J Smith" style="width:150px">
         <select id="sp-role">${Object.entries(ME_ROLES).map(([k,r])=>`<option value="${k}">${r[0]}</option>`).join('')}</select>
         <label>Age <input type="number" id="sp-age" min="17" max="24" value="19" style="width:60px"></label></div>
-      ${slots.some(Boolean)?`<h3 style="margin-top:10px">Or carry on</h3>${slots.map((d,i)=>d?`<div class="spread"><span>Slot ${i+1}: <b>${esc(d.name)}</b> <span class="muted">${d.n} matches</span></span><button class="btn sm" data-sp="${i}">Load</button></div>`:'').join('')}`:''}
-      <button class="btn" id="sp-guide">How it works</button></div></div>`;
+      <label class="row" style="gap:6px">Save in <select id="sp-slot">${slots.map((d,i)=>`<option value="${i}" ${i===pick?'selected':''}>Slot ${i+1} - ${d?esc(d.name)+' ('+d.n+' matches) - starts fresh':'empty'}</option>`).join('')}</select></label>
+      <div class="muted" style="font-size:12px" id="sp-warn"></div>
+      <div class="row">${slots.some(Boolean)?'<button class="btn" id="sp-back">Back</button>':''}<button class="btn" id="sp-guide">How it works</button></div></div></div>`;
+  const warn=()=>{const d=slots[+$('#sp-slot').value];$('#sp-warn').innerHTML=d?`<span class="red">Starting here wipes "${esc(d.name)}" - its ${d.n} matches, stats and records. Back it up first from Settings if you might want it.</span>`:'';};
+  $('#sp-slot').onchange=warn;warn();
+  $('#sp-back')&&($('#sp-back').onclick=()=>showTitle());
   $('#sp-go').onclick=()=>{
-    if(slotInfo(SLOT)){const free=SLOT_KEYS.findIndex((_,i)=>!slotInfo(i));if(free>=0)setSlot(free);else if(!confirm('All three slots are in use. Overwrite slot '+(SLOT+1)+'?'))return;}
+    const i=+$('#sp-slot').value,d=slotInfo(i);
+    if(d&&!confirm(`Start a new career in slot ${i+1}? "${d.name}" (${d.n} matches) and all its stats are wiped.`))return;
+    if(d)clearSlot(i);setSlot(i);LM=null;
     S=newCareer({name:$('#sp-name').value.trim()||'My career',myTeam:+$('#sp-team').value});
     if($('#sp-coach').checked){if(!+$('#sp-team').value){toast('Pick the team to coach.','warn');S=null;return;}startCoach(+$('#sp-team').value);}
     else if($('#sp-me').checked){if(!+$('#sp-team').value){toast('Pick the team to play for.','warn');S=null;return;}
       createMe({name:$('#sp-pname').value.trim()||'J Smith',team:+$('#sp-team').value,role:$('#sp-role').value,age:+$('#sp-age').value});}
     saveGame();go(S.coach?'coach':S.me?'me':'home');
   };
-  $$('[data-sp]').forEach(b=>b.onclick=()=>{if(loadSlot(+b.dataset.sp))go('home');});
   $('#sp-me').onchange=e=>{$('#sp-me-f').classList.toggle('hidden',!e.target.checked);if(e.target.checked)$('#sp-coach').checked=false;};
   $('#sp-coach').onchange=e=>{if(e.target.checked){$('#sp-me').checked=false;$('#sp-me-f').classList.add('hidden');}};
   $('#sp-guide').onclick=openGuide;
@@ -6060,7 +6091,9 @@ function init(){
   appInit();
   try{localStorage.removeItem(SANDBOX_KEY);}catch(e){}   // a challenge left mid-way doesn't come back
   setTimeout(applyBroadcast,0);
-  if(loadSlot(SLOT)){LM=S.live||null;applyBroadcast();go('home');}
+  // the title screen: the last career is loaded behind it (Continue just carries on); Settings can skip it
+  const first=SLOT_KEYS.findIndex((_,i)=>slotInfo(i));
+  if(loadSlot(SLOT)||(first>=0&&loadSlot(first))){LM=S.live||null;applyBroadcast();if(introSkip())go('home');else showTitle();}
   else showSplash();
 }
 if(typeof window!=='undefined'&&!window.FXI_NO_INIT)init();

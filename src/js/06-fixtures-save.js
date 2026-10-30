@@ -171,7 +171,8 @@ function parseSave(raw){try{const d=JSON.parse(saveText(raw));return d&&d.v===1&
 function readSlot(i){try{return parseSave(localStorage.getItem(SLOT_KEYS[i]));}catch(e){return null;}}
 // A slot's name, match count and last date, kept beside it so menus needn't unpack whole careers.
 const metaKey=i=>SLOT_KEYS[i]+'_meta';
-function writeMeta(i,d){try{localStorage.setItem(metaKey(i),JSON.stringify({name:d.name,n:d.matches.length,last:d.matches.length?d.matches[d.matches.length-1].date:CAREER_START}));}catch(e){}}
+function writeMeta(i,d){try{localStorage.setItem(metaKey(i),JSON.stringify({name:d.name,n:d.matches.length,last:d.matches.length?d.matches[d.matches.length-1].date:CAREER_START,
+  mode:d.me?'player':d.coach?'coach':'',team:(d.me&&d.me.team)||(d.coach&&d.coach.team)||(d.settings&&d.settings.myTeam)||0,player:d.me?(d.gen&&d.gen.players[d.me.pid]||{}).n||'':'',saved:d.savedAt||0}));}catch(e){}}
 function slotInfo(i){
   try{const raw=localStorage.getItem(SLOT_KEYS[i]);if(!raw)return null;
     const m=JSON.parse(localStorage.getItem(metaKey(i))||'null');if(m)return m;
