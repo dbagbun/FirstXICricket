@@ -38,6 +38,9 @@ The <b>World Test Championship</b> runs from August 2019 in two-year cycles: eve
 <p><b>Scouting:</b> as a coach you get six uncapped prospects a year and four scouting reports to reveal their true potential (until then it's a range).
 Call one up into your next squad and he gets first chance when the XI needs his role. Young players grow into their potential with age - and with caps.</p>
 <p><b>Season review:</b> every finished year gets a review - your side's record, the champions, the performers, the awards, the back pages, your quote of the year and the board's verdict - on the dashboard, under Rankings → Honours, and as an image to share.</p>
+<p><b>Be a player:</b> start a career as one young cricketer for the team you follow - top-order batter, all-rounder, fast bowler, spinner or keeper-batter.
+You play domestic cricket between your side's matches; your selection standing follows your form, and at 70 the selectors pick you (you take the place of the like-for-like man). Below 45 in the side and you're dropped.
+Your intent - defend, normal or attack - moves the cards one step for the overs you face and the overs you bowl. Experience turns a GREEN batter BLUE and brings a bowler's rating down towards 1; age takes it back from 34. My player has it all.</p>
 <p><b>Knockouts</b> are re-seeded from your own tables once a tournament's league stage is finished (Settings to follow history instead).</p>`;
 function openGuide(){
   openModal(GUIDE+(S&&!S.sandbox?`<div class="row" style="margin-top:12px"><button class="btn" id="g-start">Show the Start here checklist</button><button class="btn" id="g-keys">Keyboard shortcuts</button></div>`:''));
@@ -112,15 +115,23 @@ function showSplash(){
     <div class="stack"><div class="row"><input type="text" id="sp-name" placeholder="Career name" value="My career"><select id="sp-team"><option value="0">Follow a team (optional)</option>${[...TEAMS.values()].filter(t=>t.full).map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('')}</select>
       <button class="btn pri" id="sp-go">Start a new career</button></div>
       <label class="row" style="gap:6px"><input type="checkbox" id="sp-coach"> Coach the team I follow (board targets, contracts, squads, the sack)</label>
+      <label class="row" style="gap:6px"><input type="checkbox" id="sp-me"> Be a player in the team I follow (one cricketer's career)</label>
+      <div class="row hidden" id="sp-me-f"><input type="text" id="sp-pname" placeholder="Your player's name" value="J Smith" style="width:150px">
+        <select id="sp-role">${Object.entries(ME_ROLES).map(([k,r])=>`<option value="${k}">${r[0]}</option>`).join('')}</select>
+        <label>Age <input type="number" id="sp-age" min="17" max="24" value="19" style="width:60px"></label></div>
       ${slots.some(Boolean)?`<h3 style="margin-top:10px">Or carry on</h3>${slots.map((d,i)=>d?`<div class="spread"><span>Slot ${i+1}: <b>${esc(d.name)}</b> <span class="muted">${d.n} matches</span></span><button class="btn sm" data-sp="${i}">Load</button></div>`:'').join('')}`:''}
       <button class="btn" id="sp-guide">How it works</button></div></div>`;
   $('#sp-go').onclick=()=>{
     if(slotInfo(SLOT)){const free=SLOT_KEYS.findIndex((_,i)=>!slotInfo(i));if(free>=0)setSlot(free);else if(!confirm('All three slots are in use. Overwrite slot '+(SLOT+1)+'?'))return;}
     S=newCareer({name:$('#sp-name').value.trim()||'My career',myTeam:+$('#sp-team').value});
     if($('#sp-coach').checked){if(!+$('#sp-team').value){toast('Pick the team to coach.','warn');S=null;return;}startCoach(+$('#sp-team').value);}
-    saveGame();go(S.coach?'coach':'home');
+    else if($('#sp-me').checked){if(!+$('#sp-team').value){toast('Pick the team to play for.','warn');S=null;return;}
+      createMe({name:$('#sp-pname').value.trim()||'J Smith',team:+$('#sp-team').value,role:$('#sp-role').value,age:+$('#sp-age').value});}
+    saveGame();go(S.coach?'coach':S.me?'me':'home');
   };
   $$('[data-sp]').forEach(b=>b.onclick=()=>{if(loadSlot(+b.dataset.sp))go('home');});
+  $('#sp-me').onchange=e=>{$('#sp-me-f').classList.toggle('hidden',!e.target.checked);if(e.target.checked)$('#sp-coach').checked=false;};
+  $('#sp-coach').onchange=e=>{if(e.target.checked){$('#sp-me').checked=false;$('#sp-me-f').classList.add('hidden');}};
   $('#sp-guide').onclick=openGuide;
 }
 

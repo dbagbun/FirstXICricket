@@ -6,7 +6,7 @@ for(const f of FRANCHISES)TEAM_COL[f[2]]=f[3];
 const badge=t=>`<span class="tbadge" style="background:${TEAM_COL[teamShort(t)]||'#334155'}">${esc(teamShort(t))}</span>`;
 const tlabel=t=>`${badge(t)} ${esc(teamName(t))}`;
 const plink=pid=>`<span class="plink" data-pid="${pid}">${esc(pName(pid))}</span>`;
-const VIEWS=[['home','Dashboard'],['match','Match'],['coach','Coach'],['plan','Planner'],['play','Challenges'],['league','League'],['fixtures','Fixtures'],['tour','Tournament Centre'],['rank','Rankings'],['records','Records'],['query','Stats lab'],['players','Players'],['history','Results'],['miles','Milestones'],['settings','Settings']];
+const VIEWS=[['home','Dashboard'],['match','Match'],['me','My player'],['coach','Coach'],['plan','Planner'],['play','Challenges'],['league','League'],['fixtures','Fixtures'],['tour','Tournament Centre'],['rank','Rankings'],['records','Records'],['query','Stats lab'],['players','Players'],['history','Results'],['miles','Milestones'],['settings','Settings']];
 let VIEW='home',VIEW_ARG=null;
 const RENDER={};
 
@@ -22,7 +22,7 @@ function go(v,arg){
 function rerender(){go(VIEW,VIEW_ARG);}
 function renderNav(){
   const live=S&&S.live&&S.live.state!=='done';
-  $('#nav').innerHTML=S?VIEWS.map(([k,n])=>`<button data-go="${k}" class="${VIEW===k?'on':''}">${n}${k==='match'&&live?'<span class="dot"></span>':''}</button>`).join(''):'';
+  $('#nav').innerHTML=S?VIEWS.filter(([k])=>k!=='me'||S.me).map(([k,n])=>`<button data-go="${k}" class="${VIEW===k?'on':''}">${n}${k==='match'&&live?'<span class="dot"></span>':''}</button>`).join(''):'';
   $('#clock').textContent=S?fmtDate(careerDate()):'';
 }
 document.addEventListener('click',e=>{

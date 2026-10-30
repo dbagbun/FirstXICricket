@@ -20,6 +20,7 @@ function genColour(g,pid){
 // pAttr for generated players, and ageing for real ones in the future (called from pAttr)
 function futureAttr(pid,date,base){
   const g=genP(pid);if(!g)return base;
+  if(g.me&&S.me&&S.me.pid===+pid)return meAttr(g,pid,date);
   if(!g.real){const st=g.st;return{style:st,rating:st==='N'?7:genRating(g,date,pid),max:st==='N'?0:10,src:'g',bat:genColour(g,pid),batSrc:'g',era:true};}
   if(!isFuture(date))return base;
   const a=ageOf(g,date),dec=a>=37?2:a>=34?1:0;
@@ -72,7 +73,7 @@ function newYoungster(team,year,domestic){
   S.gen.players[pid]={real:false,n:genName(team),t:team,born:year-(domestic?rndInt(20,31):rndInt(18,22)),st,pot:domestic?Math.max(pot,3):pot,wk:role!=='tail'&&rnd()<.12,role,debut:null,domestic:!!domestic};
   return pid;
 }
-const activePool=(team,date)=>Object.entries(S.gen.players).filter(([,g])=>g.t===team&&!(g.ret&&g.ret<=date)&&ageOf(g,date)>=17).map(([p])=>+p);
+const activePool=(team,date)=>Object.entries(S.gen.players).filter(([,g])=>g.t===team&&!(g.ret&&g.ret<=date)&&ageOf(g,date)>=17&&!(g.me&&!(S.me&&S.me.status==='xi'))).map(([p])=>+p);   // your player only when picked
 function yearTurnover(year){
   const date=year+'-01-01';
   for(const[p,g]of Object.entries(S.gen.players)){

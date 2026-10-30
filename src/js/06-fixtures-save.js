@@ -104,8 +104,10 @@ function buildMatch(fx){
 }
 // Your side picks from its squad (injuries, squad choices); then form & fatigue become the engine's mods.
 function selectAndMods(M,fx){
+  meBeforeMatch(fx);
   const my=managedTeam();
   if(my&&!fx.friendly&&M.teams.includes(my)&&M.xi[my]){const r=pickXI(fx,my,M.xi[my]);M.xi[my]=r.xi;M.selNotes=r.notes;}
+  meIntoXI(M);
   M.mods=matchMods(M);drsSetup(M);M.t20cards=S.settings.t20cards||'designed';
 }
 
@@ -133,7 +135,7 @@ function onMatchDone(M){
   applyStats(E);
   applyRankings(E);
   updateForm(E);
-  const cn=coachAfter(E);pressAfter(E);restAfter(M);
+  const cn=coachAfter(E);pressAfter(E);restAfter(M);meAfter(E);
   const ms=checkMilestones(E),pos=playerOfSeries(E.sid),aw=yearEnd(E);
   if(S.live&&S.live.id===M.id)S.live=null;
   achCheck(E,M);

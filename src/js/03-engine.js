@@ -426,7 +426,7 @@ function bowlBall(M,manualRoll){
   if(M.cur&&M.cur.rev)return reviewStep(M,I,manualRoll);
   if(!M.cur){
     const over=Math.floor(I.lb/6)+1,bi=captainBowler(M,I,over)??chooseBowler(M,I,over),b=I.eng.B[bi];
-    const card=pickCard(applyShift(wearWeights(M,b,baseWeights(weightKey(M),b.rating)),situationShift(M,I,over)),cardCodes(M));
+    const card=pickCard(applyShift(wearWeights(M,b,baseWeights(weightKey(M),b.rating)),clamp(situationShift(M,I,over)+(typeof meShift==='function'?meShift(M,I,b.pid):0),-2,3)),cardCodes(M));
     M.cur={over,bi,bowler:b.pid,card,roll:0,col:1,comp:false,legal:0,n:0,runs:0};
     if(!I.bw[b.pid]){I.bw[b.pid]={b:0,r:0,w:0,md:0,wd:0,nb:0};I.bwOrder.push(b.pid);}
   }

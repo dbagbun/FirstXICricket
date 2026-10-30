@@ -229,7 +229,7 @@ function renderLive(el,M){
     <button class="btn" id="c-watch">${WATCH?'❚❚ Pause':'▶ Watch'}</button><button class="btn" id="c-sim">Sim match</button>
     <button class="btn" id="c-snd" aria-label="${S.settings.sound?'Sound off':'Sound on'}" title="Sound">${S.settings.sound?'🔊':'🔇'}</button>
     ${M.fmt==='TEST'&&I.no<4?`<button class="btn warn" id="c-dec">Declare</button>`:''}`}
-    <span id="dice-in"></span><span class="muted hide-sm kbd-hint" style="font-size:11px;margin-left:auto">Press ? for keys</span></div>${captainPanel(M)}</div>`}
+    <span id="dice-in"></span><span class="muted hide-sm kbd-hint" style="font-size:11px;margin-left:auto">Press ? for keys</span></div>${captainPanel(M)}${mePanelHTML(M)}</div>`}
   <div class="card"><div class="seg" style="margin-bottom:10px">${[['card','Scorecard'],['comm','Ball by ball'],['charts','Charts'],['field','Field &amp; shots'],['rr','Run-rate card']].map(([k,n])=>`<button data-tab="${k}" class="${MATCH_TAB===k?'on':''}">${n}</button>`).join('')}</div>
     <div id="mtab"></div></div>
   </div>`;
@@ -241,7 +241,7 @@ function renderLive(el,M){
   $('#c-ball').onclick=()=>step(M,'ball');$('#c-over').onclick=()=>step(M,'over');$('#c-5').onclick=()=>step(M,'5');
   $('#c-inn').onclick=()=>step(M,'inn');$('#c-sim').onclick=()=>step(M,'match');$('#c-watch').onclick=()=>toggleWatch(M);
   $('#c-dec')&&($('#c-dec').onclick=()=>{if(confirm(`Declare ${teamName(I.bat)}'s innings at ${I.runs}/${I.wkts}?`)){declare(M);afterStep(M);}});
-  wireCaptain(M);fxDice(M);
+  wireCaptain(M);intentWire();fxDice(M);
   $('#c-snd')&&($('#c-snd').onclick=()=>{S.settings.sound=!S.settings.sound;if(S.settings.sound)SFX.crack(.8);saveGame();rerender();});
   if(M.needRoll)askRoll(M);
 }
