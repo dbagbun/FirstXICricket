@@ -669,7 +669,7 @@ function batColour(M,pid,pos,bowlTeam){
   const a=pAttr(pid,M.date),c=a.bat||pc;
   const vsFull=!!TEAMS.get(+bowlTeam)?.full;
   const own=c.length===2?c[vsFull?1:0]:c;
-  let col=!a.bat||a.batSrc==='h'||a.batSrc==='e'||(c.length===2&&vsFull)?own:COL_RANK[pc]<COL_RANK[own]?'BGR'[COL_RANK[own]-1]:own;
+  let col=!a.bat||a.batSrc==='h'||a.batSrc==='e'||a.batSrc==='c'||(c.length===2&&vsFull)?own:COL_RANK[pc]<COL_RANK[own]?'BGR'[COL_RANK[own]-1]:own;
   const f=M.mods&&M.mods.bat[pid];   // form: hot +1 (GREEN plays BLUE), cold -1 (BLUE plays GREEN)
   if(f)col='BGR'[clamp(COL_RANK[col]-f,0,2)];
   return col;
@@ -2452,15 +2452,18 @@ function fakeInnings(M,I,runs,wkts,balls,closed,why){
 }
 function buildChallengeMatch(def){
   const fmt=def.fmt,date=def.date,home=def.bowl;
-  const v=(HOME_VENUES.get(home)||[{venue:teamName(home)+' Oval',city:''}])[0];
-  const M=newMatch({fmt,a:def.bowl,b:def.bat,date,venue:v.venue,city:v.city,series:'Challenge: '+def.title,stage:def.stage||'',
-    xiA:nearestXI(def.bowl,date),xiB:nearestXI(def.bat,date),home});
+  const rf=def.cid&&FIX.find(f=>f.cid===def.cid),v=rf?{venue:rf.venue,city:rf.city}:(HOME_VENUES.get(home)||[{venue:teamName(home)+' Oval',city:''}])[0];
+  const xi=t=>(def.cid&&fixtureXI(def.cid,t))||nearestXI(t,date);
+  const M=newMatch({fmt,a:def.bowl,b:def.bat,date,venue:v.venue,city:v.city,series:(def.real?'Relive: ':'Challenge: ')+def.title,stage:def.stage||'',
+    xiA:xi(def.bowl),xiB:xi(def.bat),home:rf?(VENUE_HOME.get(rf.venue)||home):home,maxOv:def.maxOv});
   M.noWeather=true;M.challenge=def;M.key='CH.'+def.id;M.mods={bat:{},bowl:{}};
   M.toss={w:def.bowl,choice:'bat',bat:def.bowl};M.state='live';
   if(fmt!=='TEST'){
-    const I1=startInnings(M,def.bowl);fakeInnings(M,I1,def.target-1,rndInt(5,9),M.maxOv*6,true,'overs');
+    const I1=startInnings(M,def.bowl),f1=def.first;fakeInnings(M,I1,def.target-1,f1?f1[0]:rndInt(5,9),f1?f1[1]:M.maxOv*6,true,f1&&f1[0]>=10?'all out':'overs');
     const I2=startInnings(M,def.bat);I2.target=def.target;
+    const real=def.crease&&reliveOrder(I2,def.crease,def.wkts);
     fakeInnings(M,I2,def.target-def.need,def.wkts,M.maxOv*6-def.balls,false);
+    if(real)reliveCrease(I2,def.crease);
   }else{
     // three innings done, the fourth under way; the clock set so def.overs remain
     const A=def.bowl,B=def.bat,t=def.target;
@@ -3165,6 +3168,47 @@ function autoRotate(team){
   }
   return n;
 }
+
+// ═══ RELIVE — famous real ODIs from their real positions ═══
+// Needs tools/cricsheet_odis.py: WORLD.real[cid].pos = [[ballsLeft, need, wktsDown, aPid, aRuns, aBalls, bPid, bRuns, bBalls]]
+// at the start of the chase and of its last ten overs, for close finishes, ties, big chases and knockouts (.fam).
+// A moment becomes a challenge (kind chase or defend) with the real XIs, venue, first innings and men at the crease.
+const FAM_NAME={close:'Close finish',tie:'Tie',big:'Big chase',ko:'Knockout'};
+function famousMatches(){
+  if(!HAS_REAL)return[];
+  return FIX.filter(f=>{const R=WORLD.real[f.cid];return R&&R.pos&&R.pos.length&&R.inn.length===2&&WORLD.xi[f.cid];}).map(f=>({f,R:WORLD.real[f.cid]}));
+}
+// The start of the chase, then the snapshots nearest 10, 5, 2 and 1 overs left.
+function reliveMoments(R){
+  const out=[],seen=new Set(),add=p=>{if(p&&!seen.has(p[0])&&p[1]>0&&p[2]<10){seen.add(p[0]);out.push(p);}};
+  add(R.pos[0]);
+  for(const bl of[60,30,12,6])add(R.pos.filter(x=>x[0]<=bl).sort((a,b)=>b[0]-a[0])[0]);
+  return out;
+}
+function reliveDef(f,R,p,kind){
+  const bat=R.inn[1][0],bowl=R.inn[0][0],target=R.pos[0][1],maxBalls=R.pos[0][0],start=p[0]===maxBalls;
+  const ov=b=>`${Math.floor(b/6)}${b%6?'.'+b%6:''}`;
+  return{id:`rl-${f.cid}-${p[0]}-${kind}`,title:`${teamShort(bat)} v ${teamShort(bowl)} ${f.date.slice(0,4)}${start?'':' · '+ov(p[0])+' overs left'}`,
+    desc:start?`${teamName(bat)} chase ${target} against ${teamName(bowl)}.`:`${teamName(bat)} need ${p[1]} off ${plural(p[0],'ball')} with ${plural(10-p[2],'wicket')} left against ${teamName(bowl)}.`,
+    kind,fmt:'ODI',bat,bowl,date:f.date,target,need:p[1],balls:p[0],wkts:p[2],cid:f.cid,crease:start?null:p.slice(3),
+    first:[R.inn[0][2],R.inn[0][3]],maxOv:Math.ceil(maxBalls/6),stage:/semi/i.test(R.ev||'')?'Semi-final':/quarter/i.test(R.ev||'')?'Quarter-final':/final/i.test(R.ev||'')?'Final':'',real:1};
+}
+// Put the real pair at the crease (and the men out before them) before the innings is faked around them.
+function reliveOrder(I,c,wkts){
+  const[a,,,b]=c;if(!I.order.includes(a)||!I.order.includes(b))return false;
+  const rest=I.order.filter(p=>p!==a&&p!==b);I.order=[...rest.slice(0,wkts),a,b,...rest.slice(wkts)];return true;
+}
+function reliveCrease(I,c){
+  const[a,ar,ab,b,br,bb]=c;
+  for(const[p,r,n]of[[a,ar,ab],[b,br,bb]])if(I.bt[p])Object.assign(I.bt[p],{r,b:n,f4:Math.min(I.bt[p].f4,Math.floor(r/4)),f6:0});
+  I.st=a;I.ns=b;I.part={a,b,r:0,bl:0,ra:0,rb:0,w:I.wkts+1};
+  const sumBat=()=>Object.values(I.bt).reduce((s,x)=>s+x.r,0),fixed=I.ex.b+I.ex.wd+I.ex.nb;
+  for(const p of Object.keys(I.bt).map(Number).filter(p=>p!==a&&p!==b).sort((x,y)=>I.bt[y].r-I.bt[x].r)){
+    const over=sumBat()+fixed-I.runs;if(over<=0)break;const B=I.bt[p],cut=Math.min(B.r,over);B.r-=cut;B.f4=Math.min(B.f4,Math.floor(B.r/4));B.f6=Math.min(B.f6,Math.floor(B.r/6));
+  }
+  I.ex.lb=Math.max(0,I.runs-sumBat()-fixed);
+}
+const reliveReal=def=>def&&def.cid&&HAS_REAL&&WORLD.real[def.cid]?realText(WORLD.real[def.cid]):'';
 
 // ═══ UI SHELL — navigation, views, modal, shared widgets ═══
 const TEAM_COL={AUS:'#c9a400',IND:'#1f4fbf',ENG:'#1d3a8a',RSA:'#0f7a3e',PAK:'#0b6e2e',SL:'#173f8f',WI:'#7a1f2b',NZ:'#222',ZIM:'#b8341b',
@@ -4613,7 +4657,22 @@ function voiceEvent(M,e){
 function voiceTest(){FX.allow=true;return say('Good afternoon, and welcome to the cricket. A lovely day for it.',true);}
 
 // ═══ CHALLENGES & ACHIEVEMENTS SCREEN ═══
-let PLAY_TAB='list';
+let PLAY_TAB='list',RELIVE={team:0,side:'chase'};
+function reliveHTML(){
+  const all=famousMatches();
+  if(!all.length)return`<div class="card stack" style="max-width:720px"><h3>Relive history</h3>
+    <p class="sub">Start famous real ODIs from where they really stood - the real XIs, the real target, the real pair at the crease with ten, five, two or one overs left - and see if you can change history.</p>
+    <p class="muted">This needs the real ball-by-ball data. Download <b>odis_json.zip</b> from cricsheet.org, then run <code>python3 tools/cricsheet_odis.py odis_json.zip</code> and <code>npm run build</code> (a Claude Code session can do it for you).</p></div>`;
+  const teams=[...new Set(all.flatMap(x=>[x.f.a,x.f.b]))].sort((a,b)=>teamName(a).localeCompare(teamName(b)));
+  const list=all.filter(x=>!RELIVE.team||x.f.a===RELIVE.team||x.f.b===RELIVE.team).reverse().slice(0,60),st=readStars();
+  return`<div class="card"><div class="row"><select id="rl-team"><option value="0">All teams (${plural(all.length,'match','matches')})</option>${teams.map(t=>`<option value="${t}" ${t===RELIVE.team?'selected':''}>${esc(teamName(t))}</option>`).join('')}</select>
+    <div class="seg">${[['chase','I bat (chase)'],['defend','I bowl (defend)']].map(([k,n])=>`<button data-rls="${k}" class="${RELIVE.side===k?'on':''}">${n}</button>`).join('')}</div></div></div>
+    <div class="grid g2" style="margin-top:14px">${list.map(({f,R})=>{const bat=R.inn[1][0],bowl=R.inn[0][0];
+      return`<div class="card stack"><div class="spread"><b>${badge(bowl)} ${R.inn[0][1]}/${R.inn[0][2]} · ${badge(bat)} chase</b><span class="pill">${FAM_NAME[R.fam]||''}</span></div>
+      <div class="sub">${esc(R.ev||seriesOf(f).title)} · ${esc(f.venue)} · ${fmtDate(f.date)}</div><div class="muted" style="font-size:12px">In reality: ${esc(realText(R))}</div>
+      <div class="row">${reliveMoments(R).map(p=>{const d=reliveDef(f,R,p,RELIVE.side),s=(st[d.id]||{}).stars||0;
+        return`<button class="btn sm ${p===R.pos[0]?'pri':''}" data-rl="${f.cid}:${p[0]}" title="${esc(d.desc)}">${p===R.pos[0]?'Chase '+d.target:`${p[1]} off ${p[0]}, ${10-p[2]} wkts`}${s?' '+'★'.repeat(s):''}</button>`;}).join('')}</div></div>`;}).join('')}</div>`;
+}
 const starsHTML=n=>`<span class="gold" style="letter-spacing:2px">${'★'.repeat(n)}<span class="muted">${'★'.repeat(3-n)}</span></span>`;
 function challengeCard(c,st){
   const s=(st[c.id]||{}).stars||0;
@@ -4630,6 +4689,7 @@ RENDER.play=(el)=>{
   const st=readStars(),A=readAch();
   let body='';
   if(PLAY_TAB==='list')body=`<div class="grid g3">${CHALLENGES.map(c=>challengeCard(c,st)).join('')}</div>`;
+  else if(PLAY_TAB==='relive')body=reliveHTML();
   else if(PLAY_TAB==='build'){
     const opts=sel=>ALL_TEAMS.filter(t=>!COMPOSITE.has(t)).map(t=>`<option value="${t}" ${t===sel?'selected':''}>${esc(teamName(t))}</option>`).join('');
     body=`<div class="card stack" style="max-width:720px"><h3>Build a scenario</h3>
@@ -4649,11 +4709,14 @@ RENDER.play=(el)=>{
       <div class="bar" style="margin:8px 0 14px"><i style="width:${100*got/ACHIEVEMENTS.length}%"></i></div>
       <div class="grid g4">${ACHIEVEMENTS.map(a=>`<div class="card" style="padding:10px;${A[a[0]]?'':'opacity:.4;filter:grayscale(1)'}"><div style="font-size:26px">${a[1]}</div><b>${esc(a[2])}</b><div class="sub" style="font-size:12px">${esc(a[3])}</div>${A[a[0]]?`<div class="muted" style="font-size:11px">${fmtDate(A[a[0]])}</div>`:''}</div>`).join('')}</div></div>`;
   }
-  el.innerHTML=sandboxBanner()+`<div class="card"><div class="seg">${[['list','Challenges'],['build','Build your own'],['ach','Achievements']].map(([k,n])=>`<button data-pt="${k}" class="${PLAY_TAB===k?'on':''}">${n}</button>`).join('')}</div></div>
+  el.innerHTML=sandboxBanner()+`<div class="card"><div class="seg">${[['list','Challenges'],['relive','Relive history'],['build','Build your own'],['ach','Achievements']].map(([k,n])=>`<button data-pt="${k}" class="${PLAY_TAB===k?'on':''}">${n}</button>`).join('')}</div></div>
     <div style="margin-top:14px">${body}</div>`;
   $$('[data-pt]').forEach(b=>b.onclick=()=>{PLAY_TAB=b.dataset.pt;rerender();});
   $$('[data-chal]').forEach(b=>b.onclick=()=>startChallenge(challengeById(b.dataset.chal)));
   $$('[data-code]').forEach(b=>b.onclick=()=>showCode(challengeById(b.dataset.code)));
+  $('#rl-team')&&($('#rl-team').onchange=e=>{RELIVE.team=+e.target.value;rerender();});
+  $$('[data-rls]').forEach(b=>b.onclick=()=>{RELIVE.side=b.dataset.rls;rerender();});
+  $$('[data-rl]').forEach(b=>b.onclick=()=>{const[cid,bl]=b.dataset.rl.split(':'),f=FIX.find(x=>x.cid===cid),R=WORLD.real[cid],p=R.pos.find(x=>x[0]===+bl);startChallenge(reliveDef(f,R,p,RELIVE.side));});
   if(PLAY_TAB==='build'){
     let fmt='ODI';$$('[data-bf]').forEach(b=>b.onclick=()=>{fmt=b.dataset.bf;$$('[data-bf]').forEach(x=>x.classList.toggle('on',x===b));});
     const read=()=>{const kind=document.querySelector('input[name=cb-you]:checked').value,o=clamp(+$('#cb-o').value||1,1,fmt==='T20'?20:50);
@@ -4992,6 +5055,9 @@ A buzzing dressing room (75+) lifts a top-order batter a form step, an unhappy o
 Click a cell to rest him for that match - the squad fills the gap and he comes back fresher; "Rest anyone at 60+" does it for you (never in a knockout).</p>
 <p><b>Field &amp; shots:</b> the match screen's Field &amp; shots tab shows the field set for the next ball (your Field setting when you captain), a wagon wheel for each batter and a pitch map for each bowler.
 They're drawn from each ball but never change it - the card and the roll decide what happens; the picture (and the commentary) decide where. The last ${LOG_KEEP} matches keep them on their scorecards.</p>
+<p><b>Relive history:</b> with Cricsheet's ODI data (tools/cricsheet_odis.py), Challenges → Relive history lists the famous real chases - close finishes, ties, 300+ chases and knockouts.
+Start one from the first ball of the chase or from ten, five, two or one overs left, with the real XIs, the real target and the real pair at the crease, batting or bowling - then see what really happened.
+tools/cricsheet_batting.py goes further: batting colours from real averages, year by year (BLUE from 30, GREEN from 15), with no lift for batting position.</p>
 <p><b>Knockouts</b> are re-seeded from your own tables once a tournament's league stage is finished (Settings to follow history instead).</p>`;
 function openGuide(){openModal(GUIDE);}
 
@@ -5099,7 +5165,7 @@ uiDoneHook=(M,E,ms,pos,aw,cn)=>{
       <div class="row" style="margin-top:14px"><button class="btn pri" id="r-next">Next fixture</button><button class="btn" id="r-card">Full scorecard</button><button class="btn" id="r-img">Save as image</button></div>`);
     $('#r-img').onclick=()=>downloadCanvas(scorecardImage(E),`first-xi-${E.date}-${teamShort(E.teams[0])}-v-${teamShort(E.teams[1])}.png`);
     if(S.sandbox&&S.sandbox.res&&M.challenge){const R=S.sandbox.res;
-      $('#modal-box').insertAdjacentHTML('afterbegin',`<div class="banner" style="margin:18px 0 10px"><div class="spread"><b>${R.ok?'Challenge complete!':'Challenge failed'}</b>${starsHTML(R.stars)}</div><div class="sub">${esc(R.text)}</div>
+      $('#modal-box').insertAdjacentHTML('afterbegin',`<div class="banner" style="margin:18px 0 10px"><div class="spread"><b>${R.ok?'Challenge complete!':'Challenge failed'}</b>${starsHTML(R.stars)}</div><div class="sub">${esc(R.text)}</div>${S.sandbox.def.real?`<div class="sub">In reality: ${esc(reliveReal(S.sandbox.def))}</div>`:''}
         <div class="row" style="margin-top:8px"><button class="btn pri sm" id="ch-again">Try again</button><button class="btn sm" id="ch-back">Back to your career</button></div></div>`);
       $('#ch-again').onclick=()=>{const d=S.sandbox.def;closeModal();leaveSandbox();startChallenge(d);};
       $('#ch-back').onclick=()=>{closeModal();leaveSandbox();go('play');};}

@@ -182,7 +182,7 @@ function batColour(M,pid,pos,bowlTeam){
   const a=pAttr(pid,M.date),c=a.bat||pc;
   const vsFull=!!TEAMS.get(+bowlTeam)?.full;
   const own=c.length===2?c[vsFull?1:0]:c;
-  let col=!a.bat||a.batSrc==='h'||a.batSrc==='e'||(c.length===2&&vsFull)?own:COL_RANK[pc]<COL_RANK[own]?'BGR'[COL_RANK[own]-1]:own;
+  let col=!a.bat||a.batSrc==='h'||a.batSrc==='e'||a.batSrc==='c'||(c.length===2&&vsFull)?own:COL_RANK[pc]<COL_RANK[own]?'BGR'[COL_RANK[own]-1]:own;
   const f=M.mods&&M.mods.bat[pid];   // form: hot +1 (GREEN plays BLUE), cold -1 (BLUE plays GREEN)
   if(f)col='BGR'[clamp(COL_RANK[col]-f,0,2)];
   return col;

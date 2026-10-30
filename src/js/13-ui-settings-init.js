@@ -29,6 +29,9 @@ A buzzing dressing room (75+) lifts a top-order batter a form step, an unhappy o
 Click a cell to rest him for that match - the squad fills the gap and he comes back fresher; "Rest anyone at 60+" does it for you (never in a knockout).</p>
 <p><b>Field &amp; shots:</b> the match screen's Field &amp; shots tab shows the field set for the next ball (your Field setting when you captain), a wagon wheel for each batter and a pitch map for each bowler.
 They're drawn from each ball but never change it - the card and the roll decide what happens; the picture (and the commentary) decide where. The last ${LOG_KEEP} matches keep them on their scorecards.</p>
+<p><b>Relive history:</b> with Cricsheet's ODI data (tools/cricsheet_odis.py), Challenges → Relive history lists the famous real chases - close finishes, ties, 300+ chases and knockouts.
+Start one from the first ball of the chase or from ten, five, two or one overs left, with the real XIs, the real target and the real pair at the crease, batting or bowling - then see what really happened.
+tools/cricsheet_batting.py goes further: batting colours from real averages, year by year (BLUE from 30, GREEN from 15), with no lift for batting position.</p>
 <p><b>Knockouts</b> are re-seeded from your own tables once a tournament's league stage is finished (Settings to follow history instead).</p>`;
 function openGuide(){openModal(GUIDE);}
 
@@ -136,7 +139,7 @@ uiDoneHook=(M,E,ms,pos,aw,cn)=>{
       <div class="row" style="margin-top:14px"><button class="btn pri" id="r-next">Next fixture</button><button class="btn" id="r-card">Full scorecard</button><button class="btn" id="r-img">Save as image</button></div>`);
     $('#r-img').onclick=()=>downloadCanvas(scorecardImage(E),`first-xi-${E.date}-${teamShort(E.teams[0])}-v-${teamShort(E.teams[1])}.png`);
     if(S.sandbox&&S.sandbox.res&&M.challenge){const R=S.sandbox.res;
-      $('#modal-box').insertAdjacentHTML('afterbegin',`<div class="banner" style="margin:18px 0 10px"><div class="spread"><b>${R.ok?'Challenge complete!':'Challenge failed'}</b>${starsHTML(R.stars)}</div><div class="sub">${esc(R.text)}</div>
+      $('#modal-box').insertAdjacentHTML('afterbegin',`<div class="banner" style="margin:18px 0 10px"><div class="spread"><b>${R.ok?'Challenge complete!':'Challenge failed'}</b>${starsHTML(R.stars)}</div><div class="sub">${esc(R.text)}</div>${S.sandbox.def.real?`<div class="sub">In reality: ${esc(reliveReal(S.sandbox.def))}</div>`:''}
         <div class="row" style="margin-top:8px"><button class="btn pri sm" id="ch-again">Try again</button><button class="btn sm" id="ch-back">Back to your career</button></div></div>`);
       $('#ch-again').onclick=()=>{const d=S.sandbox.def;closeModal();leaveSandbox();startChallenge(d);};
       $('#ch-back').onclick=()=>{closeModal();leaveSandbox();go('play');};}

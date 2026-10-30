@@ -20,6 +20,13 @@ Every ODI from June 2002 to January 2026 - the real fixtures, the real XIs and t
 - Rankings (teams and players), players of the series, and the year's awards with a season review.
 - Captain your team: bowling changes, who goes in next, attack or defend.
 - Career stats by format, records (batting, bowling, fielding, captaincy, partnerships, team), milestones logged live, Man of the Match, "what really happened" bowling figures.
+- DRS and umpires: umpires get lbws and edges wrong; review them (era rules), with an umpire's-call roll.
+- Press conferences and back-page headlines; dressing-room morale and media pressure as coach.
+- Season planner: the year ahead, projected workloads, rest and rotation.
+- Field view, wagon wheels and pitch maps (cosmetic - the dice still decide everything).
+- Challenges and achievements; relive famous real chases from their real positions (with Cricsheet data).
+- The future after 2026 (generated players and fixtures), a Hall of Fame and all-time XIs, a franchise T20 league with an auction.
+- Commentator voice, three broadcast looks and a choice of fonts.
 
 ## Developing
 ```bash
@@ -27,6 +34,6 @@ npm install
 npm run build      # dist/first-xi.html
 npm test           # checks + end-to-end tests + engine stats
 ```
-See `CLAUDE.md` for the architecture and the rules of the game. Data: `python3 tools/extract.py FirstXI.xlsm data/world.json` (needs `openpyxl`); real Tests: `python3 tools/cricsheet_tests.py tests_json.zip`; real ODI results: `python3 tools/cricsheet_odis.py odis_json.zip` (both zips from cricsheet.org/downloads, JSON format).
+See `CLAUDE.md` for the architecture and the rules of the game. Data: `python3 tools/extract.py FirstXI.xlsm data/world.json` (needs `openpyxl`); real Tests: `python3 tools/cricsheet_tests.py tests_json.zip`; real ODI results and famous chases to relive: `python3 tools/cricsheet_odis.py odis_json.zip`; batting colours from real averages: `python3 tools/cricsheet_batting.py odis_json.zip tests_json.zip` (run it after the other two; zips from cricsheet.org/downloads, JSON format), then `npm run build`.
 
 Match data © [Cricsheet](https://cricsheet.org), used under ODC-BY. Fonts (Barlow, Barlow Condensed, Oswald, Saira Condensed, Montserrat) are embedded under the SIL Open Font License 1.1 - licences in `fonts/`.

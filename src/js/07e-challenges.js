@@ -69,15 +69,18 @@ function fakeInnings(M,I,runs,wkts,balls,closed,why){
 }
 function buildChallengeMatch(def){
   const fmt=def.fmt,date=def.date,home=def.bowl;
-  const v=(HOME_VENUES.get(home)||[{venue:teamName(home)+' Oval',city:''}])[0];
-  const M=newMatch({fmt,a:def.bowl,b:def.bat,date,venue:v.venue,city:v.city,series:'Challenge: '+def.title,stage:def.stage||'',
-    xiA:nearestXI(def.bowl,date),xiB:nearestXI(def.bat,date),home});
+  const rf=def.cid&&FIX.find(f=>f.cid===def.cid),v=rf?{venue:rf.venue,city:rf.city}:(HOME_VENUES.get(home)||[{venue:teamName(home)+' Oval',city:''}])[0];
+  const xi=t=>(def.cid&&fixtureXI(def.cid,t))||nearestXI(t,date);
+  const M=newMatch({fmt,a:def.bowl,b:def.bat,date,venue:v.venue,city:v.city,series:(def.real?'Relive: ':'Challenge: ')+def.title,stage:def.stage||'',
+    xiA:xi(def.bowl),xiB:xi(def.bat),home:rf?(VENUE_HOME.get(rf.venue)||home):home,maxOv:def.maxOv});
   M.noWeather=true;M.challenge=def;M.key='CH.'+def.id;M.mods={bat:{},bowl:{}};
   M.toss={w:def.bowl,choice:'bat',bat:def.bowl};M.state='live';
   if(fmt!=='TEST'){
-    const I1=startInnings(M,def.bowl);fakeInnings(M,I1,def.target-1,rndInt(5,9),M.maxOv*6,true,'overs');
+    const I1=startInnings(M,def.bowl),f1=def.first;fakeInnings(M,I1,def.target-1,f1?f1[0]:rndInt(5,9),f1?f1[1]:M.maxOv*6,true,f1&&f1[0]>=10?'all out':'overs');
     const I2=startInnings(M,def.bat);I2.target=def.target;
+    const real=def.crease&&reliveOrder(I2,def.crease,def.wkts);
     fakeInnings(M,I2,def.target-def.need,def.wkts,M.maxOv*6-def.balls,false);
+    if(real)reliveCrease(I2,def.crease);
   }else{
     // three innings done, the fourth under way; the clock set so def.overs remain
     const A=def.bowl,B=def.bat,t=def.target;
