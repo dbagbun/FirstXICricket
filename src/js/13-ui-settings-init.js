@@ -22,6 +22,9 @@ who goes in next, and whether to attack or defend - attack moves the over one ca
 The side the call went against may review (Tests 2 an innings, ODIs and T20s 1; one more each from mid-2020; DRS arrives in Tests in 2009, ODIs in 2011, T20s in 2017).
 An lbw review rolls 1-100 for <b>umpire's call</b>: 25 or under and the on-field decision stands. A failed review is lost; umpire's call keeps it from October 2017.
 As captain you're asked when you play ball by ball or over by over. Settings → Umpires &amp; DRS can turn reviews on for every era, or give you perfect umpires.</p>
+<p><b>Press and media:</b> the papers write up every match of the team you follow (the Back pages). As a coach you face the press after every match and before every series:
+talk up the board's target and the stakes rise both ways; praise or question a player and he may play a form step up (or down) next time; what you say moves the dressing room and the media pressure.
+A buzzing dressing room (75+) lifts a top-order batter a form step, an unhappy one (25 or under) drops one; with pressure at 70+ every defeat costs extra board confidence.</p>
 <p><b>Knockouts</b> are re-seeded from your own tables once a tournament's league stage is finished (Settings to follow history instead).</p>`;
 function openGuide(){openModal(GUIDE);}
 

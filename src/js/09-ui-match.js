@@ -262,7 +262,8 @@ function doneBlock(M){
   const E=S.matches.find(x=>x.id===M.id);
   const n=nextFixture();
   return`<div class="card hi"><div class="spread"><div><div class="result-big">${esc(M.result.text)}</div>
-    ${E&&E.motm?`<div style="margin-top:4px">Man of the Match: <b>${plink(E.motm)}</b></div>`:''}${M.friendly?'<div class="muted">Friendly - not part of your career.</div>':''}</div>
+    ${E&&E.motm?`<div style="margin-top:4px">Man of the Match: <b>${plink(E.motm)}</b></div>`:''}${headOf(M.id)?`<div style="margin-top:10px">${headHTML(headOf(M.id),true)}</div>`:''}
+    ${S.coach&&S.coach.pc&&S.coach.pc.mid===M.id&&S.coach.pc.qs.some(q=>q.a==null)?'<div style="margin-top:6px"><button class="btn sm" data-go="coach">🎙️ Face the press</button></div>':''}${M.friendly?'<div class="muted">Friendly - not part of your career.</div>':''}</div>
     <div class="row">${n?`<button class="btn pri" id="d-next">Next: ${esc(teamShort(n.a))} v ${esc(teamShort(n.b))}</button>`:''}<button class="btn" data-go="home">Dashboard</button></div></div></div>`;
 }
 // Steps: ball / over / 5 overs / innings / match. Stops early for a manual roll or a follow-on decision.

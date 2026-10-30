@@ -65,6 +65,7 @@ function matchMods(M){
     if(f.bowl)mods.bowl[pid]=-f.bowl;
   });
   if(my&&M.teams.includes(my))for(const pid of M.xi[my].bat)if(fatigueOf(pid,M.date)>=60)mods.bowl[pid]=(mods.bowl[pid]||0)+1;
+  if(S.settings.form!=='off')pressMods(M,mods);
   return mods;
 }
 // ---------- squads (your side) ----------
@@ -126,6 +127,7 @@ function ensureObjectives(fx){
   }
   C.objs.push({...o,sid:fx.sid,title:fx.title,status:'open',created:fx.date});
   coachNews(`The board's target for ${fx.title}: ${o.text}.`);
+  pressPre(fx,o);
 }
 function seriesRecord(sid,team){
   const M=S.matches.filter(E=>E.sid===sid&&E.teams.includes(team));
@@ -177,7 +179,7 @@ function leaveJob(why){
   const r=S.matches.filter(E=>E.date>=C.start&&E.teams.includes(C.team));
   C.history.push({team:C.team,from:C.start,to:careerDate(),p:r.length,w:r.filter(E=>E.result.winner===C.team).length,l:r.filter(E=>E.result.winner&&E.result.winner!==C.team).length,why});
   for(const o of C.objs)if(o.status==='open')o.status='void';
-  C.team=0;S.settings.myTeam=0;
+  C.team=0;S.settings.myTeam=0;C.pc=null;C.boost={};C.morale=55;C.heat=30;
 }
 function takeJob(team){
   achieve('coach1');
@@ -197,6 +199,7 @@ function coachAfter(E){
     if(E.result.winner===C.team)C.conf=clamp(C.conf+(gap<-15?4:2),0,100);
     else if(E.result.winner)C.conf=clamp(C.conf-(gap>15?4:2),0,100);
     C.conf=Math.round((C.conf+(55-C.conf)*.03)*10)/10;   // memories fade: drift back towards 55
+    moodAfter(E,E.result.winner===C.team,!!E.result.winner&&E.result.winner!==C.team,gap);C.boost={};pressConf(E);
     for(const i of rollInjuries(E,C.team))coachNews(`${pName(i.pid)} is injured (${i.what}) - out for about ${plural(Math.round(i.days/7)||1,'week')}.`,'bad');
   }
   judgeObjectives();

@@ -62,7 +62,7 @@ main{max-width:1180px;margin:0 auto;padding:16px}
 
 /* building blocks */
 .grid{display:grid;gap:14px}
-.g2{grid-template-columns:repeat(2,minmax(0,1fr))}.g3{grid-template-columns:repeat(3,minmax(0,1fr))}.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}.home-grid.g3{grid-template-columns:minmax(0,2fr) minmax(0,1fr)}.g3{grid-template-columns:repeat(3,minmax(0,1fr))}.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px}
 .card.hi{border-color:var(--cyan);box-shadow:0 0 0 1px rgba(6,182,212,.25) inset}
 .card h3:first-child{margin-top:0}
@@ -171,11 +171,15 @@ tbody tr:hover td{background:rgba(30,41,59,.6)}
 .ticker .bi:last-child{animation:pop .3s ease-out}
 @keyframes pop{from{transform:scale(.4);opacity:.2}}
 @media (max-width:900px){.g4{grid-template-columns:repeat(2,minmax(0,1fr))}.g3{grid-template-columns:1fr 1fr}}
+.paper{background:#f4efe3;color:#1b1b1b;border-radius:6px;padding:8px 12px;border-left:5px solid #1b1b1b}
+.paper-n{font:600 10px/1.2 var(--font);text-transform:uppercase;letter-spacing:.12em;color:#6b5f48}
+.paper-h{font:900 17px/1.1 Georgia,"Times New Roman",serif;margin:3px 0;letter-spacing:.01em}.paper.big .paper-h{font-size:23px}
+.paper-s{font-size:12px;color:#3d3628}
 @media (max-width:600px){
   main{padding:12px}
   #top{flex-wrap:wrap;gap:6px;padding:8px 12px}
   #nav{order:3;flex-basis:100%}
-  .g2,.g3,.g4{grid-template-columns:1fr}
+  .g2,.g3,.g4,.home-grid.g3{grid-template-columns:1fr}
   .scorebar{grid-template-columns:1fr 1fr}
   .sb-mid{grid-column:1/-1;order:3}
   .sb-score{font-size:22px}
@@ -1818,7 +1822,7 @@ function onMatchDone(M){
   applyStats(E);
   applyRankings(E);
   updateForm(E);
-  const cn=coachAfter(E);
+  const cn=coachAfter(E);pressAfter(E);
   const ms=checkMilestones(E),pos=playerOfSeries(E.sid),aw=yearEnd(E);
   if(S.live&&S.live.id===M.id)S.live=null;
   achCheck(E,M);
@@ -2157,6 +2161,7 @@ function matchMods(M){
     if(f.bowl)mods.bowl[pid]=-f.bowl;
   });
   if(my&&M.teams.includes(my))for(const pid of M.xi[my].bat)if(fatigueOf(pid,M.date)>=60)mods.bowl[pid]=(mods.bowl[pid]||0)+1;
+  if(S.settings.form!=='off')pressMods(M,mods);
   return mods;
 }
 // ---------- squads (your side) ----------
@@ -2218,6 +2223,7 @@ function ensureObjectives(fx){
   }
   C.objs.push({...o,sid:fx.sid,title:fx.title,status:'open',created:fx.date});
   coachNews(`The board's target for ${fx.title}: ${o.text}.`);
+  pressPre(fx,o);
 }
 function seriesRecord(sid,team){
   const M=S.matches.filter(E=>E.sid===sid&&E.teams.includes(team));
@@ -2269,7 +2275,7 @@ function leaveJob(why){
   const r=S.matches.filter(E=>E.date>=C.start&&E.teams.includes(C.team));
   C.history.push({team:C.team,from:C.start,to:careerDate(),p:r.length,w:r.filter(E=>E.result.winner===C.team).length,l:r.filter(E=>E.result.winner&&E.result.winner!==C.team).length,why});
   for(const o of C.objs)if(o.status==='open')o.status='void';
-  C.team=0;S.settings.myTeam=0;
+  C.team=0;S.settings.myTeam=0;C.pc=null;C.boost={};C.morale=55;C.heat=30;
 }
 function takeJob(team){
   achieve('coach1');
@@ -2289,6 +2295,7 @@ function coachAfter(E){
     if(E.result.winner===C.team)C.conf=clamp(C.conf+(gap<-15?4:2),0,100);
     else if(E.result.winner)C.conf=clamp(C.conf-(gap>15?4:2),0,100);
     C.conf=Math.round((C.conf+(55-C.conf)*.03)*10)/10;   // memories fade: drift back towards 55
+    moodAfter(E,E.result.winner===C.team,!!E.result.winner&&E.result.winner!==C.team,gap);C.boost={};pressConf(E);
     for(const i of rollInjuries(E,C.team))coachNews(`${pName(i.pid)} is injured (${i.what}) - out for about ${plural(Math.round(i.days/7)||1,'week')}.`,'bad');
   }
   judgeObjectives();
@@ -2540,6 +2547,7 @@ const ACHIEVEMENTS=[
   ['assocWC','😲','Giant-killers','An associate nation wins a World Cup final.'],['no1','🥇','Top of the world','The team you follow goes No.1 in the ODI rankings.'],
   ['awards','🎤','Awards night','Reach an end-of-year awards ceremony.'],
   ['league','💼','Owner','Found a franchise league.'],['leagueWin','🏆','Franchise champions','Win the Franchise League with your franchise.'],
+  ['press','🎙️','Face the press','Answer a press conference as coach.'],
   ['coach1','📋','The job','Take a coaching job.'],['target10','🎯','Delivering','Meet 10 board targets.'],['sacked','📦','Clear your desk','Get sacked.'],
   ['nations3','✈️','Journeyman','Coach three different nations.'],['coachWC','🏆','World champion coach','Win a World Cup final as coach.'],
   ['challenge1','🧩','Up for it','Complete a challenge.'],['challenge3','⭐','Three stars','Three-star a challenge.'],
@@ -2963,6 +2971,124 @@ function ensureLeague(){
   return false;
 }
 
+// ═══ PRESS & MEDIA — back-page headlines, press conferences, dressing-room morale, media pressure ═══
+// Headlines (S.press.heads) follow the team you follow or coach. As coach, every match of yours opens a press
+// conference (S.coach.pc): what you say moves board confidence (c), dressing-room morale (m), media pressure (h),
+// can fire up or rattle a named player for the next match (p, up/dn chances -> S.coach.boost, one form step),
+// or raise or lower the stakes of the series target (ob: its weight). Unanswered questions lapse at your next match.
+// Morale 75+ lifts one top-order batter a form step, 25 or under drops one; pressure 70+ makes defeats cost more.
+const PAPERS=['The Daily Wicket','Cover Point','The Long Room Gazette','Third Man','The Sightscreen','Silly Point Sunday'];
+const PRESS_KEEP=40;
+const hstr=s=>{let h=7;for(const c of String(s))h=(h*31+c.charCodeAt(0))>>>0;return h;};
+function press(){if(!S.press)S.press={heads:[]};return S.press;}
+const HEADLINES={
+  final:['{T} ARE CHAMPIONS','GLORY! {T} LIFT THE TROPHY','{T} CONQUER ALL'],finalL:['FINAL HEARTBREAK FOR {T}','{T} FALL AT THE LAST'],
+  upset:['SHOCK! {T} STUN {O}','GIANT-KILLERS: {T} TOPPLE {O}'],upsetL:['HUMILIATION FOR {T}','{T} RED-FACED AFTER {O} DEFEAT'],
+  ton:['{P} TON SINKS {O}','MAGNIFICENT {P} POWERS {T} HOME','{P} CENTURY THE DIFFERENCE'],five:['{P} FIVE-FOR SKITTLES {O}','{P} RUNS THROUGH {O}'],
+  close:['{T} HOLD THEIR NERVE','NAIL-BITER! {T} EDGE IT',"THRILLER GOES {T}'S WAY"],win:['{T} CRUISE PAST {O}','{P} THE HERO AS {T} SEE OFF {O}','JOB DONE FOR {T}'],
+  collapse:['{T} CRUMBLE FOR {N}','SHAMBLES! {T} ROLLED FOR {N}'],closeL:['HEARTBREAK FOR {T}','SO NEAR FOR {T}'],
+  nemesis:['{P} DESTROYS {T}','{T} HAVE NO ANSWER TO {P}'],loss:['{T} BEATEN BY {O}','BACK TO THE DRAWING BOARD FOR {T}','{O} TOO GOOD FOR {T}'],
+  pressure:['PRESSURE MOUNTS ON {T} COACH','{T} COACH IN THE FIRING LINE'],
+  tie:['TIED! UNBELIEVABLE SCENES','HONOURS EVEN IN A CLASSIC'],draw:['STALEMATE AT {V}','{T} BATTLE TO A DRAW'],nr:['RAIN HAS THE FINAL SAY','WASHED OUT'],
+};
+const rankGap=(E,T,O)=>INTL.includes(E.fmt)?rankPtsOf(T,E.fmt==='T20'?'ODI':E.fmt)-rankPtsOf(O,E.fmt==='T20'?'ODI':E.fmt):0;
+function headlineFor(E,T){
+  const O=otherOf(E,T),R=E.result,won=R.winner===T,lost=!!R.winner&&!won,L=Object.values(playerMatchLines(E));
+  const val=l=>l.r+l.w*25,best=arr=>arr.slice().sort((a,b)=>val(b)-val(a))[0];
+  const mine=L.filter(l=>l.team===T),theirs=L.filter(l=>l.team===O);
+  const gap=rankGap(E,T,O),final=/final/i.test(E.stage||'')&&!/semi|quarter/i.test(E.stage||'');
+  const close=(R.type==='runs'&&R.margin<=(E.fmt==='TEST'?25:10))||(R.type==='wkts'&&R.margin<=2)||R.type==='so';
+  const myInns=E.inns.filter(I=>I.bat===T),low=myInns.find(I=>I.wkts===10&&I.runs<(E.fmt==='TEST'?150:E.fmt==='ODI'?140:100));
+  const ton=mine.filter(l=>l.c100).sort((a,b)=>b.hs-a.hs)[0],five=mine.filter(l=>l.w5).sort((a,b)=>b.w-a.w)[0];
+  const killer=theirs.filter(l=>l.c100||l.w5)[0];
+  let k,p=0;
+  if(R.type==='nr')k='nr';else if(R.type==='tie')k='tie';else if(R.type==='draw')k='draw';
+  else if(won){k=final?'final':gap<-60?'upset':ton?'ton':five?'five':close?'close':'win';p=k==='ton'?ton.pid:k==='five'?five.pid:(best(mine)||{}).pid;}
+  else{const C=S.coach;k=final?'finalL':gap>60?'upsetL':low?'collapse':close?'closeL':killer?'nemesis':C&&C.team===T&&(C.heat||0)>=70?'pressure':'loss';p=k==='nemesis'?killer.pid:0;}
+  const list=HEADLINES[k],h=hstr(E.id+':'+T);
+  const fill=s=>s.replace('{T}',teamName(T).toUpperCase()).replace('{O}',teamName(O).toUpperCase()).replace('{P}',p?bugName(p).toUpperCase():teamShort(T))
+    .replace('{N}',low?low.runs:'').replace('{V}',String(E.city||E.venue||'').toUpperCase());
+  const stars=[best(mine),best(theirs)].filter(l=>l&&val(l)>=40).map(l=>`${pName(l.pid)} ${l.w>=3?l.w+'/'+l.br:l.r}`);
+  return{id:E.id,date:E.date,team:T,fmt:E.fmt,paper:PAPERS[h%PAPERS.length],h:fill(list[(h>>>3)%list.length]),s:[R.text,...stars].join(' · ')};
+}
+function pressTeam(){return S.coach&&S.coach.team?S.coach.team:managedTeam()||S.settings.myTeam||0;}
+// After every match (career, not the sandbox): the back page for your team.
+function pressAfter(E){
+  if(S.sandbox)return null;
+  const T=pressTeam();if(!T||!E.teams.includes(T))return null;
+  const P=press(),hd=headlineFor(E,T);P.heads.push(hd);if(P.heads.length>PRESS_KEEP)P.heads.shift();
+  return hd;
+}
+const headOf=id=>S.press&&S.press.heads.find(h=>h.id===id)||null;
+// ---------- dressing room ----------
+function moraleOf(C){if(C.morale==null)C.morale=55;if(C.heat==null)C.heat=30;return C.morale;}
+// Your team's result moves morale and pressure; then both drift back. Called from coachAfter.
+function moodAfter(E,won,lost,gap){
+  const C=S.coach;moraleOf(C);
+  if(won){C.morale+=3;C.heat-=4;}else if(lost){C.morale-=3;C.heat+=gap>15?8:5;if(C.heat>=70)C.conf=clamp(C.conf-1,0,100);}
+  C.morale=clamp(Math.round(C.morale+(55-C.morale)*.05),0,100);C.heat=clamp(Math.round(C.heat+(30-C.heat)*.05),0,100);
+}
+// The engine's view of what you said: one form step for named players, morale for one top-order batter.
+function pressMods(M,mods){
+  const C=S.coach;if(!C||!C.team||!M.teams.includes(C.team))return;
+  for(const[pid,b]of Object.entries(C.boost||{}))if(M.xi[C.team].bat.includes(+pid))mods.bat[pid]=clamp((mods.bat[pid]||0)+b,-1,1);
+  const mo=moraleOf(C);if(mo>25&&mo<75)return;
+  const top=M.xi[C.team].bat.slice(0,6).filter(p=>!mods.bat[p]);if(!top.length)return;
+  const p=top[hstr(M.date+M.id)%top.length];mods.bat[p]=mo>=75?1:-1;M.moraleP={pid:p,up:mo>=75};
+}
+// ---------- press conferences ----------
+const QOPT={
+  win:[['The players deserve every bit of the credit.',{m:4}],['We executed the plan we set out.',{c:2,m:-1}],["Pleased, but there's plenty to work on.",{m:1,h:-3}]],
+  loss:[["I back this group - we'll bounce back.",{m:4,h:2}],['Some senior players need to take a hard look at themselves.',{m:-6,c:2,h:-4}],["That's on me. I take responsibility.",{c:-1,h:-6,m:2}]],
+  even:[["We'll take it.",{m:2}],['We should have won that.',{c:1,m:-2}]],
+  job:[['Judge me at the end of the series.',{h:-5}],["I've never been more sure of anything.",{c:3,h:5}],["That's a question for the board.",{c:-2,h:3}]],
+};
+function pressQs(E,T){
+  const R=E.result,won=R.winner===T,lost=!!R.winner&&!won,C=S.coach,h=hstr(E.id),qs=[];
+  const O=teamName(otherOf(E,T));
+  if(won)qs.push({t:['A fine win today. What made the difference?',`Beating ${O} - where does that rank for you?`][h%2],o:QOPT.win});
+  else if(lost)qs.push({t:['A tough day. What went wrong?',`${O} were better today. Why?`][h%2],o:QOPT.loss});
+  else qs.push({t:'Are you happy with the result?',o:QOPT.even});
+  const L=Object.values(playerMatchLines(E)).filter(l=>l.team===T),fmt=E.fmt;
+  const star=L.filter(l=>l.c100||l.w5||l.pid===E.motm).sort((a,b)=>(b.r+b.w*25)-(a.r+a.w*25))[0];
+  const flop=E.xi[T].slice(0,5).find(p=>{const f=formOf(p,fmt).bat;return f!=null&&f<=FORM_COLD[fmt]&&(S.stats[fmt][p]||{}).m>=8;});
+  if(lost&&moraleOf(C)!=null&&C.heat>=70)qs.push({t:'Reports say the board is losing patience. Are you the right person for this job?',o:QOPT.job});
+  else if(star&&(!flop||h%2))qs.push({t:`Is ${pName(star.pid)} the best ${star.w>=star.r/20?'bowler':'batter'} in the world right now?`,
+    o:[["No question. He's world class.",{p:star.pid,up:.55,dn:.2,h:1}],["He'll be the first to say there's more to come.",{p:star.pid,up:.35,m:1}],["It's a team game.",{m:2}]]});
+  else if(flop)qs.push({t:`${pName(flop)} is struggling. Does he keep his place?`,
+    o:[['He has my full backing.',{p:flop,up:.5,dn:.1,m:2}],['He knows he needs runs.',{p:flop,up:.4,dn:.4}],["Everyone's place is under review.",{p:flop,up:.2,dn:.3,m:-3,c:1}]]});
+  return qs.map(q=>({...q,a:null}));
+}
+// Unanswered questions lapse ("no comment"): a little more pressure each.
+function pressLapse(){
+  const C=S.coach,P=C&&C.pc;if(!P)return;
+  const n=P.qs.filter(q=>q.a==null).length;
+  if(n){moraleOf(C);C.heat=clamp(C.heat+n,0,100);}
+  C.pc=null;
+}
+function pressConf(E){
+  const C=S.coach;pressLapse();
+  C.pc={date:E.date,mid:E.id,sid:E.sid,qs:pressQs(E,C.team)};
+}
+// Before a series, with the board's target: talk it up (higher stakes) or down.
+function pressPre(fx,o){
+  const C=S.coach;if(!C.pc)C.pc={date:fx.date,mid:null,sid:fx.sid,qs:[]};
+  C.pc.sid=fx.sid;
+  C.pc.qs.push({t:`${fx.title}: the board want you to ${o.text.charAt(0).toLowerCase()+o.text.slice(1)}. Can you deliver?`,pre:fx.sid,a:null,
+    o:[['Yes - and you can quote me on that.',{ob:1.35,m:3,h:4}],["It's a fair target.",{}],["We're building for the future.",{ob:.7,h:3,c:-1}]]});
+}
+function pressAnswer(qi,oi){
+  const C=S.coach,P=C&&C.pc,q=P&&P.qs[qi];if(!q||q.a!=null||!q.o[oi])return null;
+  q.a=oi;const fx=q.o[oi][1],out=[];moraleOf(C);
+  C.conf=clamp(C.conf+(fx.c||0),0,100);C.morale=clamp(C.morale+(fx.m||0),0,100);C.heat=clamp(C.heat+(fx.h||0),0,100);
+  if(fx.p){const r=rnd(),b=r<(fx.up||0)?1:r<(fx.up||0)+(fx.dn||0)?-1:0;
+    if(b){(C.boost=C.boost||{})[fx.p]=b;out.push(`${pName(fx.p)} ${b>0?'is fired up by your words.':'looks rattled.'}`);}}
+  if(fx.ob){const o=C.objs.find(x=>x.sid===q.pre&&x.status==='open');if(o){o.w=Math.round(o.w*fx.ob*100)/100;o.talk=fx.ob>1?'bold':'modest';}}
+  for(const t of out)coachNews(t,'');
+  if(typeof achieve==='function')achieve('press');
+  return out;
+}
+
 // ═══ UI SHELL — navigation, views, modal, shared widgets ═══
 const TEAM_COL={AUS:'#c9a400',IND:'#1f4fbf',ENG:'#1d3a8a',RSA:'#0f7a3e',PAK:'#0b6e2e',SL:'#173f8f',WI:'#7a1f2b',NZ:'#222',ZIM:'#b8341b',
   BAN:'#05683f',KEN:'#9c1b1b',IRE:'#169b62',NED:'#e8601c',SCO:'#1b3f94',CAN:'#c8102e',UAE:'#00732f',NAM:'#003580',USA:'#3c3b6e',NEP:'#dc143c',
@@ -3308,7 +3434,8 @@ function doneBlock(M){
   const E=S.matches.find(x=>x.id===M.id);
   const n=nextFixture();
   return`<div class="card hi"><div class="spread"><div><div class="result-big">${esc(M.result.text)}</div>
-    ${E&&E.motm?`<div style="margin-top:4px">Man of the Match: <b>${plink(E.motm)}</b></div>`:''}${M.friendly?'<div class="muted">Friendly - not part of your career.</div>':''}</div>
+    ${E&&E.motm?`<div style="margin-top:4px">Man of the Match: <b>${plink(E.motm)}</b></div>`:''}${headOf(M.id)?`<div style="margin-top:10px">${headHTML(headOf(M.id),true)}</div>`:''}
+    ${S.coach&&S.coach.pc&&S.coach.pc.mid===M.id&&S.coach.pc.qs.some(q=>q.a==null)?'<div style="margin-top:6px"><button class="btn sm" data-go="coach">🎙️ Face the press</button></div>':''}${M.friendly?'<div class="muted">Friendly - not part of your career.</div>':''}</div>
     <div class="row">${n?`<button class="btn pri" id="d-next">Next: ${esc(teamShort(n.a))} v ${esc(teamShort(n.b))}</button>`:''}<button class="btn" data-go="home">Dashboard</button></div></div></div>`;
 }
 // Steps: ball / over / 5 overs / innings / match. Stops early for a manual roll or a follow-on decision.
@@ -3473,14 +3600,14 @@ RENDER.home=(el)=>{
   const my=S.settings.myTeam,myT=my&&(S.teams.ODI[my]||S.teams.TEST[my]);
   const C=S.coach,cnx=C&&C.team?coachNext():null;
   const coachCard=C?`<div class="card hi"><div class="spread"><div>${C.team?`<span class="sub">Coach of</span> <b>${tlabel(C.team)}</b>`:'<b>Out of work</b>'}
-      ${C.team?`<div style="width:220px;margin-top:6px">${confBar(C.conf)}</div><span class="muted" style="font-size:12px">Board confidence ${Math.round(C.conf)}</span>`:`<div class="muted">${plural(C.offers.length,'offer')} waiting</div>`}</div>
+      ${C.team?`<div style="width:220px;margin-top:6px">${confBar(C.conf)}</div><span class="muted" style="font-size:12px">Board confidence ${Math.round(C.conf)}</span>${C.pc&&C.pc.qs.some(q=>q.a==null)?' <span class="pill live">press conference</span>':''}`:`<div class="muted">${plural(C.offers.length,'offer')} waiting</div>`}</div>
       <div class="row">${cnx?(nextFixture()&&nextFixture().key===cnx.key?`<button class="btn pri" data-playkey="${cnx.key}">Play ${esc(teamShort(cnx.a))} v ${esc(teamShort(cnx.b))}</button>`:`<button class="btn pri" id="h-simto">Sim to my next match (${fmtDate(cnx.date)})</button>`):''}<button class="btn" data-go="coach">Coach</button></div></div></div>`:'';
   const futureNote=S.gen&&careerDate()>LAST_REAL?`<div class="banner" style="margin-bottom:14px">🔭 <b>The future, ${careerDate().slice(0,4)}.</b> <span class="sub">The real calendar ended in ${fmtDate(LAST_REAL)}. Fixtures are now generated a year at a time; veterans age and retire and new players come through.</span></div>`:'';
-  el.innerHTML=backupBanner()+futureNote+coachCard+`<div class="grid g3" style="grid-template-columns:2fr 1fr${C?';margin-top:14px':''}">
+  el.innerHTML=backupBanner()+futureNote+coachCard+`<div class="grid g3 home-grid" style="${C?';margin-top:14px':''}">
     <div class="stack">
       ${live&&(!n||live.key!==n.key)?`<div class="card"><div class="spread"><div><span class="pill live">LIVE</span> <b>${esc(teamName(live.teams[0]))} v ${esc(teamName(live.teams[1]))}</b></div><button class="btn pri" data-go="match">Resume</button></div></div>`:''}
       ${nextCard}${tourn}
-      ${driftCard()}
+      ${driftCard()}${backPagesHTML()}
       <div class="card"><h3>Recent results</h3>${recent.length?recent.map(matchLine).join('<hr style="border:0;border-top:1px solid var(--line)">'):'<p class="muted">No matches yet. Your career starts with the '+esc(seriesOf(FIX[0]).title)+'.</p>'}</div>
     </div>
     <div class="stack">
@@ -4065,9 +4192,10 @@ RENDER.coach=(el)=>{
   const news=C?`<div class="card"><h3>News</h3>${C.news.slice(-12).reverse().map(n=>`<div style="margin-bottom:4px" class="${n.cls==='good'?'green':n.cls==='bad'?'red':''}"><span class="muted">${fmtDate(n.date)}</span> ${esc(n.text)}</div>`).join('')}</div>`:'';
   const hist=C&&C.history.length?`<div class="card"><h3>Coaching career</h3><table class="num"><tr><th>Team</th><th>From</th><th>To</th><th class="r">P</th><th class="r">W</th><th class="r">L</th><th>Left</th></tr>
     ${C.history.map(h=>`<tr><td>${tlabel(h.team)}</td><td>${fmtDate(h.from)}</td><td>${fmtDate(h.to)}</td><td class="r">${h.p}</td><td class="r">${h.w}</td><td class="r">${h.l}</td><td>${esc(h.why)}</td></tr>`).join('')}</table></div>`:'';
-  el.innerHTML=`<div class="stack">${job}${offers}${next}
+  el.innerHTML=`<div class="stack">${job}${offers}${next}${pressRoomHTML()}
     <div class="grid g2" style="align-items:start"><div class="stack">${objHTML}${injList.length?`<div class="card"><h3>Injuries</h3>${injList.map(([p,x])=>`<div>🩹 ${plink(+p)} <span class="muted">${esc(x.what)}, back ${fmtDate(x.until)}</span></div>`).join('')}</div>`:''}${hist}</div>
-    <div class="stack">${news}</div></div>${squad}</div>`;
+    <div class="stack">${backPagesHTML(4)}${news}</div></div>${squad}</div>`;
+  pressWire();
   $$('[data-take]').forEach(b=>b.onclick=()=>{takeJob(+b.dataset.take);const nx2=coachNext();if(nx2)ensureObjectives(nx2);saveGame();rerender();});
   $$('[data-decline]').forEach(b=>b.onclick=()=>{C.offers.splice(+b.dataset.decline,1);saveGame();rerender();});
   $$('[data-playkey]').forEach(b=>b.onclick=()=>startFixture(b.dataset.playkey));
@@ -4525,6 +4653,34 @@ RENDER.league=(el)=>{
   $('#lg-auction')&&($('#lg-auction').onclick=()=>{startAuction(cur+1);saveGame();rerender();});
 };
 
+// ═══ PRESS ROOM & BACK PAGES ═══
+function moodBars(C){
+  moraleOf(C);
+  const bar=(v,col)=>`<div class="bar" style="height:8px"><i style="width:${v}%;background:${col}"></i></div>`;
+  return`<div class="grid g2" style="gap:10px"><div><div class="spread"><span class="sub">Dressing room</span><b class="num">${Math.round(C.morale)}</b></div>${bar(C.morale,C.morale>=75?'var(--green)':C.morale<=25?'var(--red)':'var(--cyan)')}
+      <div class="muted" style="font-size:11px">${C.morale>=75?'Buzzing: a top-order batter plays a form step up.':C.morale<=25?'Unhappy: a top-order batter plays a form step down.':'Settled.'}</div></div>
+    <div><div class="spread"><span class="sub">Media pressure</span><b class="num">${Math.round(C.heat)}</b></div>${bar(C.heat,C.heat>=70?'var(--red)':C.heat>=45?'var(--gold)':'var(--green)')}
+      <div class="muted" style="font-size:11px">${C.heat>=70?'Intense: every defeat costs extra board confidence.':'Manageable.'}</div></div></div>`;
+}
+function pressRoomHTML(){
+  const C=S.coach;if(!C||!C.team)return'';
+  const P=C.pc,open=P&&P.qs.some(q=>q.a==null);
+  const qs=P?P.qs.map((q,i)=>`<div class="stack" style="gap:6px;margin-top:10px"><div><b>🎙️ ${esc(q.t)}</b></div>
+    ${q.a==null?`<div class="row">${q.o.map((o,j)=>`<button class="btn sm" data-pq="${i}:${j}">${esc(o[0])}</button>`).join('')}</div>`
+      :`<div class="muted">“${esc(q.o[q.a][0])}”</div>`}</div>`).join(''):'';
+  return`<div class="card ${open?'hi':''}"><div class="spread"><h3 style="margin:0">Press room</h3>${open?'<span class="pill live">waiting</span>':''}</div>
+    ${P&&P.qs.length?qs+(open?'<div class="muted" style="font-size:12px;margin-top:8px">Questions you leave unanswered lapse at your next match (a little more media pressure).</div>':''):'<p class="muted">No press conference right now - one follows every match.</p>'}
+    <div style="margin-top:12px">${moodBars(C)}</div></div>`;
+}
+function pressWire(){
+  $$('[data-pq]').forEach(b=>b.onclick=()=>{const[i,j]=b.dataset.pq.split(':').map(Number);const out=pressAnswer(i,j);(out||[]).forEach(t=>toast(esc(t),'ms'));saveGame();rerender();});
+}
+const headHTML=(h,big)=>`<div class="paper ${big?'big':''}" data-mid="${h.id}" style="cursor:pointer"><div class="paper-n">${esc(h.paper)} · ${fmtDate(h.date)}</div><div class="paper-h">${esc(h.h)}</div><div class="paper-s">${esc(h.s)}</div></div>`;
+function backPagesHTML(n=3){
+  const H=S.press?S.press.heads.slice(-n).reverse():[];
+  return H.length?`<div class="card"><h3>Back pages</h3><div class="stack" style="gap:8px">${H.map((h,i)=>headHTML(h,i===0)).join('')}</div></div>`:'';
+}
+
 // ═══ SETTINGS, SPLASH, LIVE HOOKS & INIT ═══
 const GUIDE=`<h2>How First XI works</h2>
 <p><b>Every over</b> the bowler's rating picks one of six run-rate cards - RR_3 (tight) up to RR_7 (carnage) - shifted by the match situation:
@@ -4549,6 +4705,9 @@ who goes in next, and whether to attack or defend - attack moves the over one ca
 The side the call went against may review (Tests 2 an innings, ODIs and T20s 1; one more each from mid-2020; DRS arrives in Tests in 2009, ODIs in 2011, T20s in 2017).
 An lbw review rolls 1-100 for <b>umpire's call</b>: 25 or under and the on-field decision stands. A failed review is lost; umpire's call keeps it from October 2017.
 As captain you're asked when you play ball by ball or over by over. Settings → Umpires &amp; DRS can turn reviews on for every era, or give you perfect umpires.</p>
+<p><b>Press and media:</b> the papers write up every match of the team you follow (the Back pages). As a coach you face the press after every match and before every series:
+talk up the board's target and the stakes rise both ways; praise or question a player and he may play a form step up (or down) next time; what you say moves the dressing room and the media pressure.
+A buzzing dressing room (75+) lifts a top-order batter a form step, an unhappy one (25 or under) drops one; with pressure at 70+ every defeat costs extra board confidence.</p>
 <p><b>Knockouts</b> are re-seeded from your own tables once a tournament's league stage is finished (Settings to follow history instead).</p>`;
 function openGuide(){openModal(GUIDE);}
 

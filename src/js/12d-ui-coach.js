@@ -60,9 +60,10 @@ RENDER.coach=(el)=>{
   const news=C?`<div class="card"><h3>News</h3>${C.news.slice(-12).reverse().map(n=>`<div style="margin-bottom:4px" class="${n.cls==='good'?'green':n.cls==='bad'?'red':''}"><span class="muted">${fmtDate(n.date)}</span> ${esc(n.text)}</div>`).join('')}</div>`:'';
   const hist=C&&C.history.length?`<div class="card"><h3>Coaching career</h3><table class="num"><tr><th>Team</th><th>From</th><th>To</th><th class="r">P</th><th class="r">W</th><th class="r">L</th><th>Left</th></tr>
     ${C.history.map(h=>`<tr><td>${tlabel(h.team)}</td><td>${fmtDate(h.from)}</td><td>${fmtDate(h.to)}</td><td class="r">${h.p}</td><td class="r">${h.w}</td><td class="r">${h.l}</td><td>${esc(h.why)}</td></tr>`).join('')}</table></div>`:'';
-  el.innerHTML=`<div class="stack">${job}${offers}${next}
+  el.innerHTML=`<div class="stack">${job}${offers}${next}${pressRoomHTML()}
     <div class="grid g2" style="align-items:start"><div class="stack">${objHTML}${injList.length?`<div class="card"><h3>Injuries</h3>${injList.map(([p,x])=>`<div>🩹 ${plink(+p)} <span class="muted">${esc(x.what)}, back ${fmtDate(x.until)}</span></div>`).join('')}</div>`:''}${hist}</div>
-    <div class="stack">${news}</div></div>${squad}</div>`;
+    <div class="stack">${backPagesHTML(4)}${news}</div></div>${squad}</div>`;
+  pressWire();
   $$('[data-take]').forEach(b=>b.onclick=()=>{takeJob(+b.dataset.take);const nx2=coachNext();if(nx2)ensureObjectives(nx2);saveGame();rerender();});
   $$('[data-decline]').forEach(b=>b.onclick=()=>{C.offers.splice(+b.dataset.decline,1);saveGame();rerender();});
   $$('[data-playkey]').forEach(b=>b.onclick=()=>startFixture(b.dataset.playkey));
