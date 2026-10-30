@@ -27,6 +27,8 @@ talk up the board's target and the stakes rise both ways; praise or question a p
 A buzzing dressing room (75+) lifts a top-order batter a form step, an unhappy one (25 or under) drops one; with pressure at 70+ every defeat costs extra board confidence.</p>
 <p><b>Season planner:</b> the year ahead for the side you coach (or pick squads for), and a grid of each man's projected fatigue going into the next eight matches.
 Click a cell to rest him for that match - the squad fills the gap and he comes back fresher; "Rest anyone at 60+" does it for you (never in a knockout).</p>
+<p><b>Field &amp; shots:</b> the match screen's Field &amp; shots tab shows the field set for the next ball (your Field setting when you captain), a wagon wheel for each batter and a pitch map for each bowler.
+They're drawn from each ball but never change it - the card and the roll decide what happens; the picture (and the commentary) decide where. The last ${LOG_KEEP} matches keep them on their scorecards.</p>
 <p><b>Knockouts</b> are re-seeded from your own tables once a tournament's league stage is finished (Settings to follow history instead).</p>`;
 function openGuide(){openModal(GUIDE);}
 

@@ -2,11 +2,20 @@
 // Phrases are picked by a hash of the ball (not Math.random), so seeded runs stay repeatable.
 const COMM={
   0:{P:['defended solidly','beaten outside off','left alone','driven straight to mid-off','fended away off the hip','a good length, no run'],S:['pushed back to the bowler','beaten by the turn','defended off the front foot','padded away','turned to short leg','flighted, blocked']},
-  1:['worked into the leg side for one','dabbed to third man','pushed into the covers and they scamper one','nudged off the pads','tapped and run'],
-  2:['driven through the gap, they come back for two','clipped to deep square, two','placed wide of long-on for a couple','pulled into the deep, two'],
-  3:['driven hard, three','chased down just inside the rope - three','misfield in the deep, three'],
-  4:{P:['FOUR! Crunched through the covers','FOUR! Pulled in front of square','FOUR! Off the edge, past the slips','FOUR! Driven straight past the bowler','FOUR! Cut away fiercely'],S:['FOUR! Swept fine','FOUR! Dancing down and lofting over mid-on','FOUR! Cut late past point','FOUR! Reverse-swept!']},
-  6:{P:['SIX! Pulled into the stands','SIX! Clubbed over long-on','SIX! Upper-cut over third man'],S:['SIX! Down the track and over long-off','SIX! Slog-swept into the crowd','SIX! Launched over the sightscreen']},
+  // [phrase, part of the ground] - the phrase is picked for the zone the wagon wheel draws (shotOf)
+  1:[['worked into the leg side for one','midwicket'],['dabbed to third man','third'],['pushed into the covers and they scamper one','cover'],['nudged off the pads','fine'],
+    ['tapped to mid-off and run','offdrive'],['turned to square leg for a single','square'],['cut to deep point, one','point'],['driven down to long-on, one','onside'],['pushed back past the bowler for one','straight']],
+  2:[['driven through the gap, they come back for two','cover'],['clipped to deep square, two','square'],['placed wide of long-on for a couple','onside'],['pulled into the deep, two','midwicket'],
+    ['cut hard, two to deep point','point'],['glanced fine, they run two','fine'],['driven straight, back for two','straight'],['steered to third man, two','third'],['pushed wide of mid-off, two','offdrive']],
+  3:[['driven hard, three','cover'],['chased down just inside the rope - three','midwicket'],['misfield in the deep, three',''],['cut to the sweeper, three','point'],['clipped fine, three','fine']],
+  4:{P:[['FOUR! Crunched through the covers','cover'],['FOUR! Pulled in front of square','midwicket'],['FOUR! Off the edge, past the slips','third'],['FOUR! Driven straight past the bowler','straight'],['FOUR! Cut away fiercely','point'],
+      ['FOUR! Flicked off the pads to fine leg','fine'],['FOUR! Clipped square','square'],['FOUR! Lofted over mid-on','onside'],['FOUR! Driven on the up past mid-off','offdrive']],
+    S:[['FOUR! Swept fine','fine'],['FOUR! Dancing down and lofting over mid-on','onside'],['FOUR! Cut late past point','point'],['FOUR! Reverse-swept!','point'],['FOUR! Driven through extra cover','cover'],
+      ['FOUR! Slog-swept to midwicket','midwicket'],['FOUR! Driven straight','straight'],['FOUR! Swept square','square'],['FOUR! Down the track, over mid-off','offdrive'],['FOUR! Late cut to third man','third']]},
+  6:{P:[['SIX! Pulled into the stands','midwicket'],['SIX! Clubbed over long-on','onside'],['SIX! Upper-cut over third man','third'],['SIX! Lofted over extra cover','cover'],['SIX! Straight back over the bowler','straight'],
+      ['SIX! Hooked over fine leg','fine'],['SIX! Smashed over long-off','offdrive'],['SIX! Hit over square leg','square'],['SIX! Carved over point','point']],
+    S:[['SIX! Down the track and over long-off','offdrive'],['SIX! Slog-swept into the crowd','midwicket'],['SIX! Launched over the sightscreen','straight'],['SIX! Inside-out over extra cover','cover'],['SIX! Lofted over long-on','onside'],
+      ['SIX! Swept over square leg','square'],['SIX! Reverse-swept over point','point'],['SIX! Paddled over fine leg','fine'],['SIX! Upper-cut over third man','third']]},
   wd:['wide, down the leg side','wide - too far outside off'],nb:['no-ball, overstepped','no-ball - free hit'],lb:['off the pad, leg bye','leg byes'],b:['through to the keeper, byes','byes'],
   w:{b:['BOWLED! Through the gate','BOWLED! Middle stump out of the ground'],lbw:['LBW! Trapped in front','LBW! Plumb'],ct:['CAUGHT! Taken low','CAUGHT! Straight to the fielder'],
     ctof:['CAUGHT in the deep!','CAUGHT! Holed out'],ctwk:['CAUGHT BEHIND! Thin edge','CAUGHT BEHIND! Feathered it'],st:['STUMPED! Down the track and missed it'],ro:['RUN OUT! Sent back too late','RUN OUT! Direct hit!']},
@@ -16,7 +25,10 @@ function phrase(b,style){
   const h=hashBall(b),one=l=>l[h%l.length],st=style==='S'?'S':'P';
   if(b.w){const l=COMM.w[b.how]||COMM.w.b;return one(l);}
   if(b.exType)return one(COMM[b.exType]);
-  const x=COMM[b.bat]||COMM[0];return one(Array.isArray(x)?x:x[st]);
+  const x=COMM[b.bat]||COMM[0],l=Array.isArray(x)?x:x[st];
+  if(!Array.isArray(l[0]))return one(l);
+  const z=shotOf(b,style),near=l.filter(p=>p[1]===(z&&z.zone));
+  return(near.length?near[h%near.length]:one(l))[0];
 }
 // Ball line for the live commentary: phrase, then the card, roll and column it came from.
 function commLine(b,M){

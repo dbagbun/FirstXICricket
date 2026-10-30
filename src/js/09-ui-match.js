@@ -230,7 +230,7 @@ function renderLive(el,M){
     <button class="btn" id="c-snd" aria-label="${S.settings.sound?'Sound off':'Sound on'}" title="Sound">${S.settings.sound?'🔊':'🔇'}</button>
     ${M.fmt==='TEST'&&I.no<4?`<button class="btn warn" id="c-dec">Declare</button>`:''}`}
     <span id="dice-in"></span></div>${captainPanel(M)}</div>`}
-  <div class="card"><div class="seg" style="margin-bottom:10px">${[['card','Scorecard'],['comm','Ball by ball'],['charts','Charts'],['rr','Run-rate card']].map(([k,n])=>`<button data-tab="${k}" class="${MATCH_TAB===k?'on':''}">${n}</button>`).join('')}</div>
+  <div class="card"><div class="seg" style="margin-bottom:10px">${[['card','Scorecard'],['comm','Ball by ball'],['charts','Charts'],['field','Field &amp; shots'],['rr','Run-rate card']].map(([k,n])=>`<button data-tab="${k}" class="${MATCH_TAB===k?'on':''}">${n}</button>`).join('')}</div>
     <div id="mtab"></div></div>
   </div>`;
   drawMatchTab(M);
@@ -317,6 +317,7 @@ function drawMatchTab(M){
   else if(MATCH_TAB==='comm'){
     el.innerHTML=`<div class="commentary">${commentaryHTML(M)||'<span class="muted">No balls yet.</span>'}</div>`;
   }else if(MATCH_TAB==='charts')el.innerHTML=chartsHTML(E);
+  else if(MATCH_TAB==='field'){el.innerHTML=fieldTabHTML(E,M);wireFieldTab(E,M,el);}
   else el.innerHTML=rrCardHTML(M);
 }
 function rrCardHTML(M){
@@ -395,7 +396,9 @@ function openScorecard(mid){
     <div class="muted" style="margin-bottom:10px">Toss: ${esc(teamName(E.toss[0]))}, chose to ${E.toss[1]}${E.pitch?' · '+PITCHES[E.pitch].name:''}${E.reseeded?' · re-seeded knockout':''}</div>
     <div class="row" style="margin-bottom:10px"><button class="btn sm" id="sc-hl">▶ Highlights</button><button class="btn sm" id="sc-img">Save as image</button></div>
     ${scorecardHTML(E)}<h3 style="margin-top:14px">Charts</h3>${chartsHTML(E)}
+    ${S.logs[E.id]?'<h3 style="margin-top:14px">Shots &amp; pitch maps</h3><div id="sc-field"></div>':''}
     <details style="margin-top:12px"><summary class="muted" style="cursor:pointer">Key moments</summary>${highlightsListHTML(E)}</details>`);
+  const fe=$('#sc-field');if(fe){FIELD_SEL={inn:-1,bat:0,bowl:0};fe.innerHTML=fieldTabHTML(E,null);wireFieldTab(E,null,fe);}
   $('#sc-hl').onclick=()=>{closeModal();playHighlights(E);};
   $('#sc-img').onclick=()=>downloadCanvas(scorecardImage(E),`first-xi-${E.date}-${teamShort(E.teams[0])}-v-${teamShort(E.teams[1])}.png`);
 }
