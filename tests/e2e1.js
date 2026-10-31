@@ -74,7 +74,7 @@ ok($('#view').innerHTML.includes('Knockouts'),'tournament centre shows bracket')
 const T=G(`createTestSeries({a:4,b:1,n:2,start:'2003-07-01'})`);
 ok(T.fix.length===2,'test series created');
 for(const x of T.fix)w.simFixture(w.fixtureByKey(x.key));
-const tests=G(`S.matches.filter(m=>m.fmt==='TEST')`);
+const tests=G(`S.matches.filter(m=>m.fmt==='TEST'&&m.sid==='${T.id}')`);
 ok(tests.length===2,'two Tests played');
 ok(tests.every(m=>m.inns.length>=2&&m.result.text),'tests have results: '+tests.map(m=>m.result.text).join(' | '));
 ok(tests.every(m=>m.inns.reduce((a,I)=>a+I.lb,0)<=450*6),'tests within 450 overs');

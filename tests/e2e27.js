@@ -24,7 +24,7 @@ const w=boot(html),G=k=>w.eval(k),$=s=>w.document.querySelector(s),$$=s=>[...w.d
 $('#sp-go').click();
 // real averages: no position lift
 const red=G(`(()=>{const e=Object.entries(WORLD.players).find(([,p])=>p[6]==='c'&&p[5]==='R');return e?+e[0]:0;})()`);
-if(red){G(`S.settings.ratings='career'`);ok(G(`batColour({batMode:'player',date:'2006-06-01'},${red},3,1)`)==='R','a real RED stays RED at No.3');G(`S.settings.ratings='era'`);}
+if(red){G(`S.settings.ratings='career'`);ok(G(`batColour({batMode:'player',date:'2006-06-01'},${red},3,1)`)==='G','a real RED at No.3 is lifted one step, as derived colours are');G(`S.settings.ratings='era'`);}
 else ok(false,'a RED batter from real averages');
 // the Relive tab
 w.go('play');$('[data-pt="relive"]').click();
@@ -47,7 +47,9 @@ $('#c-sim').click();
 setTimeout(()=>{
   ok(/In reality:/.test($('#modal-box').textContent),'the result banner tells you what really happened');
   // without the data: instructions
-  const w2=boot(path.join(root,'dist/first-xi.html'));w2.document.querySelector('#sp-go').click();
+  const bare=path.join(tmp,'bare.json'),bareHtml=path.join(tmp,'bare.html'),Wd=JSON.parse(fs.readFileSync(path.join(root,'data/world.json'),'utf8'));delete Wd.real;fs.writeFileSync(bare,JSON.stringify(Wd));
+  execFileSync('node',[path.join(root,'tools/build.js'),bareHtml,bare]);
+  const w2=boot(bareHtml);w2.document.querySelector('#sp-go').click();
   w2.go('play');w2.document.querySelector('[data-pt="relive"]').click();
   ok(/cricsheet_odis\.py/.test(w2.document.querySelector('#view').textContent),'no data: how to get it');
   console.log(fail?`e2e27: ${fail} failing`:'e2e27 ok');

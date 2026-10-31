@@ -21,7 +21,7 @@ ok(G(`S.rk.awards[2003]`)&&!G(`S.rk.awards[2004]`)&&G(`S.rk.awardYear`)===2003,'
 ok(!G(`S.rk.awards[2002]`)===(G(`S.matches.filter(E=>E.date.startsWith('2002')).length`)<15),'a year with too few matches gets no awards');
 const A=G(`S.rk.awards[2003]`);
 ok(A.coty&&A.odiBat&&A.odiBowl&&A.team,'2003 awards complete');
-ok(A.odiBat.v===G(`S.matches.filter(E=>E.date.startsWith('2003')).reduce((a,E)=>a+E.inns.reduce((b,I)=>b+(I.bt.find(r=>r[0]===${A.odiBat.pid})||[0,0])[1],0),0)`),'ODI batter of the year has the most runs');
+ok(A.odiBat.v===G(`S.matches.filter(E=>E.fmt==='ODI'&&E.date.startsWith('2003')).reduce((a,E)=>a+E.inns.reduce((b,I)=>b+(I.bt.find(r=>r[0]===${A.odiBat.pid})||[0,0])[1],0),0)`),'ODI batter of the year has the most runs');
 ok(!G(`S.rk.awards[2003].associate`)||!G(`TEAMS.get(S.stats.ODI[S.rk.awards[2003].associate.pid].teams[0]).full`),'associate award goes to an associate');
 const pos=G(`Object.keys(S.rk.pos).length`);
 const fin=G(`[...new Set(S.matches.map(m=>m.sid))].filter(s=>seriesDone(s)&&S.matches.filter(m=>m.sid===s).length>=2).length`);

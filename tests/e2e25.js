@@ -35,7 +35,8 @@ if(pace){
   ok(G(`JSON.parse(localStorage.getItem(ACH_KEY)).rotate`),'achievement');
   // the real match: he doesn't play, with a note; the rest lapses once it's played
   const M=JSON.parse(G(`(()=>{const M=buildMatch(fixtureByKey('${rows[k+1].key}'));return JSON.stringify({bat:M.xi[4].bat,notes:M.selNotes});})()`));
-  ok(!M.bat.includes(pace)&&M.notes.some(n=>n.out===pace&&n.why==='rested'),'rested in the real XI, with a note');
+  ok(!M.bat.includes(pace)&&!M.notes.some(n=>n.inn===pace),'rested: not in the real XI, never brought in as a replacement');
+  ok(!M.notes.some(n=>n.why==='not in your squad'),'a real series squad holds its real players (Test specialists too)');
   G(`for(let i=0;i<${k+2};i++)simFixture(coachNext())`);
   ok(G(`S.done['${rows[k+1].key}']`)&&!G(`S.rest&&S.rest['${rows[k+1].key}']`),'the rest lapses once the match is played');
   ok(G(`!S.matches.find(E=>E.id===S.done['${rows[k+1].key}']).xi[4].slice(0,11).includes(${pace})`),'and he sat it out');

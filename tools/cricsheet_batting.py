@@ -71,7 +71,11 @@ def main():
     tally = collections.Counter()
     for pid, R in rec.items():
         p = players.get(str(pid))
-        if not p or p[6] == 'h':
+        if not p:
+            continue
+        while len(p) < 8:   # players added by cricsheet_tests.py have no era table yet
+            p.append([None, 'N', 7, 0, 'd', '', 'd', []][len(p)])
+        if p[6] == 'h':
             continue
         def pick(window):
             for fmt in ('ODI', 'TEST'):

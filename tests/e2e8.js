@@ -28,7 +28,7 @@ setTimeout(()=>{
   w.closeModal();
   const same=G(`sameAsHistory(S.matches[0])`);
   ok(same===(E.result.winner===R0.r[0]),'same-as-history judged on the winner');
-  G(`for(const fx of allFixtures().slice(1,3))simFixture(fx)`);
+  G(`for(const fx of allFixtures().filter(x=>x.fmt==='ODI').slice(1,3))simFixture(fx)`);
   const D=G('timelineDrift()');
   ok(D.n===2,'no-result fixture is not counted ('+D.n+')');
   w.go('home');ok($('#view').innerHTML.includes('Your timeline v history'),'drift card on the dashboard');

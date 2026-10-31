@@ -8,7 +8,7 @@ const w=new JSDOM(html,{runScripts:'dangerously',pretendToBeVisual:true,url:'htt
 const G=k=>w.eval(k),$=s=>w.document.querySelector(s);
 $('#sp-go').click();
 G(`for(let i=0;i<150;i++)simFixture(nextFixture())`);
-const r=JSON.parse(G(`(()=>{let st=0,all=0,spin=0,wk=0;for(const E of S.matches)for(const I of E.inns)for(const b of I.bt){if(!b[5])continue;all++;if(b[5]==='st'){st++;if(pAttr(b[6],E.date).style==='S')spin++;if(b[7]===E.xi[I.bowl][11])wk++;}}return JSON.stringify({st,all,spin,wk});})()`));
+const r=JSON.parse(G(`(()=>{let st=0,all=0,spin=0,wk=0;for(const E of S.matches.filter(E=>E.fmt==='ODI'))for(const I of E.inns)for(const b of I.bt){if(!b[5])continue;all++;if(b[5]==='st'){st++;if(pAttr(b[6],E.date).style==='S')spin++;if(b[7]===E.xi[I.bowl][11])wk++;}}return JSON.stringify({st,all,spin,wk});})()`));
 ok(r.st>0,'stumpings happen in ODIs: '+r.st+' of '+r.all+' dismissals');
 ok(r.st/r.all>=.01&&r.st/r.all<=.05,'a realistic share: '+(100*r.st/r.all).toFixed(1)+'%');
 ok(r.spin===r.st,'all off spinners');
