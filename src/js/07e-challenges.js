@@ -111,7 +111,7 @@ function enterSandbox(def){
 }
 function leaveSandbox(){
   if(!S||!S.sandbox)return;
-  try{localStorage.removeItem(SANDBOX_KEY);}catch(e){}
+  storeDel(SANDBOX_KEY);
   S=CH.main||readSlot(SLOT)||null;CH.main=null;LM=null;
   if(S)loadSlot(SLOT);
 }

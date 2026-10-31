@@ -168,17 +168,17 @@ let SLOT=0;
 try{SLOT=+(localStorage.getItem('fxi_slot')||0)||0;}catch(e){}
 function setSlot(i){SLOT=i;try{localStorage.setItem('fxi_slot',String(i));}catch(e){}}
 function parseSave(raw){try{const d=JSON.parse(saveText(raw));return d&&d.v===1&&Array.isArray(d.matches)?d:null;}catch(e){return null;}}
-function readSlot(i){try{return parseSave(localStorage.getItem(SLOT_KEYS[i]));}catch(e){return null;}}
+function readSlot(i){try{const t=storeGet(SLOT_KEYS[i]);return t?parseSave(t):null;}catch(e){return null;}}
 // A slot's name, match count and last date, kept beside it so menus needn't unpack whole careers.
 const metaKey=i=>SLOT_KEYS[i]+'_meta';
 function writeMeta(i,d){try{localStorage.setItem(metaKey(i),JSON.stringify({name:d.name,n:d.matches.length,last:d.matches.length?d.matches[d.matches.length-1].date:CAREER_START,
   mode:d.me?'player':d.coach?'coach':'',team:(d.me&&d.me.team)||(d.coach&&d.coach.team)||(d.settings&&d.settings.myTeam)||0,player:d.me?(d.gen&&d.gen.players[d.me.pid]||{}).n||'':'',saved:d.savedAt||0}));}catch(e){}}
 function slotInfo(i){
-  try{const raw=localStorage.getItem(SLOT_KEYS[i]);if(!raw)return null;
+  try{if(!storeHas(SLOT_KEYS[i]))return null;
     const m=JSON.parse(localStorage.getItem(metaKey(i))||'null');if(m)return m;
-    const d=parseSave(raw);if(!d)return null;writeMeta(i,d);return JSON.parse(localStorage.getItem(metaKey(i))||'null')||{name:d.name,n:d.matches.length,last:CAREER_START};}catch(e){return null;}
+    const d=parseSave(storeGet(SLOT_KEYS[i]));if(!d)return null;writeMeta(i,d);return JSON.parse(localStorage.getItem(metaKey(i))||'null')||{name:d.name,n:d.matches.length,last:CAREER_START};}catch(e){return null;}
 }
-function clearSlot(i){try{localStorage.removeItem(SLOT_KEYS[i]);localStorage.removeItem(metaKey(i));}catch(e){}}
+function clearSlot(i){storeDel(SLOT_KEYS[i]);try{localStorage.removeItem(metaKey(i));}catch(e){}}
 // Long careers: past SAVE_SOFT characters the oldest matches lose their bulkiest detail (batter-v-bowler
 // matchups and over-by-over chart data); scorecards, stats and records are kept. The newest ARCHIVE_FULL stay whole.
 const SAVE_SOFT=2400000,ARCHIVE_FULL=1500;
@@ -192,6 +192,11 @@ function saveGame(){
   if(!S)return false;
   S.savedAt=Date.now();
   const key=S.sandbox?SANDBOX_KEY:SLOT_KEYS[SLOT];   // challenges never touch your slot
+  if(STORE.ok){   // IndexedDB: plain JSON, gzipped in the background - no size cap, so nothing is trimmed
+    if(typeof askPersist==='function')askPersist();
+    if(typeof FILE_HANDLE!=='undefined'&&FILE_HANDLE&&!S.sandbox)writeSaveFile();
+    storeWrite(key,JSON.stringify(S));if(!S.sandbox)writeMeta(SLOT,S);return true;
+  }
   let data=lzPack(JSON.stringify(S));
   if(data.length>SAVE_SOFT&&compactArchive())data=lzPack(JSON.stringify(S));
   if(data.length>SAVE_SOFT&&compactArchive(600))data=lzPack(JSON.stringify(S));

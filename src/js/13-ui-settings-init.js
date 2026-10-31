@@ -92,7 +92,7 @@ RENDER.settings=(el)=>{
       <div class="row">${d&&i!==SLOT?`<button class="btn sm" data-load="${i}">Load</button>`:''}${!d?`<button class="btn sm" data-new="${i}">New career</button>`:''}${d&&i!==SLOT?`<button class="btn sm warn" data-del="${i}">Delete</button>`:''}</div></div>`).join('')}
     <div class="row"><button class="btn" id="st-exp">Back up now (JSON)</button><label class="btn">Import<input type="file" id="st-imp" accept=".json,application/json" hidden></label>
       ${canSaveToFile()?`<button class="btn" id="st-file">${FILE_HANDLE?'Saving to '+esc(FILE_HANDLE.name):'Auto-save to a file…'}</button>`:''}</div>
-    <div class="muted" style="font-size:12px" id="st-storage">${S.backupAt?`Last backup at match ${S.backupAt}.`:'Not backed up yet.'}</div>
+    <div class="muted" style="font-size:12px" id="st-storage">${STORE.ok?'Saved in this browser\'s database (no size limit). ':'Saved in this browser\'s local storage (about 5MB). '}${S.backupAt?`Last backup at match ${S.backupAt}.`:'Not backed up yet.'}</div>
     <div class="row"><button class="btn" id="st-rebuild">Rebuild stats from scorecards</button><button class="btn warn" id="st-reset">Start this slot again</button></div></div>
   </div>
   <div class="card" style="margin-top:14px"><h3>Data</h3><p class="sub">${FIX.length.toLocaleString()} ODI fixtures from Cricsheet (${fmtDate(FIX[0].date)} - ${fmtDate(FIX[FIX.length-1].date)}), ${Object.keys(WORLD.xi).length.toLocaleString()} real XIs and bowling plans, ${Object.keys(WORLD.players).length.toLocaleString()} players. Built from ${esc(WORLD.source||'the First XI workbook')}.</p></div>`;
@@ -225,11 +225,15 @@ function applyTheme(){
 function init(){
   applyTheme();
   appInit();
-  try{localStorage.removeItem(SANDBOX_KEY);}catch(e){}   // a challenge left mid-way doesn't come back
+  storeDel(SANDBOX_KEY);   // a challenge left mid-way doesn't come back
   setTimeout(applyBroadcast,0);
   // the title screen: the last career is loaded behind it (Continue just carries on); Settings can skip it
   const first=SLOT_KEYS.findIndex((_,i)=>slotInfo(i));
   if(loadSlot(SLOT)||(first>=0&&loadSlot(first))){LM=S.live||null;applyBroadcast();if(introSkip())go('home');else showTitle();}
   else showSplash();
 }
-if(typeof window!=='undefined'&&!window.FXI_NO_INIT)init();
+// IndexedDB loads before the game starts (a moment, with a note on screen); without it, straight away from localStorage.
+if(typeof window!=='undefined'&&!window.FXI_NO_INIT){
+  if(idbSupported()){const v=document.getElementById('view');if(v)v.innerHTML='<div class="card empty" style="max-width:420px;margin:40px auto">Loading your careers…</div>';storeInit().then(init,init);}
+  else init();
+}

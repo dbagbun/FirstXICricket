@@ -1952,17 +1952,17 @@ let SLOT=0;
 try{SLOT=+(localStorage.getItem('fxi_slot')||0)||0;}catch(e){}
 function setSlot(i){SLOT=i;try{localStorage.setItem('fxi_slot',String(i));}catch(e){}}
 function parseSave(raw){try{const d=JSON.parse(saveText(raw));return d&&d.v===1&&Array.isArray(d.matches)?d:null;}catch(e){return null;}}
-function readSlot(i){try{return parseSave(localStorage.getItem(SLOT_KEYS[i]));}catch(e){return null;}}
+function readSlot(i){try{const t=storeGet(SLOT_KEYS[i]);return t?parseSave(t):null;}catch(e){return null;}}
 // A slot's name, match count and last date, kept beside it so menus needn't unpack whole careers.
 const metaKey=i=>SLOT_KEYS[i]+'_meta';
 function writeMeta(i,d){try{localStorage.setItem(metaKey(i),JSON.stringify({name:d.name,n:d.matches.length,last:d.matches.length?d.matches[d.matches.length-1].date:CAREER_START,
   mode:d.me?'player':d.coach?'coach':'',team:(d.me&&d.me.team)||(d.coach&&d.coach.team)||(d.settings&&d.settings.myTeam)||0,player:d.me?(d.gen&&d.gen.players[d.me.pid]||{}).n||'':'',saved:d.savedAt||0}));}catch(e){}}
 function slotInfo(i){
-  try{const raw=localStorage.getItem(SLOT_KEYS[i]);if(!raw)return null;
+  try{if(!storeHas(SLOT_KEYS[i]))return null;
     const m=JSON.parse(localStorage.getItem(metaKey(i))||'null');if(m)return m;
-    const d=parseSave(raw);if(!d)return null;writeMeta(i,d);return JSON.parse(localStorage.getItem(metaKey(i))||'null')||{name:d.name,n:d.matches.length,last:CAREER_START};}catch(e){return null;}
+    const d=parseSave(storeGet(SLOT_KEYS[i]));if(!d)return null;writeMeta(i,d);return JSON.parse(localStorage.getItem(metaKey(i))||'null')||{name:d.name,n:d.matches.length,last:CAREER_START};}catch(e){return null;}
 }
-function clearSlot(i){try{localStorage.removeItem(SLOT_KEYS[i]);localStorage.removeItem(metaKey(i));}catch(e){}}
+function clearSlot(i){storeDel(SLOT_KEYS[i]);try{localStorage.removeItem(metaKey(i));}catch(e){}}
 // Long careers: past SAVE_SOFT characters the oldest matches lose their bulkiest detail (batter-v-bowler
 // matchups and over-by-over chart data); scorecards, stats and records are kept. The newest ARCHIVE_FULL stay whole.
 const SAVE_SOFT=2400000,ARCHIVE_FULL=1500;
@@ -1976,6 +1976,11 @@ function saveGame(){
   if(!S)return false;
   S.savedAt=Date.now();
   const key=S.sandbox?SANDBOX_KEY:SLOT_KEYS[SLOT];   // challenges never touch your slot
+  if(STORE.ok){   // IndexedDB: plain JSON, gzipped in the background - no size cap, so nothing is trimmed
+    if(typeof askPersist==='function')askPersist();
+    if(typeof FILE_HANDLE!=='undefined'&&FILE_HANDLE&&!S.sandbox)writeSaveFile();
+    storeWrite(key,JSON.stringify(S));if(!S.sandbox)writeMeta(SLOT,S);return true;
+  }
   let data=lzPack(JSON.stringify(S));
   if(data.length>SAVE_SOFT&&compactArchive())data=lzPack(JSON.stringify(S));
   if(data.length>SAVE_SOFT&&compactArchive(600))data=lzPack(JSON.stringify(S));
@@ -2002,6 +2007,58 @@ function loadSlot(i){
 }
 function exportCareer(){return JSON.stringify(S);}
 function importCareer(text){const d=parseSave(text);if(!d)return false;S=d;saveGame();return true;}
+
+// ═══ SAVE STORAGE — IndexedDB with the browser's own gzip; localStorage as the fallback ═══
+// localStorage caps an origin at ~5MB and the old LZW packing took seconds on a long career. Where the browser has
+// IndexedDB and CompressionStream, each save is gzipped JSON in IDB ('first-xi' / 'saves'), mirrored in memory
+// (STORE.cache: key -> JSON text) so reads stay synchronous; writes go in the background, latest wins. Old
+// localStorage saves move across on the first start. Slot summaries (fxi_save_N_meta) stay in localStorage.
+const STORE={db:null,cache:new Map(),ok:false,queue:new Map(),busy:false};
+function idbSupported(){try{return typeof indexedDB!=='undefined'&&!!indexedDB&&typeof CompressionStream!=='undefined'&&typeof DecompressionStream!=='undefined';}catch(e){return false;}}
+const idbReq=r=>new Promise((res,rej)=>{r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});
+async function gz(text){return await new Response(new Blob([text]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer();}
+async function gunz(buf){return await new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'))).text();}
+const storeOS=mode=>STORE.db.transaction('saves',mode).objectStore('saves');
+async function storePut(k,text){const buf=await gz(text);await idbReq(storeOS('readwrite').put(buf,k));}
+// Open the database, load every save into memory, move old localStorage saves across. Resolves true when IDB is in use.
+async function storeInit(){
+  if(!idbSupported())return false;
+  try{
+    const open=indexedDB.open('first-xi',1);open.onupgradeneeded=()=>open.result.createObjectStore('saves');
+    STORE.db=await Promise.race([idbReq(open),new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),4000))]);
+    const keys=await idbReq(storeOS('readonly').getAllKeys());
+    for(const k of keys){const v=await idbReq(storeOS('readonly').get(k));STORE.cache.set(k,typeof v==='string'?v:await gunz(v));}
+    for(const k of[...SLOT_KEYS,SANDBOX_KEY]){
+      let raw=null;try{raw=localStorage.getItem(k);}catch(e){}
+      if(!raw)continue;
+      if(!STORE.cache.has(k)){const text=saveText(raw);STORE.cache.set(k,text);await storePut(k,text);}
+      try{localStorage.removeItem(k);}catch(e){}
+    }
+    STORE.ok=true;return true;
+  }catch(e){STORE.ok=false;STORE.cache.clear();return false;}
+}
+// A background write; while one is in flight, later saves of the same key replace the queued text.
+function storeWrite(k,text){
+  STORE.cache.set(k,text);STORE.queue.set(k,text);
+  if(STORE.busy)return;STORE.busy=true;
+  (async()=>{
+    try{while(STORE.queue.size){const[k2,t]=STORE.queue.entries().next().value;STORE.queue.delete(k2);await storePut(k2,t);}}
+    catch(e){if(typeof toast==='function')toast("Couldn't save to this browser's storage - back up your career from Settings.",'bad');}
+    finally{STORE.busy=false;}
+  })();
+}
+// The JSON text of a save (either backend), or null.
+function storeGet(k){
+  if(STORE.ok)return STORE.cache.get(k)??null;
+  try{const raw=localStorage.getItem(k);return raw?saveText(raw):null;}catch(e){return null;}
+}
+function storeHas(k){if(STORE.ok)return STORE.cache.has(k);try{return!!localStorage.getItem(k);}catch(e){return false;}}
+function storeDel(k){
+  if(STORE.ok){STORE.cache.delete(k);STORE.queue.delete(k);try{storeOS('readwrite').delete(k);}catch(e){}return;}
+  try{localStorage.removeItem(k);}catch(e){}
+}
+// Resolves when nothing is waiting to be written (tests, and before leaving the page).
+async function storeFlush(){for(let i=0;i<400&&(STORE.busy||STORE.queue.size);i++)await new Promise(r=>setTimeout(r,25));}
 
 // ═══ RECORDS — computed from career stats and the match archive (top 10 per record) ═══
 const REC_MIN={ODI:{inn:20,balls:500,wkts:30,bb:600,cap:10},TEST:{inn:15,balls:1000,wkts:30,bb:1500,cap:8},T20:{inn:12,balls:250,wkts:20,bb:300,cap:8},LEAGUE:{inn:12,balls:250,wkts:20,bb:300,cap:8}};
@@ -2610,7 +2667,7 @@ function enterSandbox(def){
 }
 function leaveSandbox(){
   if(!S||!S.sandbox)return;
-  try{localStorage.removeItem(SANDBOX_KEY);}catch(e){}
+  storeDel(SANDBOX_KEY);
   S=CH.main||readSlot(SLOT)||null;CH.main=null;LM=null;
   if(S)loadSlot(SLOT);
 }
@@ -5958,7 +6015,7 @@ RENDER.settings=(el)=>{
       <div class="row">${d&&i!==SLOT?`<button class="btn sm" data-load="${i}">Load</button>`:''}${!d?`<button class="btn sm" data-new="${i}">New career</button>`:''}${d&&i!==SLOT?`<button class="btn sm warn" data-del="${i}">Delete</button>`:''}</div></div>`).join('')}
     <div class="row"><button class="btn" id="st-exp">Back up now (JSON)</button><label class="btn">Import<input type="file" id="st-imp" accept=".json,application/json" hidden></label>
       ${canSaveToFile()?`<button class="btn" id="st-file">${FILE_HANDLE?'Saving to '+esc(FILE_HANDLE.name):'Auto-save to a file…'}</button>`:''}</div>
-    <div class="muted" style="font-size:12px" id="st-storage">${S.backupAt?`Last backup at match ${S.backupAt}.`:'Not backed up yet.'}</div>
+    <div class="muted" style="font-size:12px" id="st-storage">${STORE.ok?'Saved in this browser\'s database (no size limit). ':'Saved in this browser\'s local storage (about 5MB). '}${S.backupAt?`Last backup at match ${S.backupAt}.`:'Not backed up yet.'}</div>
     <div class="row"><button class="btn" id="st-rebuild">Rebuild stats from scorecards</button><button class="btn warn" id="st-reset">Start this slot again</button></div></div>
   </div>
   <div class="card" style="margin-top:14px"><h3>Data</h3><p class="sub">${FIX.length.toLocaleString()} ODI fixtures from Cricsheet (${fmtDate(FIX[0].date)} - ${fmtDate(FIX[FIX.length-1].date)}), ${Object.keys(WORLD.xi).length.toLocaleString()} real XIs and bowling plans, ${Object.keys(WORLD.players).length.toLocaleString()} players. Built from ${esc(WORLD.source||'the First XI workbook')}.</p></div>`;
@@ -6091,14 +6148,18 @@ function applyTheme(){
 function init(){
   applyTheme();
   appInit();
-  try{localStorage.removeItem(SANDBOX_KEY);}catch(e){}   // a challenge left mid-way doesn't come back
+  storeDel(SANDBOX_KEY);   // a challenge left mid-way doesn't come back
   setTimeout(applyBroadcast,0);
   // the title screen: the last career is loaded behind it (Continue just carries on); Settings can skip it
   const first=SLOT_KEYS.findIndex((_,i)=>slotInfo(i));
   if(loadSlot(SLOT)||(first>=0&&loadSlot(first))){LM=S.live||null;applyBroadcast();if(introSkip())go('home');else showTitle();}
   else showSplash();
 }
-if(typeof window!=='undefined'&&!window.FXI_NO_INIT)init();
+// IndexedDB loads before the game starts (a moment, with a note on screen); without it, straight away from localStorage.
+if(typeof window!=='undefined'&&!window.FXI_NO_INIT){
+  if(idbSupported()){const v=document.getElementById('view');if(v)v.innerHTML='<div class="card empty" style="max-width:420px;margin:40px auto">Loading your careers…</div>';storeInit().then(init,init);}
+  else init();
+}
 
 </script>
 </body>
