@@ -11,7 +11,7 @@ const PTS_WIN=4,PTS_TIE=2;
 const EDITIONS=new Map();
 function edition(sid){
   if(EDITIONS.has(sid))return EDITIONS.get(sid);
-  const s=SERIES.get(sid);if(!s)return null;
+  const s=SERIES.get(sid);if(!s||s.test||s.t20)return null;   // ODI tournaments only
   const fix=s.fix.map(n=>FIX_BY_NO.get(n));
   const labelled=fix.some(f=>f.mno>0);
   const league=fix.filter(f=>!labelled||f.mno>0);let ko=labelled?fix.filter(f=>!f.mno):[];
@@ -179,6 +179,7 @@ function seriesStatus(sid){
   const teams=[...s.teams],[a,b]=teams,wa=w[a]||0,wb=w[b]||0,total=s.fix.length,left=total-R.length;
   let text;
   if(!R.length)text=`${total}-match series`;
+  else if(s.teams.size>2)text=left?`${R.length} of ${total} played`:'Complete';
   else if(wa===wb)text=left?`Series level ${wa}-${wb}`:`Series drawn ${wa}-${wb}`;
   else{const[l,ws,ls]=wa>wb?[a,wa,wb]:[b,wb,wa];text=`${teamName(l)} ${left?(ws>ls+left?'have won':'lead'):'won'} ${ws}-${ls}`;}
   return{text,played:R.length,total,wins:w,draws:dr,left};

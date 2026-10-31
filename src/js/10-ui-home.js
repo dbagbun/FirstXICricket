@@ -192,7 +192,7 @@ RENDER.fixtures=(el)=>{
       <div class="tbl-wrap"><table>${g.items.map(x=>{const E=S.done[x.key]&&byId.get(S.done[x.key]);const[a,b]=E?E.teams:fixtureTeams(x);
         const side=(t,k)=>t?badge(t):`<span class="pill">${esc(slotName(x.slots&&x.slots[k]))}</span>`;
         return`<tr ${E?`data-mid="${E.id}" style="cursor:pointer"`:''}><td class="muted num" style="white-space:nowrap">${fmtDate(x.date)}</td><td>${side(a,0)} v ${side(b,1)}</td>
-        <td class="hide-sm sub" style="font-size:12px">${esc(!x.f||x.fmt==='TEST'?x.label:(x.f.mno?'Match '+x.f.mno:stageName(edition(x.sid)?.stageOf.get(x.f.no),edition(x.sid))||''))} · ${esc(x.venue)}</td>
+        <td class="hide-sm sub" style="font-size:12px">${esc(!x.f||x.fmt!=='ODI'?x.label:(x.f.mno?'Match '+x.f.mno:stageName(edition(x.sid)?.stageOf.get(x.f.no),edition(x.sid))||''))} · ${esc(x.venue)}</td>
         <td class="r">${E?`<span class="${E.result.winner?'green':'sub'}">${esc(E.result.text)}</span>`:x.cup&&!x.playable?'<span class="muted">to be decided</span>':x.playable?`<button class="btn sm pri" data-play="${x.key}">Play</button> <button class="btn sm" data-sim="${x.key}">Sim</button>`:'<span class="muted">no XI data</span>'}</td></tr>`;}).join('')}</table></div></div>`;}).join('')||'<div class="card empty">No fixtures match.</div>'}
   ${groups.length>80?`<div class="muted">Showing the first 80 series - narrow the filters to see more.</div>`:''}</div>`;
   $('#fx-y').onchange=e=>{FX_F.year=e.target.value;rerender();};

@@ -13,7 +13,8 @@ const out=vm.runInContext(`(function(nO,nT){
     const f=fx[Math.floor(Math.random()*fx.length)];
     const M=newMatch({fmt:'ODI',batMode:process.env.BATMODE,a:f.a,b:f.b,date:f.date,cid:f.cid,xiA:fixtureXI(f.cid,f.a),xiB:fixtureXI(f.cid,f.b)});
     doToss(M);simMatch(M);
-    const [a,b]=M.inns;st.odi.n++;st.odi.inn1.push(a.runs);st.odi.wk1.push(a.wkts);st.odi.inn2.push(b.runs);st.odi.ov.push(a.lb/6);
+    const [a,b]=M.inns;if(!b)continue;   // washed out in the first innings
+    st.odi.n++;st.odi.inn1.push(a.runs);st.odi.wk1.push(a.wkts);st.odi.inn2.push(b.runs);st.odi.ov.push(a.lb/6);
     if(M.result.type==='wkts')st.odi.chaseW++;if(M.result.type==='tie')st.odi.ties++;
     for(const I of M.inns){st.odi.ext+=I.ex.b+I.ex.lb+I.ex.wd+I.ex.nb;for(const p in I.bt){const r=I.bt[p].r;if(r>=100)st.odi.hundreds++;else if(r>=50)st.odi.fifties++;}
       st.odi.top.push(I.bt[I.order[0]].r);}

@@ -77,7 +77,7 @@ function squadFor(sid,team,date){
   if(!S.squads[k]){
     // the real XIs of the series: ODI team sheets, or the real Test XIs (Test specialists included)
     const real=fixturesOf(sid).filter(x=>x.f).flatMap(x=>{const c=x.f.cid;
-      const X=WORLD.xi[c]&&WORLD.xi[c][team]?fixtureXI(c,team):x.real&&WORLD.txi&&WORLD.txi[c]&&WORLD.txi[c][team]?testXI(c,team,x.date):null;return X?X.bat:[];});
+      const X=WORLD.xi[c]&&WORLD.xi[c][team]?fixtureXI(c,team):x.real&&realXIRow(c,team)?testXI(c,team,x.date):null;return X?X.bat:[];});
     const pool=[...new Set([...real,...squadAround(team,date,365)])];
     S.squads[k]=pool.filter(p=>!isInjured(p,date)).slice(0,SQUAD_SIZE);
   }

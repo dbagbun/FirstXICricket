@@ -4,7 +4,8 @@ let S=null;
 function newCareer(opts={}){
   return{
     v:1,created:Date.now(),name:opts.name||'My career',
-    settings:{dice:'auto',captain:'auto',knockouts:'timeline',batColours:'player',ratings:'era',history:'after',selection:'auto',form:'on',broadcast:'standard',font:'barlow',voice:false,voiceRate:1.05,future:'on',drs:'era',t20wc:'on',t20cards:'designed',assocTiers:'on',badges:'flags',myTeam:+opts.myTeam||0,ballDelay:250,sound:false,tv:true},
+    settings:{dice:'auto',captain:'auto',knockouts:'timeline',batColours:'player',ratings:'era',history:'after',selection:'auto',form:'on',broadcast:'standard',font:'barlow',voice:false,voiceRate:1.05,future:'on',drs:'era',t20wc:'on',t20cards:'designed',assocTiers:'on',badges:'flags',t20is:'on',myTeam:+opts.myTeam||0,ballDelay:250,sound:false,tv:true},
+    t20iFrom:'',      // real T20Is from this date ('' = all; old saves get theirs from where they were)
     done:{},          // fixture no / test id -> match id
     matches:[],       // archived scorecards (compact), oldest first
     logs:{},          // match id -> compact ball log, last LOG_KEEP matches only

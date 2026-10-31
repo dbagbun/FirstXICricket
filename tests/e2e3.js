@@ -13,7 +13,7 @@ execFileSync('node',[path.join(root,'tools/build.js'),html,world]);
 const w=new JSDOM(fs.readFileSync(html,'utf8'),{runScripts:'dangerously',url:'http://localhost/',beforeParse(w){w.confirm=()=>true;w.scrollTo=()=>{};w.addEventListener('error',e=>{fail++;console.log('PAGE ERROR',e.message);});}}).window;
 const G=k=>w.eval(k);
 w.document.querySelector('#sp-go').click();
-const real=G(`allFixtures().filter(x=>x.real).map(x=>x.key+'|'+x.title+'|'+x.label)`);
+const real=G(`allFixtures().filter(x=>x.real&&x.fmt==='TEST').map(x=>x.key+'|'+x.title+'|'+x.label)`);
 ok(real.length===2&&real[0]==='r1|The Ashes 2003 (Tests)|1st Test','real Tests in the calendar: '+real.join(', '));
 const xi=G(`(()=>{const M=buildMatch(fixtureByKey('r1'));return{bat:M.xi[4].bat.map(pName),wk:pName(M.xi[4].wk),cap:pName(M.xi[4].cap)};})()`);
 ok(xi.bat[10]==='ZZ Debutant','new player added for the debutant');

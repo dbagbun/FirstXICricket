@@ -54,12 +54,16 @@ const ODI_FX=FIX.map(f=>({key:'o'+f.no,fmt:'ODI',date:f.date,a:f.a,b:f.b,venue:f
   title:seriesOf(f).title,label:f.mno?'Match '+f.mno:(f.raw&&f.raw!==f.name?f.raw:'ODI'),playable:!!(WORLD.xi[f.cid]&&WORLD.xi[f.cid][f.a]&&WORLD.xi[f.cid][f.b])}));
 const REAL_TEST_FX=TFIX.map(f=>{const s=seriesOf(f),k=s.fix.indexOf(f.no)+1;
   return{key:'r'+f.no,fmt:'TEST',date:f.date,a:f.a,b:f.b,venue:f.venue,city:f.city,sid:f.sid,f,title:s.title,label:`${ordinal(k)} Test`,playable:true,real:true};});
-const ODI_FX_BY_KEY=new Map([...ODI_FX,...REAL_TEST_FX].map(x=>[x.key,x]));
+const REAL_T20_FX=IFIX.map(f=>{const s=seriesOf(f),k=s.fix.indexOf(f.no)+1;
+  return{key:'i'+f.no,fmt:'T20',date:f.date,a:f.a,b:f.b,venue:f.venue,city:f.city,sid:f.sid,f,title:s.title,label:s.teams.size>2?'T20I':`${ordinal(k)} T20I`,playable:true,real:true};});
+const ODI_FX_BY_KEY=new Map([...ODI_FX,...REAL_TEST_FX,...REAL_T20_FX].map(x=>[x.key,x]));
+// Real T20Is are in the calendar unless switched off; a save from before they were added gets them from where it was.
+const realT20s=()=>S.settings.t20is==='off'?[]:S.t20iFrom?REAL_T20_FX.filter(x=>x.date>=S.t20iFrom):REAL_T20_FX;
 let FX_CACHE=null;
 const fxDirty=()=>{FX_CACHE=null;};
 function allFixtures(){
   if(FX_CACHE&&FX_CACHE.S===S)return FX_CACHE.list;
-  const out=ODI_FX.concat(REAL_TEST_FX);
+  const out=ODI_FX.concat(REAL_TEST_FX,realT20s());
   for(const T of S.tests)T.fix.forEach((x,k)=>out.push(customFx(T,x,k)));
   for(const C of S.cups||[])for(const f of C.fix)out.push(cupFx(C,f));
   out.sort((x,y)=>x.date<y.date?-1:x.date>y.date?1:(x.fmt==='TEST')-(y.fmt==='TEST'));
@@ -73,7 +77,7 @@ function fixturesOf(sid){
   return C.bySid.get(sid)||[];
 }
 function fixtureByKey(key){
-  if(key[0]==='o'||key[0]==='r')return ODI_FX_BY_KEY.get(key)||null;
+  if(key[0]==='o'||key[0]==='r'||key[0]==='i')return ODI_FX_BY_KEY.get(key)||null;
   for(const T of S.tests){const k=T.fix.findIndex(x=>x.key===key);if(k>=0)return customFx(T,T.fix[k],k);}
   if(key[0]==='C'){const C=cupById(key.split('.')[0]),f=C&&C.fix.find(x=>x.key===key);if(f)return cupFx(C,f);}
   return null;
@@ -214,6 +218,7 @@ function loadSlot(i){
   setSlot(i);S=d;
   S.settings=Object.assign(newCareer().settings,S.settings||{});
   for(const k of['tests','ms','matches','cups'])S[k]=S[k]||[];
+  realT20From();
   for(const k of['logs','msKeys','attrEdits','seen','reseed','done'])S[k]=S[k]||{};
   for(const k of['stats','teams'])for(const f of FORMATS)S[k][f]=S[k][f]||{};
   for(const f of FORMATS)S.fast[f]=S.fast[f]||{f50:null,f100:null};
@@ -222,4 +227,6 @@ function loadSlot(i){
   return true;
 }
 function exportCareer(){return JSON.stringify(S);}
-function importCareer(text){const d=parseSave(text);if(!d)return false;S=d;saveGame();return true;}
+function importCareer(text){const d=parseSave(text);if(!d)return false;S=d;realT20From();saveGame();return true;}
+// A career saved before the real T20Is were added picks them up from its current date, not back in 2005.
+function realT20From(){if(S&&S.t20iFrom==null)S.t20iFrom=S.matches&&S.matches.length?careerDate():'';}

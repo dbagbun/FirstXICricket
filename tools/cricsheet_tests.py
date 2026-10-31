@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
-"""Add the real Test calendar from Cricsheet to data/world.json.
+"""Add the real Test (or T20I) calendar from Cricsheet to data/world.json.
 
 Usage: python3 tools/cricsheet_tests.py tests_json.zip [data/world.json]
-  (tests_json.zip from https://cricsheet.org/downloads/ - the JSON format)
+       python3 tools/cricsheet_tests.py --t20 t20s_json.zip [data/world.json]
+  (the zips from https://cricsheet.org/downloads/ - the JSON format)
+
+--t20 writes WORLD.t20s / WORLD.t20xi instead, in the same shapes, and leaves out the T20 World Cups themselves
+(the game stages those as cups, 07m-icc); qualifiers, tri-series and bilateral series are kept. Run it after the Tests.
 
 For every Test between two teams in the workbook's Teams list, from the first ODI fixture date onwards:
   WORLD.tests  = [[no, date, event, teamA, teamB, venue, city, cricsheetId], ...]
@@ -13,8 +17,15 @@ Run it again whenever Cricsheet publishes more Tests; it replaces WORLD.tests/tx
 """
 import json, sys, zipfile, collections
 
-ZIP = sys.argv[1]
-OUT = sys.argv[2] if len(sys.argv) > 2 else 'data/world.json'
+import re
+T20 = '--t20' in sys.argv
+ARGS = [a for a in sys.argv[1:] if a != '--t20']
+ZIP = ARGS[0]
+OUT = ARGS[1] if len(ARGS) > 1 else 'data/world.json'
+# per format: Cricsheet match_type, output keys, minimum balls to be rated / to join the rating pool
+FMT = dict(mt='T20', key='t20s', xi='t20xi', rate_min=72, pool_min=600, label='T20I', style='M') if T20 else \
+      dict(mt='Test', key='tests', xi='txi', rate_min=120, pool_min=1200, label='Test', style='M')
+WORLD_CUP = re.compile(r"^(ICC (Men's )?T20 World Cup|ICC World Twenty20|World T20)$")
 
 
 def main():
@@ -26,18 +37,26 @@ def main():
     # team of an existing player id: ids are <team><nnn> in the workbook (4027 = England)
     for pid, p in players.items():
         by_name[p[0]].append(int(pid))
-    for cid, sides in world['xi'].items():
-        for tid, lst in sides.items():
-            for pid in lst[:11]:
-                by_name_team[(players[str(pid)][0], int(tid))] = pid
+    teams_of = collections.defaultdict(set)
+    # the other format's real XIs count too (a T20 run sees the Test XIs), but not this format's old import
+    for key in ('xi', 'txi', 't20xi'):
+        if key == FMT['xi']:
+            continue
+        for cid, sides in world.get(key, {}).items():
+            for tid, lst in sides.items():
+                for pid in lst[:11]:
+                    by_name_team[(players[str(pid)][0], int(tid))] = pid
+                    teams_of[pid].add(int(tid))
     next_id = max(int(k) for k in players) + 1
+    first_new = next_id
     tests, txi, bowl = [], {}, collections.defaultdict(lambda: [0, 0, 0])
 
     def pid_for(name, tid):
         nonlocal next_id
         if (name, tid) in by_name_team:
             return by_name_team[(name, tid)]
-        if len(by_name.get(name, [])) == 1:
+        # a unique name matches only a player who hasn't played for another side (USA's S Taylor isn't England's)
+        if len(by_name.get(name, [])) == 1 and teams_of[by_name[name][0]] <= {tid}:
             return by_name[name][0]
         pid = next_id; next_id += 1
         players[str(pid)] = [name, 'N', 7, 0, 'd', '', 'd']   # no batting colour: the position rule applies
@@ -50,11 +69,14 @@ def main():
                 continue
             d = json.loads(z.read(fn))
             info = d.get('info', {})
-            if info.get('match_type') != 'Test':
+            if info.get('match_type') != FMT['mt'] or info.get('gender', 'male') != 'male':
                 continue
             date = info['dates'][0]
             teams = info.get('teams', [])
             if date < start or len(teams) != 2 or not all(t in tid_of for t in teams):
+                continue
+            ev0 = info.get('event', {})
+            if T20 and WORLD_CUP.match(ev0.get('name', '') if isinstance(ev0, dict) else str(ev0)):
                 continue
             cid = fn.rsplit('/', 1)[-1][:-5]
             side = {}
@@ -109,22 +131,23 @@ def main():
     # rate Test-only bowlers by percentile of (runs per over - 9 x wickets per over), as the ODI extractor does
     def val(b):
         return b[1] / (b[0] / 6) - 9.0 * b[2] / (b[0] / 6)
-    pool = sorted(val(b) for b in bowl.values() if b[0] >= 1200)
+    pool = sorted(val(b) for b in bowl.values() if b[0] >= FMT['pool_min'])
     rated = 0
     for pid, b in bowl.items():
         p = players[str(pid)]
-        if p[1] != 'N' or b[0] < 120:
+        # T20 spells rate only the players this run added: an ODI batter's T20 part-time overs mustn't change the ODI game
+        if p[1] != 'N' or b[0] < FMT['rate_min'] or (T20 and pid < first_new):
             continue
         pc = sum(1 for x in pool if x < val(b)) / max(1, len(pool))
         r = 1 if pc < .10 else 2 if pc < .30 else 3 if pc < .60 else 4 if pc < .85 else 5
-        if b[0] < 1200:
+        if b[0] < FMT['pool_min']:
             r = max(r, 4)
         p[1], p[2], p[3], p[4] = 'M', r, 10, 'd'
         rated += 1
-    world['tests'] = tests
-    world['txi'] = txi
+    world[FMT['key']] = tests
+    world[FMT['xi']] = txi
     json.dump(world, open(OUT, 'w'), separators=(',', ':'))
-    print('added', len(tests), 'Tests', len(txi), 'XIs;', rated, 'bowlers rated from Test spells; players now', len(players))
+    print('added', len(tests), FMT['label'] + 's', len(txi), 'XIs;', rated, 'bowlers rated from', FMT['label'], 'spells; players now', len(players))
 
 
 if __name__ == '__main__':

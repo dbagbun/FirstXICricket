@@ -3,7 +3,7 @@
 // Real players who were active at the end of the data join the pool with an estimated birth year (from their
 // debut); everyone ages: generated players grow into their potential and fade from 33; real players decline from
 // 34. Each new year retires the old, brings youngsters through and schedules tours and ICC events (S.tests/S.cups).
-const LAST_REAL=[...FIX,...TFIX].reduce((m,f)=>f.date>m?f.date:m,'');
+const LAST_REAL=[...FIX,...TFIX,...IFIX].reduce((m,f)=>f.date>m?f.date:m,'');
 const GEN_ID0=900001;
 const isFuture=date=>!!date&&date>addDays(LAST_REAL,20);
 const genP=pid=>S&&S.gen&&S.gen.players[pid]||null;
@@ -38,10 +38,42 @@ function namePool(team){
   const P={first:first.length?first:['Sam','Alex','Jordan'],last:last.length?last:['Smith','Khan','Perera'],init:names.length?init/names.length:.5};
   NAME_CACHE.set(team,P);return P;
 }
+// Surnames are made up, never a real player's: a letter-by-letter (order-3 Markov, backing off to 2) model of the surnames of everyone
+// who has played for that side - plus a neighbour's for the small associates - so a Sri Lankan prospect sounds Sri
+// Lankan without being "Kumar Sangakkara". Real surnames are rejected.
+const SURNAME_KIN={UAE:['PAK','IND'],OMA:['IND','PAK'],HK:['PAK','IND'],CAN:['IND','PAK','WI'],USA:['IND','WI','PAK'],NEP:['IND'],
+  BER:['WI'],JER:['ENG'],SCO:['ENG'],IRE:['ENG'],NAM:['RSA'],NED:['RSA','ENG'],ZIM:['RSA'],KEN:['UAE']};
+let SURNAMES=null;
+function surnameBook(){
+  if(SURNAMES)return SURNAMES;
+  const by=new Map(),real=new Set(),add=(t,pid)=>{const p=WORLD.players[pid];if(!p)return;const w=p[0].split(' ').pop();
+    if(!/^[A-Za-z'-]{3,}$/.test(w))return;const l=w.toLowerCase();real.add(l);if(!by.has(+t))by.set(+t,new Set());by.get(+t).add(l);};
+  for(const k of['xi','txi','t20xi'])for(const sides of Object.values(WORLD[k]||{}))for(const[t,x]of Object.entries(sides))x.slice(0,11).forEach(p=>add(t,p));
+  for(const p of Object.values(WORLD.players)){const w=p[0].split(' ').pop();if(w)real.add(w.toLowerCase());}
+  return SURNAMES={by,real,models:new Map()};
+}
+function surnameModel(team){
+  const B=surnameBook();if(B.models.has(team))return B.models.get(team);
+  const short=teamShort(team),corpus=new Set(B.by.get(+team)||[]);
+  if(corpus.size<80)for(const k of SURNAME_KIN[short]||[]){const id=[...TEAMS.values()].find(t=>t.short===k)?.id;for(const w of B.by.get(id)||[])corpus.add(w);}
+  const next=new Map();
+  for(const w of corpus){const s='^^^'+w+'$';for(let i=3;i<s.length;i++)for(const k of[s.slice(i-3,i),'2'+s.slice(i-2,i)]){if(!next.has(k))next.set(k,[]);next.get(k).push(s[i]);}}
+  const M={next,size:corpus.size};B.models.set(team,M);return M;
+}
+const capName=w=>w.replace(/(^|[-'])([a-z])/g,(m,a,c)=>a+c.toUpperCase()).replace(/^Mc([a-z])/,(m,c)=>'Mc'+c.toUpperCase());
+function inventSurname(team){
+  const M=surnameModel(team),B=surnameBook();
+  for(let i=0;i<60&&M.size;i++){
+    let s='^^^';while(s.length<16){const L3=M.next.get(s.slice(-3)),L=L3&&(L3.length>1||rnd()<.5)?L3:M.next.get('2'+s.slice(-2));if(!L)break;const c=pick(L);if(c==='$')break;s+=c;}
+    const w=s.slice(3);   // 5-10 letters (short ones are too often plain words), no hyphens, not a real surname
+    if(w.length>=5&&w.length<=10&&!/-|'$/.test(w)&&!B.real.has(w))return capName(w);
+  }
+  return null;
+}
 function genName(team){
   const P=namePool(team),taken=new Set([...Object.values(WORLD.players).map(p=>p[0]),...Object.values(S.gen.players).map(g=>g.n)]);
   for(let i=0;i<40;i++){
-    const ln=pick(P.last),n=rnd()<P.init?'ABCDEGHJKLMNPRSTW'[rndInt(0,16)]+(rnd()<.6?'ABCDEGHJKLMNPRSTW'[rndInt(0,16)]:'')+' '+ln:pick(P.first)+' '+ln;
+    const ln=inventSurname(team)||pick(P.last),n=rnd()<P.init?'ABCDEGHJKLMNPRSTW'[rndInt(0,16)]+(rnd()<.6?'ABCDEGHJKLMNPRSTW'[rndInt(0,16)]:'')+' '+ln:pick(P.first)+' '+ln;
     if(!taken.has(n))return n;
   }
   return'New Player '+S.gen.next;

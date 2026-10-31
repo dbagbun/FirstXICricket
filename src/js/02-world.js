@@ -42,23 +42,25 @@ const FIX_BY_NO=new Map(FIX.map(f=>[f.no,f]));
 // Real Tests (optional, added by tools/cricsheet_tests.py): same shape as FIX, keyed 'r<no>'.
 const TFIX=(WORLD.tests||[]).map(r=>({no:r[0],date:r[1],raw:r[2],a:r[3],b:r[4],venue:r[5],city:r[6],cid:r[7],name:normSeries(r[2]),mno:0,test:true}));
 const TFIX_BY_NO=new Map(TFIX.map(f=>[f.no,f]));
+// Real T20Is (optional, tools/cricsheet_tests.py --t20; the T20 World Cups themselves are staged as cups): keyed 'i<no>'.
+const IFIX=(WORLD.t20s||[]).map(r=>({no:r[0],date:r[1],raw:r[2],a:r[3],b:r[4],venue:r[5],city:r[6],cid:r[7],name:normSeries(r[2]),mno:0,t20:true}));
 const SERIES=new Map();
 (function buildSeries(){
   const last={};
-  for(const f of[...FIX,...TFIX]){
+  for(const f of[...FIX,...TFIX,...IFIX]){
     const nm=f.name||(teamName(f.a)+' v '+teamName(f.b));
-    const lk=(f.test?'T:':'')+nm;
+    const pre=f.test?'Test:':f.t20?'T20:':'',lk=pre+nm;
     let sid=last[lk];
     if(!sid||daysBetween(SERIES.get(sid).end,f.date)>60){
-      sid=(f.test?'Test:':'')+nm+'|'+f.date.slice(0,7);
-      SERIES.set(sid,{sid,name:nm,year:f.date.slice(0,4),fix:[],teams:new Set(),start:f.date,end:f.date,test:!!f.test});
+      sid=pre+nm+'|'+f.date.slice(0,7);
+      SERIES.set(sid,{sid,name:nm,year:f.date.slice(0,4),fix:[],teams:new Set(),start:f.date,end:f.date,test:!!f.test,t20:!!f.t20});
       last[lk]=sid;
     }
     const s=SERIES.get(sid);s.fix.push(f.no);s.teams.add(f.a);s.teams.add(f.b);s.end=f.date;f.sid=sid;
   }
   for(const s of SERIES.values()){
-    s.kind=s.teams.size>=3&&!s.test?'tournament':'bilateral';
-    s.title=s.name+(s.name.includes(s.year)?'':' '+(s.start.slice(0,4)===s.end.slice(0,4)?s.year:s.year+'/'+s.end.slice(2,4)))+(s.test&&!/test/i.test(s.name)?' (Tests)':'');
+    s.kind=s.teams.size>=3&&!s.test&&!s.t20?'tournament':'bilateral';   // (real T20I tri-series play as plain series)
+    s.title=s.name+(s.name.includes(s.year)?'':' '+(s.start.slice(0,4)===s.end.slice(0,4)?s.year:s.year+'/'+s.end.slice(2,4)))+(s.test&&!/test/i.test(s.name)?' (Tests)':'')+(s.t20&&!/T20|Twenty20/i.test(s.name)?' (T20Is)':'');
   }
 })();
 const seriesOf=f=>SERIES.get(f.sid);
@@ -69,9 +71,10 @@ function fixtureXI(cid,tid){
   if(!x)return null;
   return{bat:x.slice(0,11),wk:x[x[11]]??x[0],cap:x[x[12]]??x[0]};
 }
-// Real Test XIs: keeper/captain index -1 = unknown, taken from the nearest real ODI XI when he's playing.
+// Real Test and T20I XIs: keeper/captain index -1 = unknown, taken from the nearest real ODI XI when he's playing.
+const realXIRow=(cid,tid)=>(WORLD.txi&&WORLD.txi[cid]||WORLD.t20xi&&WORLD.t20xi[cid]||{})[tid]||null;
 function testXI(cid,tid,date){
-  const x=WORLD.txi&&WORLD.txi[cid]&&WORLD.txi[cid][tid];
+  const x=realXIRow(cid,tid);
   if(!x)return null;
   const bat=x.slice(0,11),near=nearestXI(tid,date);
   const wk=x[11]>=0?bat[x[11]]:near&&bat.includes(near.wk)?near.wk:bat[6];

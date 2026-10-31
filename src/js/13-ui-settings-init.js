@@ -15,7 +15,7 @@ Ratings 1 (elite) to 5 (part-timer) come from your Excel ratings where you set t
 <p><b>T20s</b> have their own ladder of six cards, <b>RR_T6</b> (6 an over) to <b>RR_T12</b> (12 an over, the death card), designed in the same token language and calibrated to real T20s:
 about 155 an innings, 6-7 wickets and 5-6 sixes; the powerplay near 8 an over, the middle overs 7.4, the death 10. Faster cards carry more BLUE wickets, so a top-order batter's risk rises with the rate.
 The middle overs deal one card slower, overs 16-18 one faster and the last two two faster; a steep chase pushes faster again. Bowlers get 4 overs.
-Settings → T20 run-rate cards can switch back to the provisional ladder (the ODI cards plus RR_8 and RR_9 built from RR_6 and RR_7).</p>
+These are the signed-off T20 cards. Settings → T20 run-rate cards can switch back to the original ladder (the ODI cards plus RR_8 and RR_9 built from RR_6 and RR_7).</p>
 <p><b>Tests</b> use their own card weights (RR_3 most overs, RR_7 as the wicket card), five days of 90 overs, weather, pitches that wear, follow-ons at 200 and declarations.</p>
 <p><b>Your dice:</b> switch Settings → Dice to "I roll" and enter each roll yourself.</p>
 <p><b>Captain:</b> Settings → Captaincy → Me, and you captain the team you follow (or both sides): choose who bowls each over (the real bowler of that over is marked),
@@ -71,7 +71,8 @@ RENDER.settings=(el)=>{
     <div class="spread"><span>Weakest associates (Namibia, Canada, USA ...) a colour lower v Test nations</span>${seg('assocTiers',[['on','On'],['off','Off']])}</div>
     <div class="spread"><span>Batting colours</span>${seg('batColours',[['player','Player'],['position','Classic (by position)']])}</div>
     <div class="spread"><span>After the real calendar (2026)</span>${seg('future',[['on','Carry on into the future'],['off','Stop']])}</div>
-    ${HAS_T20_DESIGN?`<div class="spread"><span>T20 run-rate cards</span>${seg('t20cards',[['designed','Designed (RR_T6-T12)'],['provisional','Provisional (ODI cards + RR_8/9)']])}</div>`:''}
+    ${HAS_T20_DESIGN?`<div class="spread"><span>T20 run-rate cards</span>${seg('t20cards',[['designed','T20 cards (RR_T6-T12)'],['provisional','Original (ODI cards + RR_8/9)']])}</div>`:''}
+    ${REAL_T20_FX.length?`<div class="spread"><span>Real T20Is (${REAL_T20_FX.length.toLocaleString()} bilateral and tri-series matches)</span>${seg('t20is',[['on','On'],['off','Off']])}</div>`:''}
     <div class="spread"><span>T20 World Cups (real years, 2007-2024)</span>${seg('t20wc',[['on','On'],['off','Off']])}</div>
     <div class="spread"><span>Tournament knockouts</span>${seg('knockouts',[['timeline','My timeline'],['history','History']])}</div>
     ${HAS_REAL?`<div class="spread"><span>Real results (after you play a match)</span>${seg('history',[['after','Show'],['off','Hide']])}</div>`:''}
@@ -101,6 +102,7 @@ RENDER.settings=(el)=>{
     if(S.live&&S.live.state!=='done'){if(k==='dice')S.live.manual=v==='manual';if(k==='captain')S.live.manualCaptain=v==='manual'?captainOf(S.live):null;if(k==='batColours')S.live.batMode=v;if(k==='t20cards')S.live.t20cards=v;if(k==='assocTiers')S.live.assocTiers=v!=='off';}
     if(k==='broadcast'||k==='font')applyBroadcast();
     if(k==='t20wc')iccToggle(v==='on');
+    if(k==='t20is')fxDirty();
     saveGame();rerender();});
   $('#st-team').onchange=e=>{st.myTeam=+e.target.value;saveGame();};
   $$('[data-intro]').forEach(b=>b.onclick=()=>{try{localStorage.setItem(INTRO_KEY,b.dataset.intro);}catch(e){}rerender();});
