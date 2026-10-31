@@ -101,6 +101,8 @@ input:focus,select:focus,button:focus-visible{outline:2px solid var(--cyan);outl
 .pill.ko{color:var(--gold);border-color:rgba(255,215,0,.5)}
 .pill.test{color:var(--violet);border-color:rgba(139,92,246,.6)}
 .tbadge{display:inline-flex;align-items:center;justify-content:center;min-width:38px;height:22px;padding:0 6px;border-radius:5px;font-size:11px;font-weight:800;letter-spacing:.04em;color:#fff;text-shadow:0 1px 1px rgba(0,0,0,.4)}
+.tbadge.fl{background:var(--card);color:var(--text);text-shadow:none;gap:5px;padding:0 6px 0 4px;box-shadow:inset 0 0 0 1px var(--line)}
+.flag{width:18px;height:12px;border-radius:2px;flex:none;box-shadow:0 0 0 1px rgba(0,0,0,.3)}
 .bchip{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:4px;font-size:10px;font-weight:800;color:#fff;vertical-align:middle}
 .bchip.bB{background:#2563eb}.bchip.bG{background:#16a34a}.bchip.bR{background:#dc2626}
 .plink{cursor:pointer;border-bottom:1px dotted rgba(148,163,184,.5)}
@@ -1287,7 +1289,7 @@ let S=null;
 function newCareer(opts={}){
   return{
     v:1,created:Date.now(),name:opts.name||'My career',
-    settings:{dice:'auto',captain:'auto',knockouts:'timeline',batColours:'player',ratings:'era',history:'after',selection:'auto',form:'on',broadcast:'standard',font:'barlow',voice:false,voiceRate:1.05,future:'on',drs:'era',t20wc:'on',t20cards:'designed',assocTiers:'on',myTeam:+opts.myTeam||0,ballDelay:250,sound:false,tv:true},
+    settings:{dice:'auto',captain:'auto',knockouts:'timeline',batColours:'player',ratings:'era',history:'after',selection:'auto',form:'on',broadcast:'standard',font:'barlow',voice:false,voiceRate:1.05,future:'on',drs:'era',t20wc:'on',t20cards:'designed',assocTiers:'on',badges:'flags',myTeam:+opts.myTeam||0,ballDelay:250,sound:false,tv:true},
     done:{},          // fixture no / test id -> match id
     matches:[],       // archived scorecards (compact), oldest first
     logs:{},          // match id -> compact ball log, last LOG_KEEP matches only
@@ -3762,12 +3764,49 @@ function dreamWire(){
   $('#dr-code')&&($('#dr-code').onclick=()=>showCode(dreamDef()));
 }
 
+// ═══ FLAGS — small inline SVG flags (30x20, simplified) for the national sides, drawn here so the game stays offline ═══
+// Cricket's own flags where the team isn't one nation's: West Indies (maroon with a palm and stumps) and Ireland
+// (an all-island side: green with a shamrock). England flies St George's cross. Composite XIs and franchises keep
+// their colour badges. badge() (08-ui-shell) shows a flag unless Settings -> Team badges is 'colours'.
+const UJ=`<rect width="15" height="10" fill="#012169"/><path d="M0 0L15 10M15 0L0 10" stroke="#fff" stroke-width="2"/><path d="M0 0L15 10M15 0L0 10" stroke="#C8102E" stroke-width=".8"/><path d="M7.5 0V10M0 5H15" stroke="#fff" stroke-width="3"/><path d="M7.5 0V10M0 5H15" stroke="#C8102E" stroke-width="1.6"/>`;
+const flagStar=(x,y,r,f='#fff')=>{let d='';for(let i=0;i<10;i++){const a=Math.PI/5*i-Math.PI/2,rr=i%2?r*.42:r;d+=(i?'L':'M')+(x+rr*Math.cos(a)).toFixed(2)+' '+(y+rr*Math.sin(a)).toFixed(2);}return`<path d="${d}Z" fill="${f}"/>`;};
+const FLAG_SVG={
+  AUS:`<rect width="30" height="20" fill="#012169"/>${UJ}${flagStar(7.5,15,2.2)}${flagStar(22.5,4,1.1)}${flagStar(26.5,9,1.1)}${flagStar(22.5,17,1.2)}${flagStar(19,10,1.1)}${flagStar(24.5,12.5,.6)}`,
+  IND:`<rect width="30" height="20" fill="#fff"/><rect width="30" height="6.67" fill="#FF9933"/><rect y="13.33" width="30" height="6.67" fill="#138808"/><circle cx="15" cy="10" r="2.6" fill="none" stroke="#000080" stroke-width=".7"/><circle cx="15" cy="10" r=".6" fill="#000080"/>`,
+  ENG:`<rect width="30" height="20" fill="#fff"/><path d="M15 0V20M0 10H30" stroke="#CE1124" stroke-width="4"/>`,
+  RSA:`<rect width="30" height="20" fill="#fff"/><rect width="30" height="10" fill="#E03C31"/><rect y="10" width="30" height="10" fill="#001489"/><path d="M0 0L12 10L0 20" fill="#fff"/><path d="M-1 1.5L11 10L-1 18.5M10 10H30" stroke="#007749" stroke-width="5" fill="none"/><path d="M0 3.5L8.5 10L0 16.5Z" fill="#FFB81C"/><path d="M0 5.2L6.4 10L0 14.8Z" fill="#000"/>`,
+  PAK:`<rect width="30" height="20" fill="#01411C"/><rect width="7.5" height="20" fill="#fff"/><circle cx="19" cy="10" r="5" fill="#fff"/><circle cx="20.3" cy="8.8" r="4.3" fill="#01411C"/>${flagStar(22,8,1.6)}`,
+  SL:`<rect width="30" height="20" fill="#FFBE29"/><rect x="1" y="1" width="3.6" height="18" fill="#00534E"/><rect x="4.6" y="1" width="3.6" height="18" fill="#F7A21B"/><rect x="9.2" y="1" width="19.8" height="18" fill="#8D153A"/><path d="M14 15c0-4 1.5-7 4-8l2 1 2-1c2 1 3 4 3 8h-2v-3h-1v3h-2l-1-3-1 3h-2v-3h-1v3z" fill="#FFBE29"/>`,
+  WI:`<rect width="30" height="20" fill="#7A1F2B"/><circle cx="21" cy="6" r="2.6" fill="#FFC72C"/><path d="M5 17h20" stroke="#FFC72C" stroke-width="1.2"/><path d="M13 17C13 13 12 10 11 7" stroke="#2E7D32" stroke-width="1.4" fill="none"/><path d="M11 7c-3-1-5 0-6 2M11 7c2-2 5-2 6 0M11 7c-1-2-3-3-5-3M11 7c1-2 4-3 5-2" stroke="#2E7D32" stroke-width="1.1" fill="none"/><path d="M18 17v-6M19.5 17v-6M21 17v-6" stroke="#fff" stroke-width=".7"/>`,
+  NZ:`<rect width="30" height="20" fill="#012169"/>${UJ}${flagStar(23,4.5,1.4,'#fff')}${flagStar(23,4.5,1,'#C8102E')}${flagStar(20,10,1.4,'#fff')}${flagStar(20,10,1,'#C8102E')}${flagStar(26,9,1.3,'#fff')}${flagStar(26,9,.9,'#C8102E')}${flagStar(23,16,1.5,'#fff')}${flagStar(23,16,1.1,'#C8102E')}`,
+  ZIM:`<rect width="30" height="20" fill="#319208"/><rect y="2.86" width="30" height="2.86" fill="#FFD200"/><rect y="5.71" width="30" height="2.86" fill="#DE2010"/><rect y="8.57" width="30" height="2.86" fill="#000"/><rect y="11.43" width="30" height="2.86" fill="#DE2010"/><rect y="14.29" width="30" height="2.86" fill="#FFD200"/><path d="M0 0L11 10L0 20Z" fill="#fff" stroke="#000" stroke-width=".4"/>${flagStar(4.2,10,2.6,'#DE2010')}<path d="M3.5 11.5c.5-2 1.5-3 2-3.5l.5 1.5-1 .5.5 2z" fill="#FFD200"/>`,
+  BAN:`<rect width="30" height="20" fill="#006A4E"/><circle cx="13.5" cy="10" r="5.3" fill="#F42A41"/>`,
+  KEN:`<rect width="30" height="20" fill="#fff"/><rect width="30" height="5.4" fill="#000"/><rect y="7" width="30" height="6" fill="#BB0000"/><rect y="14.6" width="30" height="5.4" fill="#006600"/><path d="M11.5 16L18.5 4M18.5 16L11.5 4" stroke="#fff" stroke-width=".6"/><ellipse cx="15" cy="10" rx="2.6" ry="5.2" fill="#BB0000" stroke="#000" stroke-width=".4"/><path d="M12.4 10a2.6 5.2 0 0 0 5.2 0" fill="#000"/><ellipse cx="15" cy="10" rx=".5" ry="1.4" fill="#fff"/>`,
+  IRE:`<rect width="30" height="20" fill="#169B62"/><g fill="#fff"><circle cx="13.3" cy="7.6" r="2.2"/><circle cx="16.7" cy="7.6" r="2.2"/><circle cx="15" cy="10.4" r="2.2"/></g><path d="M15 10.5c0 3 .8 5 2.2 6.5" stroke="#fff" stroke-width=".9" fill="none"/>`,
+  NED:`<rect width="30" height="20" fill="#fff"/><rect width="30" height="6.67" fill="#AE1C28"/><rect y="13.33" width="30" height="6.67" fill="#21468B"/>`,
+  SCO:`<rect width="30" height="20" fill="#005EB8"/><path d="M0 0L30 20M30 0L0 20" stroke="#fff" stroke-width="3.2"/>`,
+  CAN:`<rect width="30" height="20" fill="#fff"/><rect width="7.5" height="20" fill="#D52B1E"/><rect x="22.5" width="7.5" height="20" fill="#D52B1E"/><path d="M15 3.5l1.1 2.1 1.4-.6-.5 3.3 1.8-1.7.4 1.1 1.9-.3-.7 2 .9.5-3.2 2.7.4 1.3-3-.4V16h-.9v-2.5l-3 .4.4-1.3-3.2-2.7.9-.5-.7-2 1.9.3.4-1.1 1.8 1.7-.5-3.3 1.4.6z" fill="#D52B1E"/>`,
+  UAE:`<rect width="30" height="20" fill="#fff"/><rect width="30" height="6.67" fill="#00732F"/><rect y="13.33" width="30" height="6.67" fill="#000"/><rect width="7.5" height="20" fill="#FF0000"/>`,
+  NAM:`<rect width="30" height="20" fill="#009543"/><path d="M0 0H30L0 20Z" fill="#003580"/><path d="M0 20L30 0" stroke="#fff" stroke-width="7"/><path d="M0 20L30 0" stroke="#D21034" stroke-width="5"/>${flagStar(6,5,2.6,'#FFCE00')}<circle cx="6" cy="5" r="1.5" fill="#FFCE00" stroke="#003580" stroke-width=".3"/>`,
+  USA:`<rect width="30" height="20" fill="#fff"/><g fill="#B22234">${[0,2,4,6,8,10,12].map(i=>`<rect y="${(i*20/13).toFixed(2)}" width="30" height="${(20/13).toFixed(2)}"/>`).join('')}</g><rect width="12" height="10.77" fill="#3C3B6E"/><g fill="#fff">${[[2,2],[5,2],[8,2],[3.5,4.5],[6.5,4.5],[9.5,4.5],[2,7],[5,7],[8,7],[3.5,9],[6.5,9]].map(([x,y])=>`<circle cx="${x}" cy="${y}" r=".5"/>`).join('')}</g>`,
+  NEP:`<path d="M6 0L23 9.5H10.5L23 19.5H6Z" fill="#DC143C" stroke="#003893" stroke-width="1.2"/><circle cx="10" cy="7" r="1.6" fill="#fff"/>${flagStar(10.3,14.8,1.9)}`,
+  OMA:`<rect width="30" height="20" fill="#fff"/><rect y="13.33" width="30" height="6.67" fill="#008000"/><rect y="6.67" width="30" height="6.67" fill="#DB161B"/><rect width="8" height="20" fill="#DB161B"/><path d="M2 2.5l4 4M6 2.5l-4 4M4 1.5v6" stroke="#fff" stroke-width=".7"/>`,
+  PNG:`<rect width="30" height="20" fill="#000"/><path d="M0 0H30V20Z" fill="#CE1126"/><path d="M20 4c2 0 4 1 5 3-1 0-2 0-3 1 1 1 2 3 1 5-1-2-3-3-5-3-1-2 0-5 2-6z" fill="#FCD116"/>${flagStar(5,10,1)}${flagStar(8,13,1)}${flagStar(5,16,1)}${flagStar(3,13,.7)}${flagStar(7,7.5,.7)}`,
+  HK:`<rect width="30" height="20" fill="#DE2910"/><g fill="#fff">${[0,72,144,216,288].map(a=>`<ellipse cx="15" cy="7.2" rx="1.6" ry="2.8" transform="rotate(${a} 15 10)"/>`).join('')}</g>`,
+  BER:`<rect width="30" height="20" fill="#CF142B"/>${UJ}<path d="M19 6h7v6c0 3-3.5 5-3.5 5S19 15 19 12z" fill="#fff" stroke="#0C2340" stroke-width=".4"/><circle cx="22.5" cy="11" r="1.6" fill="#CF142B"/>`,
+  JER:`<rect width="30" height="20" fill="#fff"/><path d="M0 0L30 20M30 0L0 20" stroke="#DF112D" stroke-width="2.6"/><path d="M13 2.5h4v3c0 1.2-2 2-2 2s-2-.8-2-2z" fill="#DF112D" stroke="#FFD200" stroke-width=".4"/>`,
+};
+const flagSVG=code=>FLAG_SVG[code]?`<svg class="flag" viewBox="0 0 30 20" aria-hidden="true">${FLAG_SVG[code]}</svg>`:'';
+const useFlags=()=>!(typeof S!=='undefined'&&S&&S.settings&&S.settings.badges==='colours');
+
 // ═══ UI SHELL — navigation, views, modal, shared widgets ═══
 const TEAM_COL={AUS:'#c9a400',IND:'#1f4fbf',ENG:'#1d3a8a',RSA:'#0f7a3e',PAK:'#0b6e2e',SL:'#173f8f',WI:'#7a1f2b',NZ:'#222',ZIM:'#b8341b',
   BAN:'#05683f',KEN:'#9c1b1b',IRE:'#169b62',NED:'#e8601c',SCO:'#1b3f94',CAN:'#c8102e',UAE:'#00732f',NAM:'#003580',USA:'#3c3b6e',NEP:'#dc143c',
   OMA:'#c8102e',PNG:'#b8860b',HK:'#c8102e',BER:'#00247d',JER:'#c8102e',AFR:'#6b4f1d',ASIA:'#4b2a7b',WXI:'#334155'};
 for(const f of FRANCHISES)TEAM_COL[f[2]]=f[3];
-const badge=t=>`<span class="tbadge" style="background:${TEAM_COL[teamShort(t)]||'#334155'}">${esc(teamShort(t))}</span>`;
+// A national side shows its flag and code (07z-flags); composites, franchises and Settings -> Team badges 'Colours' keep the colour chip.
+const badge=t=>{const c=teamShort(t),f=useFlags()&&flagSVG(c);
+  return f?`<span class="tbadge fl" title="${esc(teamName(t))}">${f}${esc(c)}</span>`:`<span class="tbadge" style="background:${TEAM_COL[c]||'#334155'}">${esc(c)}</span>`;};
 const tlabel=t=>`${badge(t)} ${esc(teamName(t))}`;
 const plink=pid=>`<span class="plink" data-pid="${pid}" tabindex="0" role="link">${esc(pName(pid))}</span>`;
 document.addEventListener('keydown',e=>{if(e.key!=='Enter')return;const t=e.target;if(t&&t.matches&&t.matches('.plink,[data-mid]')){e.preventDefault();t.click();}});
@@ -5998,6 +6037,7 @@ RENDER.settings=(el)=>{
     <div class="spread"><span>T20 World Cups (real years, 2007-2024)</span>${seg('t20wc',[['on','On'],['off','Off']])}</div>
     <div class="spread"><span>Tournament knockouts</span>${seg('knockouts',[['timeline','My timeline'],['history','History']])}</div>
     ${HAS_REAL?`<div class="spread"><span>Real results (after you play a match)</span>${seg('history',[['after','Show'],['off','Hide']])}</div>`:''}
+    <div class="spread"><span>Team badges</span>${seg('badges',[['flags','Flags'],['colours','Colours']])}</div>
     <div class="spread"><span>Theme (this device)</span><div class="seg">${[['dark','Dark'],['light','Light'],['auto','Auto']].map(([v,n])=>`<button data-thm="${v}" class="${themePref()===v?'on':''}">${n}</button>`).join('')}</div></div>
     <div class="spread"><span>App font</span>${seg('font',APP_FONTS)}</div>
     <div class="spread"><span>Broadcast style</span>${seg('broadcast',BROADCASTS)}</div>

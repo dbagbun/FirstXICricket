@@ -75,6 +75,7 @@ RENDER.settings=(el)=>{
     <div class="spread"><span>T20 World Cups (real years, 2007-2024)</span>${seg('t20wc',[['on','On'],['off','Off']])}</div>
     <div class="spread"><span>Tournament knockouts</span>${seg('knockouts',[['timeline','My timeline'],['history','History']])}</div>
     ${HAS_REAL?`<div class="spread"><span>Real results (after you play a match)</span>${seg('history',[['after','Show'],['off','Hide']])}</div>`:''}
+    <div class="spread"><span>Team badges</span>${seg('badges',[['flags','Flags'],['colours','Colours']])}</div>
     <div class="spread"><span>Theme (this device)</span><div class="seg">${[['dark','Dark'],['light','Light'],['auto','Auto']].map(([v,n])=>`<button data-thm="${v}" class="${themePref()===v?'on':''}">${n}</button>`).join('')}</div></div>
     <div class="spread"><span>App font</span>${seg('font',APP_FONTS)}</div>
     <div class="spread"><span>Broadcast style</span>${seg('broadcast',BROADCASTS)}</div>
