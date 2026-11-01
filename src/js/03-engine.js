@@ -242,10 +242,18 @@ function newMatch(o){
     maxOv:o.maxOv||(o.fmt==='T20'?20:50),events:[],pending:null,followOn:false,cur:null,home:o.home||0,batMode:o.batMode||'player',
   };
   if(M.fmt==='TEST')M.pitch=o.pitch||rollPitch(M.home);
-  // Historical bowling plans (ODIs): the real bowler of each over, by player id.
+  // Historical bowling plans (ODIs, from the workbook): the real bowler of each over, by player id.
   if(M.fmt==='ODI'&&o.cid&&!o.noPlans)for(const t of M.teams){
     const map=fixturePlan(o.cid,t),orig=fixtureXI(o.cid,t);
     if(map&&orig)M.plans[t]=[...map].map(ch=>ch==='.'?0:orig.bat['abcdefghijk'.indexOf(ch)]);
+  }
+  // Real Tests and T20Is (tools/cricsheet_plans.py): one plan per innings the side bowled, in order (M.tplans);
+  // M.plans[t] holds the first, so anything that drops a side's plan (a changed XI) drops them all.
+  if(M.fmt!=='ODI'&&o.realCid&&!o.noPlans&&WORLD.tplans&&WORLD.tplans[o.realCid])for(const t of M.teams){
+    const maps=WORLD.tplans[o.realCid][t],orig=realXIRow(o.realCid,t);
+    if(!maps||!orig)continue;
+    M.tplans=M.tplans||{};M.tplans[t]=maps.map(map=>[...map].map(ch=>ch==='.'?0:orig['abcdefghijk'.indexOf(ch)]));
+    M.plans[t]=M.tplans[t][0];
   }
   return M;
 }
@@ -290,10 +298,12 @@ const SPELLS={
 function bowlEngInit(M,I){
   const x=M.xi[I.bowl],B=[];let total=0;
   const mod=pid=>(M.mods&&M.mods.bowl[pid])||0;   // form and fatigue move a bowler's rating a step
-  const add=(pid,style,rating,max)=>{B.push({pid,style,rating:clamp(rating+mod(pid),1,6),max,used:0,last:0,spell:0,spellMax:0,rest:0,active:false});total+=max;};
+  // pt: a part-timer (bowls at most PART_TIME_MAX of his 10 overs in an ODI) - in a Test he's a change, not a stock bowler
+  const add=(pid,style,rating,max,pt=false)=>{B.push({pid,style,rating:clamp(rating+mod(pid),1,6),max,pt,used:0,last:0,spell:0,spellMax:0,rest:0,active:false});total+=max;};
   x.bat.forEach((pid,i)=>{
     const a=pAttr(pid,M.date);
-    if(a.style!=='N'&&a.rating<=6&&a.max>0)add(pid,a.style,a.rating,M.fmt==='TEST'?999:Math.max(1,Math.round(a.max*perBowler(M)/10)));
+    if(pid===x.wk)return;   // the keeper keeps
+    if(a.style!=='N'&&a.rating<=6&&a.max>0)add(pid,a.style,a.rating,M.fmt==='TEST'?999:Math.max(1,Math.round(a.max*perBowler(M)/10)),a.max<=PART_TIME_MAX);
   });
   // Safety net: not enough overs (or bowlers) -> top-order part-timers, weak.
   const need=M.fmt==='TEST'?5:M.maxOv;
@@ -301,17 +311,18 @@ function bowlEngInit(M,I){
   for(let pass=0;pass<2&&!enough();pass++)for(let i=0;i<11&&!enough();i++){
     const pid=x.bat[pass?10-i:i];
     if(B.some(b=>b.pid===pid)||pid===x.wk)continue;
-    add(pid,'M',6,M.fmt==='TEST'?999:Math.max(1,Math.round(perBowler(M)*.3)));
+    add(pid,'M',6,M.fmt==='TEST'?999:Math.max(1,Math.round(perBowler(M)*.3)),true);
   }
   // Bowlers from the real plan who aren't in the list yet bowl what they really bowled.
-  const plan=M.plans[I.bowl];
+  let plan=M.plans[I.bowl];
+  if(plan&&M.tplans&&M.tplans[I.bowl])plan=M.tplans[I.bowl][M.inns.filter(J=>J.bowl===I.bowl).length]||null;   // this side's 1st or 2nd innings in the field
   if(plan){
     const cnt={};plan.forEach(p=>{if(p)cnt[p]=(cnt[p]||0)+1;});
     for(const p in cnt){
       const pid=+p;if(!x.bat.includes(pid))continue;
       const b=B.find(b=>b.pid===pid);
       if(b)b.max=Math.max(b.max,cnt[p]);
-      else{const a=pAttr(pid,M.date);add(pid,a.style==='N'?'M':a.style,a.style==='N'?4:a.rating,Math.max(cnt[p],a.max||0));}
+      else{const a=pAttr(pid,M.date);add(pid,a.style==='N'?'M':a.style,a.style==='N'?4:a.rating,M.fmt==='TEST'?999:Math.max(cnt[p],a.max||0),true);}
     }
   }
   return{B,lastIdx:-1,plan:plan||null,newBallAt:1};
@@ -330,6 +341,8 @@ function phaseBonus(M,I,style,over){
   if(style==='M')return age<=10?0:4;
   return 0;
 }
+// Tests: a rating step is worth more, and part-timers come on as changes (tuned so the top four bowlers bowl ~88% of a Test innings, as in 2,701 real ones since 2002)
+const PART_TIME_MAX=7,TEST_RATING_W=7,TEST_PT_PEN=8;
 function chooseBowler(M,I,over){
   const E=I.eng,B=E.B;
   if(M.fmt==='TEST'&&over>1&&(over-E.newBallAt)>=NEW_BALL&&!M.manualCaptain?.[I.bowl])E.newBallAt=over;
@@ -347,7 +360,8 @@ function chooseBowler(M,I,over){
     if(b.active&&b.spell<b.spellMax)s+=30;
     s+=LIMITED(M)?(b.max-b.used)*2*10/perBowler(M):-b.used*0.4;
     s+=phaseBonus(M,I,b.style,over);
-    s+=(6-Math.min(b.rating,5))*3;
+    s+=(6-Math.min(b.rating,5))*(LIMITED(M)?3:TEST_RATING_W);
+    if(!LIMITED(M)&&b.pt)s-=TEST_PT_PEN;
     s+=rnd()*15;
     if(s>bs){bs=s;best=i;}
   });

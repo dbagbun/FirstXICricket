@@ -98,7 +98,7 @@ function buildMatch(fx){
   if(fx.fmt!=='ODI'||fx.custom){
     const xi=t=>(fx.real&&testXI(fx.f.cid,t,fx.date))||nearestXI(t,fx.date);
     const home=fx.real?(VENUE_HOME.get(fx.venue)||fx.a):fx.a;
-    const M=newMatch({fmt:fx.fmt,a:fx.a,b:fx.b,home,date:fx.date,venue:fx.venue,city:fx.city,sid:fx.sid,series:fx.title,stage:fx.stage||fx.label,
+    const M=newMatch({fmt:fx.fmt,a:fx.a,b:fx.b,home,date:fx.date,venue:fx.venue,city:fx.city,sid:fx.sid,series:fx.title,stage:fx.stage||fx.label,realCid:fx.real?fx.f.cid:null,
       xiA:fx.xiA||xi(fx.a),xiB:fx.xiB||xi(fx.b)});
     if(fx.superOver)M.superOverOn=true;
     if(fx.cup&&cupById(fx.sid)?.league){M.statFmt='LEAGUE';M.league=true;}

@@ -65,16 +65,25 @@ function playerMatchLines(E){
   }
   return P;
 }
+// Man of the Match: runs and wickets in each format's own currency. Test runs aren't scaled by strike rate (a long
+// hundred is a match-winning hundred) and maidens count only in white-ball cricket; the winning side's men are
+// favoured (x1.2) and the losing side's discounted (x.75), so a loser needs a clearly bigger match to take it.
+const MOTM_W={TEST:{wk:20,md:0,c100:25,c50:8,w5:25,par:0,econ:0},ODI:{wk:22,md:4,c100:20,c50:8,w5:30,par:.85,econ:5.2},T20:{wk:22,md:10,c100:25,c50:10,w5:30,par:1.3,econ:8}};
+function motmScore(L,fmt){
+  const K=MOTM_W[fmt]||MOTM_W.ODI;
+  let s=L.r;
+  if(K.par&&L.b>0)s*=clamp(L.r/L.b/K.par,.7,1.4);
+  s+=L.w*K.wk+L.md*K.md+L.c100*K.c100+L.c50*K.c50+L.w5*K.w5+(fmt==='TEST'&&L.w>=10?30:0);
+  if(K.econ&&L.bb>=12)s+=(K.econ-L.br/(L.bb/6))*Math.min(L.bb/6,10)*2;
+  s+=L.ct*(fmt==='TEST'?4:5)+L.st*6+L.ro*8;
+  return s;
+}
 function pickMOTM(E){
   if(!E.result||E.result.type==='nr')return 0;
+  const fmt=E.fmt==='LEAGUE'?'T20':E.fmt,w=E.result.winner;
   let best=0,bs=-1e9;
   for(const L of Object.values(playerMatchLines(E))){
-    let s=L.b>0?L.r*(L.r/L.b):L.r;
-    s+=L.w*25+L.md*10;
-    if(L.bb>0)s-=(L.br/(L.bb/6))*3;
-    s+=L.ct*10+L.st*15+L.ro*12;
-    s+=L.c100*30+L.c50*15+L.w5*40;
-    if(E.result.winner&&L.team===E.result.winner)s*=1.25;
+    const s=motmScore(L,fmt)*(!w?1:L.team===w?1.2:.75);
     if(s>bs){bs=s;best=L.pid;}
   }
   return best;

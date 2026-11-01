@@ -71,14 +71,41 @@ function fixtureXI(cid,tid){
   if(!x)return null;
   return{bat:x.slice(0,11),wk:x[x[11]]??x[0],cap:x[x[12]]??x[0]};
 }
-// Real Test and T20I XIs: keeper/captain index -1 = unknown, taken from the nearest real ODI XI when he's playing.
+// Real Test and T20I XIs: Cricsheet names no captain, and a keeper only when he made a stumping (index -1 = unknown).
+// The keeper is then the man in the XI who has kept most in real XIs; the captain the one who led the side most
+// within two years of the date (ODI XIs carry both), then career captaincies, the nearest ODI XI, the most-capped.
 const realXIRow=(cid,tid)=>(WORLD.txi&&WORLD.txi[cid]||WORLD.t20xi&&WORLD.t20xi[cid]||{})[tid]||null;
+let ROLE_IDX=null;
+function roleIdx(){
+  if(ROLE_IDX)return ROLE_IDX;
+  // the workbook falls back to the opener (index 0) when a match has no keeper/captain flag, so those count a quarter
+  const kept=new Map(),led=new Map(),apps=new Map(),inc=(m,p,w=1)=>m.set(p,(m.get(p)||0)+w),wt=i=>i===0?.25:1;
+  for(const f of FIX){const s=WORLD.xi[f.cid];if(!s)continue;
+    for(const x of Object.values(s)){if(x[11]!=null&&x[x[11]]!=null)inc(kept,x[x[11]],wt(x[11]));
+      if(x[12]!=null&&x[x[12]]!=null){const c=x[x[12]];if(!led.has(c))led.set(c,[]);led.get(c).push([f.date,wt(x[12])]);}
+      x.slice(0,11).forEach(p=>inc(apps,p));}}
+  for(const k of['txi','t20xi'])for(const sides of Object.values(WORLD[k]||{}))for(const x of Object.values(sides)){
+    if(x[11]>=0)inc(kept,x[x[11]]);x.slice(0,11).forEach(p=>inc(apps,p));}
+  return ROLE_IDX={kept,led,apps};
+}
+function pickKeeper(bat,near){
+  const R=roleIdx(),k=p=>(R.kept.get(p)||0)+(near&&p===near.wk?.5:0);
+  const best=bat.slice().sort((a,b)=>k(b)-k(a))[0];
+  if(k(best)>=1)return best;
+  // nobody has kept: a specialist batter from 7 up (never a front-line bowler)
+  return[6,5,4,3,7,2].map(i=>bat[i]).find(p=>p!=null&&(WORLD.players[p]?.[1]||'N')==='N')??bat[6];
+}
+function pickCaptain(bat,date,near){
+  const R=roleIdx(),sum=L=>L.reduce((a,[,w])=>a+w,0),led=p=>R.led.get(p)||[];
+  const s=p=>sum(led(p).filter(([d])=>Math.abs(daysBetween(d,date))<=730))*1000+sum(led(p))*10+(near&&p===near.cap?5:0)+(R.apps.get(p)||0)/1000;
+  return bat.slice().sort((a,b)=>s(b)-s(a))[0];
+}
 function testXI(cid,tid,date){
   const x=realXIRow(cid,tid);
   if(!x)return null;
   const bat=x.slice(0,11),near=nearestXI(tid,date);
-  const wk=x[11]>=0?bat[x[11]]:near&&bat.includes(near.wk)?near.wk:bat[6];
-  const cap=x[12]>=0?bat[x[12]]:near&&bat.includes(near.cap)?near.cap:bat[0];
+  const wk=x[11]>=0?bat[x[11]]:pickKeeper(bat,near);
+  const cap=x[12]>=0?bat[x[12]]:pickCaptain(bat,date,near);
   return{bat,wk,cap};
 }
 // Team appearances by date, for picking a squad on a date that has no real fixture (Tests, re-seeded knockouts).
