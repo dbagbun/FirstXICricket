@@ -40,7 +40,7 @@ function achieve(id){
 function achCheck(E,M){
   const a=achieve;
   a('first');
-  if(!S.sandbox){const n=S.matches.length;if(n>=100)a('m100');if(n>=500)a('m500');if(n>=1000)a('m1000');
+  if(!S.sandbox){const n=S.matches.length-(S.prefilled||0);if(n>=100)a('m100');if(n>=500)a('m500');if(n>=1000)a('m1000');
     if(E.fmt==='ODI'&&E.fid&&ODI_FX.every(x=>!x.playable||S.done[x.key]))a('calendar');}
   if(!S.sandbox&&E.date>LAST_REAL)a('future');if(!S.sandbox&&E.date>='2036-01-01')a('era');
   if(E.fmt==='TEST')a('test1');if(E.fmt==='T20')a('t20');

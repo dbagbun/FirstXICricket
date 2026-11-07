@@ -20,15 +20,15 @@ function meP(){return S&&S.me&&!S.me.ret?S.me:null;}
 const isMe=pid=>!!(S&&S.me&&S.me.pid===+pid);
 function createMe({name,team,role,age}){
   genStore();
-  const R=ME_ROLES[role]||ME_ROLES.top,year=+careerDate().slice(0,4),pid=S.gen.next++;
+  const R=ME_ROLES[role]||ME_ROLES.top,year=+takeoverDate().slice(0,4),pid=S.gen.next++;
   S.gen.players[pid]={real:false,n:name,t:+team,born:year-clamp(+age||19,17,24),st:R[1],pot:3,wk:role==='wk',role:R[2],debut:null,me:true};
-  S.me={pid,team:+team,role,start:careerDate(),rep:40,status:'domestic',intent:{bat:0,bowl:0},dom:{m:0,inn:0,no:0,r:0,b:0,w:0,bb:0,br:0,hs:0},xp:0,log:[]};
+  S.me={pid,team:+team,role,start:takeoverDate(),rep:40,status:'domestic',intent:{bat:0,bowl:0},dom:{m:0,inn:0,no:0,r:0,b:0,w:0,bb:0,br:0,hs:0},xp:0,log:[]};
   S.settings.myTeam=+team;
   meLog(`${name} signs a domestic contract with ${teamName(team)}, aged ${clamp(+age||19,17,24)}.`);
   if(typeof achieve==='function')achieve('meStart');
   return pid;
 }
-function meLog(text,cls=''){const M=S.me;M.log.push({date:careerDate(),text,cls});if(M.log.length>80)M.log.shift();}
+function meLog(text,cls=''){const M=S.me;M.log.push({date:M.log.length?careerDate():M.start,text,cls});if(M.log.length>80)M.log.shift();}
 // ---------- attributes ----------
 // Batting: RED to start for bowlers, GREEN for batters; BLUE once the runs come (xp and an average).
 // Bowling: rating 5 (part-time) to 1 (elite) by role and xp. Age takes a step off each from 34 and 37.

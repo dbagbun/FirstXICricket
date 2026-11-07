@@ -1933,6 +1933,8 @@ function nextFixture(){
   return n;
 }
 function careerDate(){const last=S.matches[S.matches.length-1];return last?last.date:CAREER_START;}
+// When you took charge: the start you chose, if the years before it were played out (prefillTo) - else today in the career.
+const takeoverDate=()=>S.startFrom&&S.startFrom>careerDate()?S.startFrom:careerDate();
 
 // Build the match for a fixture (not tossed yet). ODI knockouts can be re-seeded from your tables.
 function buildMatch(fx){
@@ -1995,7 +1997,7 @@ function onMatchDone(M){
   const cn=coachAfter(E);pressAfter(E);restAfter(M);meAfter(E);
   const ms=checkMilestones(E),pos=playerOfSeries(E.sid),aw=yearEnd(E);
   if(S.live&&S.live.id===M.id)S.live=null;
-  achCheck(E,M);
+  if(!S.prefill)achCheck(E,M);   // no achievements for the years played out before a later start
   if(S.sandbox)challengeAfter(M,E);
   if(!M.sim)saveGame();
   if(uiDoneHook)uiDoneHook(M,E,ms,pos,aw,cn);
@@ -2818,7 +2820,7 @@ function achieve(id){
 function achCheck(E,M){
   const a=achieve;
   a('first');
-  if(!S.sandbox){const n=S.matches.length;if(n>=100)a('m100');if(n>=500)a('m500');if(n>=1000)a('m1000');
+  if(!S.sandbox){const n=S.matches.length-(S.prefilled||0);if(n>=100)a('m100');if(n>=500)a('m500');if(n>=1000)a('m1000');
     if(E.fmt==='ODI'&&E.fid&&ODI_FX.every(x=>!x.playable||S.done[x.key]))a('calendar');}
   if(!S.sandbox&&E.date>LAST_REAL)a('future');if(!S.sandbox&&E.date>='2036-01-01')a('era');
   if(E.fmt==='TEST')a('test1');if(E.fmt==='T20')a('t20');
@@ -3663,15 +3665,15 @@ function meP(){return S&&S.me&&!S.me.ret?S.me:null;}
 const isMe=pid=>!!(S&&S.me&&S.me.pid===+pid);
 function createMe({name,team,role,age}){
   genStore();
-  const R=ME_ROLES[role]||ME_ROLES.top,year=+careerDate().slice(0,4),pid=S.gen.next++;
+  const R=ME_ROLES[role]||ME_ROLES.top,year=+takeoverDate().slice(0,4),pid=S.gen.next++;
   S.gen.players[pid]={real:false,n:name,t:+team,born:year-clamp(+age||19,17,24),st:R[1],pot:3,wk:role==='wk',role:R[2],debut:null,me:true};
-  S.me={pid,team:+team,role,start:careerDate(),rep:40,status:'domestic',intent:{bat:0,bowl:0},dom:{m:0,inn:0,no:0,r:0,b:0,w:0,bb:0,br:0,hs:0},xp:0,log:[]};
+  S.me={pid,team:+team,role,start:takeoverDate(),rep:40,status:'domestic',intent:{bat:0,bowl:0},dom:{m:0,inn:0,no:0,r:0,b:0,w:0,bb:0,br:0,hs:0},xp:0,log:[]};
   S.settings.myTeam=+team;
   meLog(`${name} signs a domestic contract with ${teamName(team)}, aged ${clamp(+age||19,17,24)}.`);
   if(typeof achieve==='function')achieve('meStart');
   return pid;
 }
-function meLog(text,cls=''){const M=S.me;M.log.push({date:careerDate(),text,cls});if(M.log.length>80)M.log.shift();}
+function meLog(text,cls=''){const M=S.me;M.log.push({date:M.log.length?careerDate():M.start,text,cls});if(M.log.length>80)M.log.shift();}
 // ---------- attributes ----------
 // Batting: RED to start for bowlers, GREEN for batters; BLUE once the runs come (xp and an average).
 // Bowling: rating 5 (part-time) to 1 (elite) by role and xp. Age takes a step off each from 34 and 37.
@@ -4457,7 +4459,7 @@ RENDER.home=(el)=>{
       <div class="card"><h3>Recent results</h3>${recent.length?recent.map(matchLine).join('<hr style="border:0;border-top:1px solid var(--line)">'):'<p class="muted">No matches yet. Your career starts with the '+esc(seriesOf(FIX[0]).title)+'.</p>'}</div>
     </div>
     <div class="stack">
-      <div class="card"><h3>Career</h3><div class="spread"><span class="sub">ODIs played</span><b class="num">${playedO} / ${total}</b></div>
+      <div class="card"><h3>Career</h3>${S.prefilled?`<div class="muted" style="font-size:12px;margin:-4px 0 6px">Taken over on ${fmtDate(S.startFrom)} - the ${S.prefilled.toLocaleString()} matches before were played out.</div>`:''}<div class="spread"><span class="sub">ODIs played</span><b class="num">${playedO} / ${total}</b></div>
         <div class="bar" style="margin:6px 0 10px"><i style="width:${(100*playedO/total).toFixed(1)}%"></i></div>
         ${playedT?`<div class="spread"><span class="sub">Tests played</span><b class="num">${playedT}</b></div>`:''}${playedT20?`<div class="spread"><span class="sub">T20s played</span><b class="num">${playedT20}</b></div>`:''}
         ${top('ODI',s=>s.r,'Most ODI runs')}${top('ODI',s=>s.bw,'Most ODI wickets')}${top('TEST',s=>s.r,'Most Test runs')}${top('TEST',s=>s.bw,'Most Test wickets')}</div>
@@ -4523,6 +4525,30 @@ function simMany(list,what){
     else{saveGame();closeModal();
       if(SIM_NEWS.aw.length)openModal(`<h2>Season review</h2><div class="stack">${honoursHTML(SIM_NEWS.aw)}</div>`);
       toast(`Simmed ${i} ${i===1?'match':'matches'}. ${S.ms.length-ms0} new milestones${SIM_NEWS.pos?`, ${SIM_NEWS.pos} players of the series`:''}.`);rerender();}
+  };
+  setTimeout(tick,30);
+}
+// ---------- start in a later year ----------
+// A career that starts in, say, 2008 first plays out every match before it - quietly, with AI captains and no
+// achievements - so the records, rankings, tables and players' careers are in place when you take over.
+// S.prefilled = matches played out, S.startFrom = the date you took over.
+function prefillTo(year,done){
+  const cut=year+'-01-01',span=Math.max(1,daysBetween(CAREER_START,cut));let n=0,reached=false;
+  S.prefill=true;SIM_STOP=false;
+  openModal(`<h2>Playing out ${CAREER_START.slice(0,4)}${+year-1>+CAREER_START.slice(0,4)?'-'+(year-1):''}</h2>
+    <p class="sub">Every match before ${year}, with AI captains, so the records, rankings and careers are in place when you start.</p>
+    <div class="bar" style="margin:10px 0"><i id="pf-bar" style="width:0"></i></div><div id="pf-txt" class="sub">Starting…</div>
+    <div class="row" style="margin-top:12px"><button class="btn" id="pf-stop">Stop and start from here</button></div>`);
+  $('#pf-stop').onclick=()=>{SIM_STOP=true;};
+  const tick=()=>{
+    const t0=Date.now();
+    while(Date.now()-t0<80&&!SIM_STOP){const fx=nextFixture();if(!fx||fx.date>=cut){SIM_STOP=reached=true;break;}simFixture(fx);n++;}
+    const d=careerDate();
+    $('#pf-bar')&&($('#pf-bar').style.width=Math.min(100,100*daysBetween(CAREER_START,d)/span)+'%');
+    $('#pf-txt')&&($('#pf-txt').textContent=`${fmtDate(d)} · ${n.toLocaleString()} matches`);
+    if(!SIM_STOP){setTimeout(tick,0);return;}
+    S.prefill=false;S.prefilled=S.matches.length;S.startFrom=!n?'':reached?cut:careerDate();
+    closeModal();saveGame();done();
   };
   setTimeout(tick,30);
 }
@@ -4995,7 +5021,7 @@ const fatigueTag=(pid,date)=>{const f=fatigueOf(pid,date);return f>=60?`<span cl
 function confBar(c){const col=c>=60?'var(--green)':c>=35?'var(--gold)':'var(--red)';return`<div class="bar" style="height:10px"><i style="width:${c}%;background:${col}"></i></div>`;}
 function startCoach(team){
   achieve('coach1');
-  S.coach=newCoach(team,careerDate());S.settings.myTeam=+team;S.settings.captain='manual';
+  S.coach=newCoach(team,takeoverDate());S.settings.myTeam=+team;S.settings.captain='manual';
   coachNews(`You are the new coach of ${teamName(team)}. Contract until ${fmtDate(S.coach.until)}.`,'good');
   const nx=coachNext();if(nx)ensureObjectives(nx);
   S.coach.year=+careerDate().slice(0,4);yearObjective(S.coach.year);
@@ -6076,6 +6102,7 @@ These are the signed-off T20 cards. Settings → T20 run-rate cards can switch b
 <p><b>Your dice:</b> switch Settings → Dice to "I roll" and enter each roll yourself.</p>
 <p><b>Captain:</b> Settings → Captaincy → Me, and you captain the team you follow (or both sides): choose who bowls each over (the real bowler of that over is marked),
 who goes in next, and whether to attack or defend - attack moves the over one card faster, defend one slower. A batter sent up the order gains at most one colour.</p>
+<p><b>Starting later:</b> a new career can start in any year. Every match before it is played out first (AI captains, automatic dice, no achievements), so the records, rankings, tables and players' careers are already there - starting in 2008 takes a few seconds; Stop starts you from wherever it has got to. A coaching job or player career begins in the year you choose.</p>
 <p><b>Saving:</b> your career lives in this browser (three slots). Back it up from Settings - a reminder appears every ${BACKUP_EVERY} matches - or, in Chrome/Edge on a computer, auto-save to a file. Hosted on a website (e.g. GitHub Pages), the game installs like an app and plays offline.</p>
 <p><b>Umpires and DRS:</b> the card is the truth, but the umpire can get an lbw or a caught-behind wrong, or give out a batter the card's colour saved.
 The side the call went against may review (Tests 2 an innings, ODIs and T20s 1; one more each from mid-2020; DRS arrives in Tests in 2009, ODIs in 2011, T20s in 2017).
@@ -6201,12 +6228,15 @@ function showTitle(){
   $('#ti-new').onclick=()=>showSplash();
   $('#ti-guide').onclick=openGuide;
 }
+// Years a new career can start in: the first real season to the last; the earlier ones are played out (prefillTo).
+const startYears=()=>{const a=+CAREER_START.slice(0,4),b=+LAST_REAL.slice(0,4),o=[];for(let y=a;y<=b;y++)o.push(y);return o;};
+const fixturesBefore=y=>ODI_FX.filter(x=>x.playable&&x.date<y+'-01-01').length+REAL_TEST_FX.filter(x=>x.date<y+'-01-01').length+REAL_T20_FX.filter(x=>x.date<y+'-01-01').length;
 function showSplash(pref){
   renderNav();if(S)$('#nav').innerHTML='';
   const slots=SLOT_KEYS.map((_,i)=>slotInfo(i));
   const pick=pref!=null?pref:slots.findIndex(d=>!d)>=0?slots.findIndex(d=>!d):SLOT;
   $('#view').innerHTML=`<div class="card hi" style="max-width:640px;margin:30px auto"><h1 style="font-size:28px">First XI <span class="cyan">Cricket</span></h1>
-    <p class="sub">Every ODI from ${fmtDate(FIX[0].date)} to ${fmtDate(FIX[FIX.length-1].date)}, with the real XIs and bowling plans, played out with the First XI run-rate cards. Add Test series whenever you like.</p>
+    <p class="sub">Every ODI, Test and T20I from ${fmtDate(CAREER_START)} to ${fmtDate(LAST_REAL)}, with the real XIs and bowling plans, played out with the First XI run-rate cards. Start at the beginning, or in a later year with everything before it played out.</p>
     <div class="stack"><div class="row"><input type="text" id="sp-name" placeholder="Career name" value="My career"><select id="sp-team"><option value="0">Follow a team (optional)</option>${[...TEAMS.values()].filter(t=>t.full).map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('')}</select>
       <button class="btn pri" id="sp-go">Start a new career</button></div>
       <label class="row" style="gap:6px"><input type="checkbox" id="sp-coach"> Coach the team I follow (board targets, contracts, squads, the sack)</label>
@@ -6214,6 +6244,8 @@ function showSplash(pref){
       <div class="row hidden" id="sp-me-f"><input type="text" id="sp-pname" placeholder="Your player's name" value="J Smith" style="width:150px">
         <select id="sp-role">${Object.entries(ME_ROLES).map(([k,r])=>`<option value="${k}">${r[0]}</option>`).join('')}</select>
         <label>Age <input type="number" id="sp-age" min="17" max="24" value="19" style="width:60px"></label></div>
+      <label class="row" style="gap:6px">Start in <select id="sp-year">${startYears().map(y=>`<option value="${y}">${y}${y===+CAREER_START.slice(0,4)?' (the beginning)':''}</option>`).join('')}</select>
+        <span class="muted" style="font-size:12px" id="sp-year-note"></span></label>
       <label class="row" style="gap:6px">Save in <select id="sp-slot">${slots.map((d,i)=>`<option value="${i}" ${i===pick?'selected':''}>Slot ${i+1} - ${d?esc(d.name)+' ('+d.n+' matches) - starts fresh':'empty'}</option>`).join('')}</select></label>
       <div class="muted" style="font-size:12px" id="sp-warn"></div>
       <div class="row">${slots.some(Boolean)?'<button class="btn" id="sp-back">Back</button>':''}<button class="btn" id="sp-guide">How it works</button></div></div></div>`;
@@ -6223,13 +6255,17 @@ function showSplash(pref){
   $('#sp-go').onclick=()=>{
     const i=+$('#sp-slot').value,d=slotInfo(i);
     if(d&&!confirm(`Start a new career in slot ${i+1}? "${d.name}" (${d.n} matches) and all its stats are wiped.`))return;
+    const team=+$('#sp-team').value,coach=$('#sp-coach').checked,me=$('#sp-me').checked,yr=+$('#sp-year').value;
+    if((coach||me)&&!team){toast(coach?'Pick the team to coach.':'Pick the team to play for.','warn');return;}
+    const meSpec={name:$('#sp-pname').value.trim()||'J Smith',team,role:$('#sp-role').value,age:+$('#sp-age').value};
     if(d)clearSlot(i);setSlot(i);LM=null;
-    S=newCareer({name:$('#sp-name').value.trim()||'My career',myTeam:+$('#sp-team').value});
-    if($('#sp-coach').checked){if(!+$('#sp-team').value){toast('Pick the team to coach.','warn');S=null;return;}startCoach(+$('#sp-team').value);}
-    else if($('#sp-me').checked){if(!+$('#sp-team').value){toast('Pick the team to play for.','warn');S=null;return;}
-      createMe({name:$('#sp-pname').value.trim()||'J Smith',team:+$('#sp-team').value,role:$('#sp-role').value,age:+$('#sp-age').value});}
-    saveGame();go(S.coach?'coach':S.me?'me':'home');
+    S=newCareer({name:$('#sp-name').value.trim()||'My career',myTeam:team});
+    // coach / player careers begin when you take over, after any years played out
+    const begin=()=>{if(coach)startCoach(team);else if(me)createMe(meSpec);saveGame();go(S.coach?'coach':S.me?'me':'home');};
+    if(yr>+CAREER_START.slice(0,4))prefillTo(yr,begin);else begin();
   };
+  const yrNote=()=>{const y=+$('#sp-year').value;$('#sp-year-note').textContent=y>+CAREER_START.slice(0,4)?`${CAREER_START.slice(0,4)}-${y-1} are played out first (${fixturesBefore(y).toLocaleString()} matches, about ${Math.max(2,Math.round(fixturesBefore(y)/300))} seconds)`:'';};
+  $('#sp-year').onchange=yrNote;yrNote();
   $('#sp-me').onchange=e=>{$('#sp-me-f').classList.toggle('hidden',!e.target.checked);if(e.target.checked)$('#sp-coach').checked=false;};
   $('#sp-coach').onchange=e=>{if(e.target.checked){$('#sp-me').checked=false;$('#sp-me-f').classList.add('hidden');}};
   $('#sp-guide').onclick=openGuide;

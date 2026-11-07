@@ -4,7 +4,7 @@ const fatigueTag=(pid,date)=>{const f=fatigueOf(pid,date);return f>=60?`<span cl
 function confBar(c){const col=c>=60?'var(--green)':c>=35?'var(--gold)':'var(--red)';return`<div class="bar" style="height:10px"><i style="width:${c}%;background:${col}"></i></div>`;}
 function startCoach(team){
   achieve('coach1');
-  S.coach=newCoach(team,careerDate());S.settings.myTeam=+team;S.settings.captain='manual';
+  S.coach=newCoach(team,takeoverDate());S.settings.myTeam=+team;S.settings.captain='manual';
   coachNews(`You are the new coach of ${teamName(team)}. Contract until ${fmtDate(S.coach.until)}.`,'good');
   const nx=coachNext();if(nx)ensureObjectives(nx);
   S.coach.year=+careerDate().slice(0,4);yearObjective(S.coach.year);

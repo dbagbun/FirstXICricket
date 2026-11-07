@@ -92,6 +92,8 @@ function nextFixture(){
   return n;
 }
 function careerDate(){const last=S.matches[S.matches.length-1];return last?last.date:CAREER_START;}
+// When you took charge: the start you chose, if the years before it were played out (prefillTo) - else today in the career.
+const takeoverDate=()=>S.startFrom&&S.startFrom>careerDate()?S.startFrom:careerDate();
 
 // Build the match for a fixture (not tossed yet). ODI knockouts can be re-seeded from your tables.
 function buildMatch(fx){
@@ -154,7 +156,7 @@ function onMatchDone(M){
   const cn=coachAfter(E);pressAfter(E);restAfter(M);meAfter(E);
   const ms=checkMilestones(E),pos=playerOfSeries(E.sid),aw=yearEnd(E);
   if(S.live&&S.live.id===M.id)S.live=null;
-  achCheck(E,M);
+  if(!S.prefill)achCheck(E,M);   // no achievements for the years played out before a later start
   if(S.sandbox)challengeAfter(M,E);
   if(!M.sim)saveGame();
   if(uiDoneHook)uiDoneHook(M,E,ms,pos,aw,cn);
