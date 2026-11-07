@@ -12,7 +12,11 @@ function dismissalText(how,bowler,fielder){
     case'lbw':return'lbw b '+b;
     case'ctwk':return`c †${f} b ${b}`;
     case'st':return`st †${f} b ${b}`;
-    case'ro':return`run out (${f})`;
+    case'ro':return f?`run out (${f})`:'run out';
+    case'hw':return'hit wicket b '+b;
+    case'rto':return'retired out';
+    case'obs':return'obstructing the field';
+    case'to':return'timed out';
     default:return fielder===bowler?'c &amp; b '+b:`c ${f} b ${b}`;
   }
 }
@@ -426,12 +430,13 @@ function openScorecard(mid){
   openModal(`<div class="sub">${esc(E.series)}${E.stage?' · '+esc(E.stage):''} · ${esc(E.venue)} · ${fmtDate(E.date)}</div>
     <h2 style="margin:6px 0">${tlabel(E.teams[0])} v ${tlabel(E.teams[1])}</h2><div class="result-big" style="margin-bottom:10px">${esc(E.result.text)}</div>
     <div class="muted" style="margin-bottom:10px">Toss: ${esc(teamName(E.toss[0]))}, chose to ${E.toss[1]}${E.pitch?' · '+PITCHES[E.pitch].name:''}${E.reseeded?' · re-seeded knockout':''}</div>
-    <div class="row" style="margin-bottom:10px"><button class="btn sm" id="sc-hl">▶ Highlights</button><button class="btn sm" id="sc-img">Save as image</button><button class="btn sm" id="sc-replay">↺ Replay this match</button></div>
+    ${E.real?`<div class="banner" style="margin-bottom:10px">As it really happened - filled in from the real scorecard before your career began.</div>`:''}
+    <div class="row" style="margin-bottom:10px">${S.logs[E.id]?'<button class="btn sm" id="sc-hl">▶ Highlights</button>':''}<button class="btn sm" id="sc-img">Save as image</button><button class="btn sm" id="sc-replay">↺ Replay this match</button></div>
     ${scorecardHTML(E)}<h3 style="margin-top:14px">Charts</h3>${chartsHTML(E)}
     ${S.logs[E.id]?'<h3 style="margin-top:14px">Shots &amp; pitch maps</h3><div id="sc-field"></div>':''}
     <details style="margin-top:12px"><summary class="muted" style="cursor:pointer">Key moments</summary>${highlightsListHTML(E)}</details>`);
   const fe=$('#sc-field');if(fe){FIELD_SEL={inn:-1,bat:0,bowl:0};fe.innerHTML=fieldTabHTML(E,null);wireFieldTab(E,null,fe);}
-  $('#sc-hl').onclick=()=>{closeModal();playHighlights(E);};
+  $('#sc-hl')&&($('#sc-hl').onclick=()=>{closeModal();playHighlights(E);});
   $('#sc-replay').onclick=()=>{closeModal();replayMatch(E);};
   $('#sc-img').onclick=()=>downloadCanvas(scorecardImage(E),`first-xi-${E.date}-${teamShort(E.teams[0])}-v-${teamShort(E.teams[1])}.png`);
 }

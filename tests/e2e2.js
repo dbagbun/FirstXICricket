@@ -17,7 +17,7 @@ const secs=(Date.now()-t0)/1000;
 console.log(`simmed ${n} matches in ${secs.toFixed(0)}s`);
 ok(n>2500,'whole career simmed');
 ok(!G('nextFixture()'),'nothing left to play');
-ok(G(`S.matches.filter(m=>m.fmt==='TEST'&&!isWtcFinal(m)).length`)===69+G('REAL_TEST_FX.length'),'all Tests played (69 scheduled + '+G('REAL_TEST_FX.length')+' real)');
+ok(G(`S.matches.filter(m=>m.fmt==='TEST'&&!isWtcFinal(m)).length`)===69+G('REAL_TEST_FX.filter(x=>!x.wtcFinal).length'),'all Tests played (69 scheduled + '+G('REAL_TEST_FX.filter(x=>!x.wtcFinal).length')+' real; the real WTC finals only in real-history years)');
 ok(G(`S.matches.filter(m=>isWtcFinal(m)).length`)<=3,'and at most three WTC finals ('+G(`S.matches.filter(m=>isWtcFinal(m)).length`)+')');
 ok(G('saveGame()'),'career saves');
 const raw=w.localStorage.getItem('fxi_save_1');

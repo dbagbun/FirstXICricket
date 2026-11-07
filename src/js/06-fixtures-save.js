@@ -52,18 +52,21 @@ function deleteTestSeries(id){
 }
 const ODI_FX=FIX.map(f=>({key:'o'+f.no,fmt:'ODI',date:f.date,a:f.a,b:f.b,venue:f.venue,city:f.city,sid:f.sid,f,
   title:seriesOf(f).title,label:f.mno?'Match '+f.mno:(f.raw&&f.raw!==f.name?f.raw:'ODI'),playable:!!(WORLD.xi[f.cid]&&WORLD.xi[f.cid][f.a]&&WORLD.xi[f.cid][f.b])}));
-const REAL_TEST_FX=TFIX.map(f=>{const s=seriesOf(f),k=s.fix.indexOf(f.no)+1;
-  return{key:'r'+f.no,fmt:'TEST',date:f.date,a:f.a,b:f.b,venue:f.venue,city:f.city,sid:f.sid,f,title:s.title,label:`${ordinal(k)} Test`,playable:true,real:true};});
+// The real WTC finals (wtcFinal) are played only in years filled in from real results; otherwise 07m books the game's own.
+const REAL_TEST_FX=TFIX.map(f=>{const s=seriesOf(f),k=s.fix.indexOf(f.no)+1,wf=/World Test Championship/.test(f.raw);
+  return{key:'r'+f.no,fmt:'TEST',date:f.date,a:f.a,b:f.b,venue:f.venue,city:f.city,sid:f.sid,f,title:wf?`ICC World Test Championship Final ${f.date.slice(0,4)}`:s.title,label:wf?'Final':`${ordinal(k)} Test`,stage:wf?'Final':'',playable:true,real:true,wtcFinal:wf};});
 const REAL_T20_FX=IFIX.map(f=>{const s=seriesOf(f),k=s.fix.indexOf(f.no)+1;
-  return{key:'i'+f.no,fmt:'T20',date:f.date,a:f.a,b:f.b,venue:f.venue,city:f.city,sid:f.sid,f,title:s.title,label:s.teams.size>2?'T20I':`${ordinal(k)} T20I`,playable:true,real:true};});
+  return{key:'i'+f.no,fmt:'T20',date:f.date,a:f.a,b:f.b,venue:f.venue,city:f.city,sid:f.sid,f,title:s.title,label:f.stage||(s.teams.size>2?'T20I':`${ordinal(k)} T20I`),stage:f.stage,playable:true,real:true};});
 const ODI_FX_BY_KEY=new Map([...ODI_FX,...REAL_TEST_FX,...REAL_T20_FX].map(x=>[x.key,x]));
 // Real T20Is are in the calendar unless switched off; a save from before they were added gets them from where it was.
-const realT20s=()=>S.settings.t20is==='off'?[]:S.t20iFrom?REAL_T20_FX.filter(x=>x.date>=S.t20iFrom):REAL_T20_FX;
+// S.realTo: the years before it were filled in from real results (07q) - real T20 World Cups and WTC finals play there.
+const inRealYears=x=>!!(S.realTo&&x.date<S.realTo);
+const realT20s=()=>(S.settings.t20is==='off'?REAL_T20_FX.filter(x=>x.f.wc):S.t20iFrom?REAL_T20_FX.filter(x=>x.date>=S.t20iFrom||x.f.wc):REAL_T20_FX).filter(x=>!x.f.wc||inRealYears(x));
 let FX_CACHE=null;
 const fxDirty=()=>{FX_CACHE=null;};
 function allFixtures(){
   if(FX_CACHE&&FX_CACHE.S===S)return FX_CACHE.list;
-  const out=ODI_FX.concat(REAL_TEST_FX,realT20s());
+  const out=ODI_FX.concat(REAL_TEST_FX.filter(x=>!x.wtcFinal||inRealYears(x)),realT20s());
   for(const T of S.tests)T.fix.forEach((x,k)=>out.push(customFx(T,x,k)));
   for(const C of S.cups||[])for(const f of C.fix)out.push(cupFx(C,f));
   out.sort((x,y)=>x.date<y.date?-1:x.date>y.date?1:(x.fmt==='TEST')-(y.fmt==='TEST'));
@@ -143,12 +146,16 @@ function onMatchDone(M){
     if(M.h2h)achieve('h2h');if(M.manual)achieve('dice');saveGame();
     if(uiDoneHook)uiDoneHook(M,E,[],null,[],[]);return;
   }
-  const E=archiveMatch(M);
+  recordMatch(archiveMatch(M),M);
+}
+// Everything a finished match feeds: the archive, stats, rankings, form, milestones, awards. M can be a stub
+// {id, key, sim, real} for a real scorecard filled in from history (07q): no ball log, no live match to tidy.
+function recordMatch(E,M){
   if(M.key)S.done[M.key]=E.id;
   if(M.reseeded)S.reseed[M.key]={a:M.teams[0],b:M.teams[1]};
   S.matches.push(E);
   if(S.cups&&S.cups.length&&cupById(E.sid))fxDirty();   // knockout slots in that tournament may now resolve
-  S.logs[E.id]=packBalls(M);
+  if(!M.real)S.logs[E.id]=packBalls(M);
   const ids=Object.keys(S.logs);if(ids.length>LOG_KEEP)for(const id of ids.slice(0,ids.length-LOG_KEEP))delete S.logs[id];
   applyStats(E);
   applyRankings(E);

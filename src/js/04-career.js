@@ -18,7 +18,7 @@ function newCareer(opts={}){
 const LOG_KEEP=25;
 
 // ---------- archive ----------
-const HOW_TXT={b:'b',lbw:'lbw',ct:'c',ctof:'c',ctwk:'c',st:'st',ro:'run out'};
+const HOW_TXT={b:'b',lbw:'lbw',ct:'c',ctof:'c',ctwk:'c',st:'st',ro:'run out',hw:'hit wicket',rto:'retired out',obs:'obstructing the field',to:'timed out'};
 function archiveMatch(M){
   const E={id:M.id,fmt:M.statFmt||M.fmt,fid:M.fid,sid:M.sid,series:M.series,stage:M.stage,date:M.date,venue:M.venue,city:M.city,
     teams:M.teams,toss:[M.toss.w,M.toss.choice],result:M.result,followOn:M.followOn||false,pitch:M.pitch||'',wx:M.wx||null,

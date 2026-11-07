@@ -23,6 +23,7 @@ function ensureIcc(){
   const I=iccState(),now=careerDate();
   if(S.settings.t20wc!=='off')for(const[y,start,host,teams]of T20WC){
     if(I.made[y]&&I.made[y]!=='off')continue;I.made[y]=start>now?'yes':'past';
+    if(S.realTo&&start<S.realTo){I.made[y]='real';continue;}   // filled in from real results: the real World Cup was played
     if(start<=now)continue;
     const ok=teams.filter(t=>TEAMS.has(t)&&nearestXI(t,start));
     if(ok.length>=8)I.made[y]=createCup({name:`ICC T20 World Cup ${y}`,fmt:'T20',format:ok.length>=12?'groups4':'groups2',host,start,teams:ok,quiet:true}).id;
@@ -64,6 +65,9 @@ function wtcTick(now){
     if(X&&X.key&&!X.done&&S.done[X.key]){const E=S.matches.find(m=>m.id===S.done[X.key]);if(E){X.done=1;X.champ=E.result.winner?[E.result.winner]:[...E.teams];
       if(typeof achieve==='function'&&X.champ.includes(S.settings.myTeam))achieve('wtc');}}
     if(X||now<addDays(c.to,-150))continue;
+    // filled in from real results: the real final
+    const rf=S.realTo&&c.final<S.realTo&&REAL_TEST_FX.find(x=>x.wtcFinal&&x.date===c.final);
+    if(rf){W[c.y]={key:rf.key,a:rf.a,b:rf.b,date:rf.date,table:wtcTable(c).slice(0,9)};continue;}
     // over once the career passes its end, or nothing left to play before it
     if(now<c.to){const nx=allFixtures().find(x=>x.playable&&!S.done[x.key]);if(!nx||nx.date<=c.to)continue;}
     const L=wtcTable(c).filter(r=>r.p>=3);

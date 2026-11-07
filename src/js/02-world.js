@@ -43,7 +43,8 @@ const FIX_BY_NO=new Map(FIX.map(f=>[f.no,f]));
 const TFIX=(WORLD.tests||[]).map(r=>({no:r[0],date:r[1],raw:r[2],a:r[3],b:r[4],venue:r[5],city:r[6],cid:r[7],name:normSeries(r[2]),mno:0,test:true}));
 const TFIX_BY_NO=new Map(TFIX.map(f=>[f.no,f]));
 // Real T20Is (optional, tools/cricsheet_tests.py --t20; the T20 World Cups themselves are staged as cups): keyed 'i<no>'.
-const IFIX=(WORLD.t20s||[]).map(r=>({no:r[0],date:r[1],raw:r[2],a:r[3],b:r[4],venue:r[5],city:r[6],cid:r[7],name:normSeries(r[2]),mno:0,t20:true}));
+// wc: a real T20 World Cup match (played only in years filled in from real results; otherwise the game stages its own cups).
+const IFIX=(WORLD.t20s||[]).map(r=>({no:r[0],date:r[1],raw:r[2],a:r[3],b:r[4],venue:r[5],city:r[6],cid:r[7],name:normSeries(r[2]),mno:0,t20:true,wc:r[8]===1,stage:r[9]||''})).sort((x,y)=>x.date<y.date?-1:x.date>y.date?1:x.no-y.no);
 const SERIES=new Map();
 (function buildSeries(){
   const last={};

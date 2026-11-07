@@ -15,7 +15,7 @@ function realText(R){
 // same: the same side won (or both tied); null when history had no result or the teams were re-seeded
 function sameAsHistory(E){
   const R=realOf(E);if(!R||E.reseeded||R.r[1]==='nr')return null;
-  if(R.r[1]==='tie')return E.result.type==='tie';
+  if(R.r[1]==='tie')return E.result.type==='tie'||E.result.type==='so';   // (a tie settled by a super over is still a tie)
   return E.result.winner===R.r[0];
 }
 function timelineDrift(){

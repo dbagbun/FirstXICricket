@@ -8,10 +8,15 @@ const boot=store=>new JSDOM(html,{runScripts:'dangerously',pretendToBeVisual:tru
   if(store)for(const k in store)w.localStorage.setItem(k,store[k]);
   w.addEventListener('error',e=>{fail++;console.log('PAGE ERROR',e.message);});}}).window;
 let w=boot();const $=s=>w.document.querySelector(s);
-const n=w.eval('REAL_T20_FX.length');
+// the real T20 World Cup matches (f.wc) are only for years filled in from real results (e2e49)
+const n=w.eval('REAL_T20_FX.filter(x=>!x.f.wc).length');
 if(!n){console.log('e2e45 skipped (no real T20Is in this build)');process.exit(0);}
 ok(n>1000,'over a thousand real T20Is ('+n+')');
-ok(w.eval(`REAL_T20_FX.every(x=>x.fmt==='T20'&&x.key[0]==='i'&&!/^(ICC (Men.s )?T20 World Cup|ICC World Twenty20|World T20) \d{4}/.test(x.title))`),'T20Is keyed i<no>, no World Cup games');
+const WC_RE=/^(ICC (Men.s )?T20 World Cup|ICC World Twenty20|World T20) \d{4}/;
+const T=w.eval(`REAL_T20_FX.map(x=>[x.fmt,x.key,x.title,!!x.f.wc])`);
+ok(T.every(([f,k])=>f==='T20'&&k[0]==='i'),'T20Is keyed i<no>');
+ok(T.filter(x=>x[3]).length>250&&T.filter(x=>x[3]).every(x=>WC_RE.test(x[2])),'the real T20 World Cup matches are flagged');
+ok(T.filter(x=>!x[3]).every(x=>!WC_RE.test(x[2])),'and only those');
 ok(w.eval(`REAL_T20_FX[0].date`)>='2005-01-01','from 2005');
 ok(w.eval(`REAL_T20_FX.every(x=>realXIRow(x.f.cid,x.a)&&realXIRow(x.f.cid,x.b))`),'every one has both real XIs');
 $('#sp-go').click();

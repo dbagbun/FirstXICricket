@@ -20,7 +20,7 @@ These are the signed-off T20 cards. Settings → T20 run-rate cards can switch b
 <p><b>Your dice:</b> switch Settings → Dice to "I roll" and enter each roll yourself.</p>
 <p><b>Captain:</b> Settings → Captaincy → Me, and you captain the team you follow (or both sides): choose who bowls each over (the real bowler of that over is marked),
 who goes in next, and whether to attack or defend - attack moves the over one card faster, defend one slower. A batter sent up the order gains at most one colour.</p>
-<p><b>Starting later:</b> a new career can start in any year. Every match before it is played out first (AI captains, automatic dice, no achievements), so the records, rankings, tables and players' careers are already there - starting in 2008 takes a few seconds; Stop starts you from wherever it has got to. A coaching job or player career begins in the year you choose.</p>
+<p><b>Starting later:</b> a new career can start in any year. The years before are filled in first - from the <b>real results</b> (every real scorecard, Player of the Match, T20 World Cup and WTC final, as it happened) or <b>simulated</b> (AI captains, automatic dice) - so the records, rankings, tables and players' careers are already there when you take over. No achievements are earned for those years; Stop starts you from wherever it has got to. A coaching job or player career begins in the year you choose.</p>
 <p><b>Saving:</b> your career lives in this browser (three slots). Back it up from Settings - a reminder appears every ${BACKUP_EVERY} matches - or, in Chrome/Edge on a computer, auto-save to a file. Hosted on a website (e.g. GitHub Pages), the game installs like an app and plays offline.</p>
 <p><b>Umpires and DRS:</b> the card is the truth, but the umpire can get an lbw or a caught-behind wrong, or give out a batter the card's colour saved.
 The side the call went against may review (Tests 2 an innings, ODIs and T20s 1; one more each from mid-2020; DRS arrives in Tests in 2009, ODIs in 2011, T20s in 2017).
@@ -154,7 +154,7 @@ function showSplash(pref){
   const slots=SLOT_KEYS.map((_,i)=>slotInfo(i));
   const pick=pref!=null?pref:slots.findIndex(d=>!d)>=0?slots.findIndex(d=>!d):SLOT;
   $('#view').innerHTML=`<div class="card hi" style="max-width:640px;margin:30px auto"><h1 style="font-size:28px">First XI <span class="cyan">Cricket</span></h1>
-    <p class="sub">Every ODI, Test and T20I from ${fmtDate(CAREER_START)} to ${fmtDate(LAST_REAL)}, with the real XIs and bowling plans, played out with the First XI run-rate cards. Start at the beginning, or in a later year with everything before it played out.</p>
+    <p class="sub">Every ODI, Test and T20I from ${fmtDate(CAREER_START)} to ${fmtDate(LAST_REAL)}, with the real XIs and bowling plans, played out with the First XI run-rate cards. Start at the beginning, or in a later year with the years before filled in - from the real results, or simulated.</p>
     <div class="stack"><div class="row"><input type="text" id="sp-name" placeholder="Career name" value="My career"><select id="sp-team"><option value="0">Follow a team (optional)</option>${[...TEAMS.values()].filter(t=>t.full).map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('')}</select>
       <button class="btn pri" id="sp-go">Start a new career</button></div>
       <label class="row" style="gap:6px"><input type="checkbox" id="sp-coach"> Coach the team I follow (board targets, contracts, squads, the sack)</label>
@@ -164,6 +164,9 @@ function showSplash(pref){
         <label>Age <input type="number" id="sp-age" min="17" max="24" value="19" style="width:60px"></label></div>
       <label class="row" style="gap:6px">Start in <select id="sp-year">${startYears().map(y=>`<option value="${y}">${y}${y===+CAREER_START.slice(0,4)?' (the beginning)':''}</option>`).join('')}</select>
         <span class="muted" style="font-size:12px" id="sp-year-note"></span></label>
+      <div class="row hidden" id="sp-hist-row" style="gap:10px"><span>Years before:</span>
+        <label class="row" style="gap:4px"><input type="radio" name="sp-hist" value="real" ${HIST_GZ?'checked':'disabled'}> Real results</label>
+        <label class="row" style="gap:4px"><input type="radio" name="sp-hist" value="sim" ${HIST_GZ?'':'checked'}> Simulated</label></div>
       <label class="row" style="gap:6px">Save in <select id="sp-slot">${slots.map((d,i)=>`<option value="${i}" ${i===pick?'selected':''}>Slot ${i+1} - ${d?esc(d.name)+' ('+d.n+' matches) - starts fresh':'empty'}</option>`).join('')}</select></label>
       <div class="muted" style="font-size:12px" id="sp-warn"></div>
       <div class="row">${slots.some(Boolean)?'<button class="btn" id="sp-back">Back</button>':''}<button class="btn" id="sp-guide">How it works</button></div></div></div>`;
@@ -180,10 +183,12 @@ function showSplash(pref){
     S=newCareer({name:$('#sp-name').value.trim()||'My career',myTeam:team});
     // coach / player careers begin when you take over, after any years played out
     const begin=()=>{if(coach)startCoach(team);else if(me)createMe(meSpec);saveGame();go(S.coach?'coach':S.me?'me':'home');};
-    if(yr>+CAREER_START.slice(0,4))prefillTo(yr,begin);else begin();
+    if(yr>+CAREER_START.slice(0,4))prefillTo(yr,begin,($('[name=sp-hist]:checked')||{}).value==='real');else begin();
   };
-  const yrNote=()=>{const y=+$('#sp-year').value;$('#sp-year-note').textContent=y>+CAREER_START.slice(0,4)?`${CAREER_START.slice(0,4)}-${y-1} are played out first (${fixturesBefore(y).toLocaleString()} matches, about ${Math.max(2,Math.round(fixturesBefore(y)/300))} seconds)`:'';};
-  $('#sp-year').onchange=yrNote;yrNote();
+  const yrNote=()=>{const y=+$('#sp-year').value,later=y>+CAREER_START.slice(0,4),real=($('[name=sp-hist]:checked')||{}).value==='real';
+    $('#sp-hist-row').classList.toggle('hidden',!later);
+    $('#sp-year-note').textContent=later?`${CAREER_START.slice(0,4)}-${y-1} are ${real?'filled in':'played out'} first (${fixturesBefore(y).toLocaleString()} matches, about ${Math.max(2,Math.round(fixturesBefore(y)/(real?900:300)))} seconds)`:'';};
+  $('#sp-year').onchange=yrNote;$$('[name=sp-hist]').forEach(r=>r.onchange=yrNote);yrNote();
   $('#sp-me').onchange=e=>{$('#sp-me-f').classList.toggle('hidden',!e.target.checked);if(e.target.checked)$('#sp-coach').checked=false;};
   $('#sp-coach').onchange=e=>{if(e.target.checked){$('#sp-me').checked=false;$('#sp-me-f').classList.add('hidden');}};
   $('#sp-guide').onclick=openGuide;

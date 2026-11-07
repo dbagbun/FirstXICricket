@@ -37,7 +37,7 @@ RENDER.home=(el)=>{
       <div class="card"><h3>Recent results</h3>${recent.length?recent.map(matchLine).join('<hr style="border:0;border-top:1px solid var(--line)">'):'<p class="muted">No matches yet. Your career starts with the '+esc(seriesOf(FIX[0]).title)+'.</p>'}</div>
     </div>
     <div class="stack">
-      <div class="card"><h3>Career</h3>${S.prefilled?`<div class="muted" style="font-size:12px;margin:-4px 0 6px">Taken over on ${fmtDate(S.startFrom)} - the ${S.prefilled.toLocaleString()} matches before were played out.</div>`:''}<div class="spread"><span class="sub">ODIs played</span><b class="num">${playedO} / ${total}</b></div>
+      <div class="card"><h3>Career</h3>${S.prefilled?`<div class="muted" style="font-size:12px;margin:-4px 0 6px">Taken over on ${fmtDate(S.startFrom)} - the ${S.prefilled.toLocaleString()} matches before ${S.realTo?`are the real ones${S.realN<S.prefilled?` (${S.prefilled-S.realN} simulated)`:''}`:'were played out'}.</div>`:''}<div class="spread"><span class="sub">ODIs played</span><b class="num">${playedO} / ${total}</b></div>
         <div class="bar" style="margin:6px 0 10px"><i style="width:${(100*playedO/total).toFixed(1)}%"></i></div>
         ${playedT?`<div class="spread"><span class="sub">Tests played</span><b class="num">${playedT}</b></div>`:''}${playedT20?`<div class="spread"><span class="sub">T20s played</span><b class="num">${playedT20}</b></div>`:''}
         ${top('ODI',s=>s.r,'Most ODI runs')}${top('ODI',s=>s.bw,'Most ODI wickets')}${top('TEST',s=>s.r,'Most Test runs')}${top('TEST',s=>s.bw,'Most Test wickets')}</div>
@@ -107,25 +107,31 @@ function simMany(list,what){
   setTimeout(tick,30);
 }
 // ---------- start in a later year ----------
-// A career that starts in, say, 2008 first plays out every match before it - quietly, with AI captains and no
-// achievements - so the records, rankings, tables and players' careers are in place when you take over.
-// S.prefilled = matches played out, S.startFrom = the date you took over.
-function prefillTo(year,done){
-  const cut=year+'-01-01',span=Math.max(1,daysBetween(CAREER_START,cut));let n=0,reached=false;
+// A career that starts in, say, 2008 first fills in every match before it - quietly, no achievements - so the records,
+// rankings, tables and players' careers are in place when you take over. real: from the real scorecards (07q; S.realTo,
+// and any match without one is simulated), else simulated with AI captains.
+// S.prefilled = matches filled in, S.startFrom = the date you took over.
+async function prefillTo(year,done,real){
+  const cut=year+'-01-01',span=Math.max(1,daysBetween(CAREER_START,cut)),yrs=`${CAREER_START.slice(0,4)}${+year-1>+CAREER_START.slice(0,4)?'-'+(year-1):''}`;
+  let n=0,nReal=0,reached=false;
+  if(real){openModal(`<h2>Unpacking the real scorecards…</h2>`);if(!await loadHist()){real=false;toast('The real scorecards are not available in this browser - the years before are simulated instead.','warn');}}
+  if(real){S.realTo=cut;fxDirty();}
   S.prefill=true;SIM_STOP=false;
-  openModal(`<h2>Playing out ${CAREER_START.slice(0,4)}${+year-1>+CAREER_START.slice(0,4)?'-'+(year-1):''}</h2>
-    <p class="sub">Every match before ${year}, with AI captains, so the records, rankings and careers are in place when you start.</p>
+  openModal(`<h2>${real?'Filling in':'Playing out'} ${yrs}</h2>
+    <p class="sub">Every match before ${year}${real?', as it really happened,':', with AI captains,'} so the records, rankings and careers are in place when you start.</p>
     <div class="bar" style="margin:10px 0"><i id="pf-bar" style="width:0"></i></div><div id="pf-txt" class="sub">Starting…</div>
     <div class="row" style="margin-top:12px"><button class="btn" id="pf-stop">Stop and start from here</button></div>`);
   $('#pf-stop').onclick=()=>{SIM_STOP=true;};
   const tick=()=>{
     const t0=Date.now();
-    while(Date.now()-t0<80&&!SIM_STOP){const fx=nextFixture();if(!fx||fx.date>=cut){SIM_STOP=reached=true;break;}simFixture(fx);n++;}
+    while(Date.now()-t0<80&&!SIM_STOP){const fx=nextFixture();if(!fx||fx.date>=cut){SIM_STOP=reached=true;break;}
+      if(real&&recordReal(fx))nReal++;else simFixture(fx);n++;}
     const d=careerDate();
     $('#pf-bar')&&($('#pf-bar').style.width=Math.min(100,100*daysBetween(CAREER_START,d)/span)+'%');
     $('#pf-txt')&&($('#pf-txt').textContent=`${fmtDate(d)} · ${n.toLocaleString()} matches`);
     if(!SIM_STOP){setTimeout(tick,0);return;}
     S.prefill=false;S.prefilled=S.matches.length;S.startFrom=!n?'':reached?cut:careerDate();
+    if(real){S.realN=nReal;if(!reached)S.realTo=S.startFrom;fxDirty();}
     closeModal();saveGame();done();
   };
   setTimeout(tick,30);

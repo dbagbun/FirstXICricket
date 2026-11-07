@@ -5,8 +5,10 @@ Usage: python3 tools/cricsheet_tests.py tests_json.zip [data/world.json]
        python3 tools/cricsheet_tests.py --t20 t20s_json.zip [data/world.json]
   (the zips from https://cricsheet.org/downloads/ - the JSON format)
 
---t20 writes WORLD.t20s / WORLD.t20xi instead, in the same shapes, and leaves out the T20 World Cups themselves
-(the game stages those as cups, 07m-icc); qualifiers, tri-series and bilateral series are kept. Run it after the Tests.
+--t20 writes WORLD.t20s / WORLD.t20xi instead, in the same shapes plus [.., wc, stage]: wc=1 marks a T20 World Cup
+match (the game stages its own World Cups as cups, 07m-icc, and plays the real ones only when it fills in years from
+real results), stage is Cricsheet's knockout stage ('Final', 'Semi Final' ...). Run it after the Tests. Re-runs keep
+the player ids of an earlier run (saves refer to them).
 
 For every Test between two teams in the workbook's Teams list, from the first ODI fixture date onwards:
   WORLD.tests  = [[no, date, event, teamA, teamB, venue, city, cricsheetId], ...]
@@ -38,10 +40,8 @@ def main():
     for pid, p in players.items():
         by_name[p[0]].append(int(pid))
     teams_of = collections.defaultdict(set)
-    # the other format's real XIs count too (a T20 run sees the Test XIs), but not this format's old import
+    # every real XI so far counts, this format's earlier import too, so a re-run keeps the same ids
     for key in ('xi', 'txi', 't20xi'):
-        if key == FMT['xi']:
-            continue
         for cid, sides in world.get(key, {}).items():
             for tid, lst in sides.items():
                 for pid in lst[:11]:
@@ -76,8 +76,8 @@ def main():
             if date < start or len(teams) != 2 or not all(t in tid_of for t in teams):
                 continue
             ev0 = info.get('event', {})
-            if T20 and WORLD_CUP.match(ev0.get('name', '') if isinstance(ev0, dict) else str(ev0)):
-                continue
+            wc = 1 if T20 and WORLD_CUP.match(ev0.get('name', '') if isinstance(ev0, dict) else str(ev0)) else 0
+            stage = ev0.get('stage', '') if isinstance(ev0, dict) else ''
             cid = fn.rsplit('/', 1)[-1][:-5]
             side = {}
             for tname in teams:
@@ -122,10 +122,11 @@ def main():
                         b[2] += sum(1 for w in dl.get('wickets', []) if w.get('kind') not in ('run out', 'retired hurt', 'obstructing the field'))
             ev = info.get('event', {})
             name = ev.get('name', '') if isinstance(ev, dict) else str(ev)
-            tests.append([0, date, name, tid_of[teams[0]], tid_of[teams[1]], info.get('venue', ''), info.get('city', ''), cid])
+            tests.append([0, date, name, tid_of[teams[0]], tid_of[teams[1]], info.get('venue', ''), info.get('city', ''), cid] + ([wc, stage] if T20 else []))
             txi[cid] = side
 
-    tests.sort(key=lambda r: (r[1], r[7]))
+    # World Cup matches are numbered after the rest, so adding them kept the keys ('i<no>') saves already use
+    tests.sort(key=lambda r: (r[8] if T20 else 0, r[1], r[7]))
     for i, r in enumerate(tests):
         r[0] = i + 1
     # rate Test-only bowlers by percentile of (runs per over - 9 x wickets per over), as the ODI extractor does

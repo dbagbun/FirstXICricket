@@ -226,7 +226,8 @@ function batColour(M,pid,pos,bowlTeam){
   if(f)col='BGR'[clamp(COL_RANK[col]-f,0,2)];
   return col;
 }
-const BOWLER_CREDIT={b:1,lbw:1,ct:1,ctof:1,ctwk:1,st:1,ro:0};
+// (hw, rto, obs, to: hit wicket, retired out, obstructing / handled, timed out - only in real scorecards, 07q)
+const BOWLER_CREDIT={b:1,lbw:1,ct:1,ctof:1,ctwk:1,st:1,hw:1,ro:0,rto:0,obs:0,to:0};
 // The workbook's ODI and Test cards have no stumpings: a keeper's wicket off a spinner is a stumping STUMP_SPIN
 // of the time (picked by a hash of the ball, so the dice and every other draw are untouched). Only the mode changes.
 const STUMP_SPIN=.28;   // ~3% of ODI dismissals, as in real ODIs

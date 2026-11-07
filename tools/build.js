@@ -1,5 +1,6 @@
 // Bundles src/ + data/world.json into one self-contained first-xi.html
 // node tools/build.js [out.html] [world.json]
+// data/hist.json.gz (tools/cricsheet_cards.py: real scorecards) goes in as base64 HIST_GZ, unpacked by the game only when needed.
 const fs=require('fs'),path=require('path');
 const root=path.join(__dirname,'..'),out=process.argv[2]||path.join(root,'dist','first-xi.html');
 // Fonts: every fonts/<family>-latin-<weight>-<style>.woff2 is embedded as an @font-face (SIL OFL, licences in fonts/)
@@ -13,7 +14,8 @@ const css=fontFaces+'\n'+fs.readFileSync(path.join(root,'src/styles.css'),'utf8'
 const js=fs.readdirSync(path.join(root,'src/js')).filter(f=>f.endsWith('.js')).sort().map(f=>fs.readFileSync(path.join(root,'src/js',f),'utf8')).join('\n');
 const data=fs.readFileSync(process.argv[3]||path.join(root,'data/world.json'),'utf8').trim().replace(/<\//g,'<\\/');
 let t=fs.readFileSync(path.join(root,'src/template.html'),'utf8');
-t=t.replace('/*@@CSS@@*/',()=>css).replace('/*@@DATA@@*/',()=>'const WORLD='+data+';').replace('/*@@JS@@*/',()=>js);
+const histF=path.join(root,'data/hist.json.gz'),hist=fs.existsSync(histF)?fs.readFileSync(histF).toString('base64'):'';
+t=t.replace('/*@@CSS@@*/',()=>css).replace('/*@@DATA@@*/',()=>'const WORLD='+data+';\nconst HIST_GZ="'+hist+'";').replace('/*@@JS@@*/',()=>js);
 fs.mkdirSync(path.dirname(out),{recursive:true});fs.writeFileSync(out,t);
 // For hosting (GitHub Pages etc.): manifest, icon and an offline service worker next to the page.
 // They are only used when the page is served over http(s); opening the file from disk ignores them.
