@@ -50,7 +50,7 @@ RENDER.coach=(el)=>{
     squad=`<div class="card"><div class="spread"><h3 style="margin:0">Squad - ${esc(nx.title)}</h3><b class="num ${sq.length>SQUAD_SIZE?'red':''}">${sq.length}/${SQUAD_SIZE}</b></div>
       <div class="muted" style="font-size:12px;margin:4px 0 8px">Your XI keeps the real XI where those men are in the squad and fit; gaps are filled from the squad like for like. ▲▼ form · tired bowlers lose a rating step.</div>
       <div class="tbl-wrap"><table><tr><th></th><th>Player</th><th class="hide-sm">Bowling</th><th>Bat</th><th class="r">${FMT_NAME[fmt]} M</th><th class="r hide-sm">Runs</th><th class="r hide-sm">Wkts</th><th>Status</th></tr>
-      ${pool.map(p=>{const a=pAttr(p,nx.date),s=S.stats[fmt][p]||{},inj=isInjured(p,nx.date);
+      ${pool.map(p=>{const a=pAttr(p,nx.date,fmt),s=S.stats[fmt][p]||{},inj=isInjured(p,nx.date);
         return`<tr><td><input type="checkbox" data-sq="${p}" ${sq.includes(p)?'checked':''} ${inj?'disabled':''}></td><td>${plink(p)} ${formIcon(p,fmt,a.bat?.length===2?a.bat[0]:a.bat||'G')}</td>
         <td class="hide-sm muted" style="font-size:12px">${a.style==='N'?'-':STYLE_NAME[a.style]+' r'+Math.min(a.rating,5)}</td><td>${a.bat?batChip(a.bat[0]):''}</td>
         <td class="r num">${s.m||0}</td><td class="r num hide-sm">${s.r||0}</td><td class="r num hide-sm">${s.bw||0}</td>

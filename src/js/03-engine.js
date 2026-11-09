@@ -216,7 +216,7 @@ const weakAssoc=(t,date)=>{const w=WEAK_ASSOC[+t];return!!w&&!!date&&date>=w[0]&
 function batColour(M,pid,pos,bowlTeam){
   const pc=posColour(pos);
   if(M.batMode==='position')return pc;
-  const a=pAttr(pid,M.date),c=a.bat||pc;
+  const a=pAttr(pid,M.date,M.fmt),c=a.bat||pc;
   const vsFull=!!TEAMS.get(+bowlTeam)?.full;
   const own=c.length===2?c[vsFull?1:0]:c;
   let col=!a.bat||a.batSrc==='h'||a.batSrc==='e'||(c.length===2&&vsFull)?own:COL_RANK[pc]<COL_RANK[own]?'BGR'[COL_RANK[own]-1]:own;
@@ -302,7 +302,7 @@ function bowlEngInit(M,I){
   // pt: a part-timer (bowls at most PART_TIME_MAX of his 10 overs in an ODI) - in a Test he's a change, not a stock bowler
   const add=(pid,style,rating,max,pt=false)=>{B.push({pid,style,rating:clamp(rating+mod(pid),1,6),max,pt,used:0,last:0,spell:0,spellMax:0,rest:0,active:false});total+=max;};
   x.bat.forEach((pid,i)=>{
-    const a=pAttr(pid,M.date);
+    const a=pAttr(pid,M.date,M.fmt);
     if(pid===x.wk)return;   // the keeper keeps
     if(a.style!=='N'&&a.rating<=6&&a.max>0)add(pid,a.style,a.rating,M.fmt==='TEST'?999:Math.max(1,Math.round(a.max*perBowler(M)/10)),a.max<=PART_TIME_MAX);
   });
@@ -323,7 +323,7 @@ function bowlEngInit(M,I){
       const pid=+p;if(!x.bat.includes(pid))continue;
       const b=B.find(b=>b.pid===pid);
       if(b)b.max=Math.max(b.max,cnt[p]);
-      else{const a=pAttr(pid,M.date);add(pid,a.style==='N'?'M':a.style,a.style==='N'?4:a.rating,M.fmt==='TEST'?999:Math.max(cnt[p],a.max||0),true);}
+      else{const a=pAttr(pid,M.date,M.fmt);add(pid,a.style==='N'?'M':a.style,a.style==='N'?4:a.rating,M.fmt==='TEST'?999:Math.max(cnt[p],a.max||0),true);}
     }
   }
   return{B,lastIdx:-1,plan:plan||null,newBallAt:1};
@@ -391,7 +391,7 @@ function bowlerOptions(M){
   const I=curInn(M),x=M.xi[I.bowl],E=I.eng,last=E.lastIdx>=0?E.B[E.lastIdx].pid:0,over=Math.floor(I.lb/6)+1;
   const real=E.plan&&E.plan[over-1]||0;
   return x.bat.filter(p=>p!==x.wk).map(pid=>{
-    const b=E.B.find(b=>b.pid===pid),W=I.bw[pid]||{b:0,r:0,w:0,md:0},a=pAttr(pid,M.date);
+    const b=E.B.find(b=>b.pid===pid),W=I.bw[pid]||{b:0,r:0,w:0,md:0},a=pAttr(pid,M.date,M.fmt);
     const used=b?b.used:0,why=pid===last?'bowled the last over':LIMITED(M)&&used>=perBowler(M)?'bowled out':'';
     return{pid,used,W,style:b?b.style:a.style==='N'?'M':a.style,rating:b?b.rating:a.style==='N'?6:a.rating,ok:!why,why,real:pid===real,regular:!!b};
   });
@@ -412,8 +412,8 @@ function captainBowler(M,I,over){
 function nightwatch(M,I){
   const clk=testClock(M)%90,k=I.wkts+1;
   if(testDay(M)>=5||clk<84||I.wkts>=7||k>5||I.target&&I.target-I.runs<60)return false;
-  const cand=[7,8,9].map(i=>I.order[i]).filter(p=>p!=null&&!I.bt[p]&&pAttr(p,M.date).style!=='N')
-    .sort((a,b)=>(COL_RANK[pAttr(a,M.date).bat?.[0]]??2)-(COL_RANK[pAttr(b,M.date).bat?.[0]]??2))[0];
+  const cand=[7,8,9].map(i=>I.order[i]).filter(p=>p!=null&&!I.bt[p]&&pAttr(p,M.date,M.fmt).style!=='N')
+    .sort((a,b)=>(COL_RANK[pAttr(a,M.date,M.fmt).bat?.[0]]??2)-(COL_RANK[pAttr(b,M.date,M.fmt).bat?.[0]]??2))[0];
   if(cand==null)return false;
   const j=I.order.indexOf(cand);I.order.splice(j,1);I.order.splice(k,0,cand);
   fire(M,null,{t:'nw',pid:cand,bat:I.bat});return true;

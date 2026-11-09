@@ -57,9 +57,9 @@ function rollInjuries(E,team){
 function matchMods(M){
   const mods={bat:{},bowl:{}},my=managedTeam();
   if(S.settings.form!=='off'&&M.batMode!=='position')for(const t of M.teams)M.xi[t].bat.forEach((pid,i)=>{
-    const opp=otherTeam(M,t),own=pAttr(pid,M.date).bat;
+    const opp=otherTeam(M,t),own=pAttr(pid,M.date,M.fmt).bat;
     // an associate's GREEN against a Test nation is the opposition rule, not form: never lift it
-    const col=own&&own.length===2&&TEAMS.get(opp)?.full?'X':batColour({batMode:M.batMode,date:M.date},pid,i+1,opp);
+    const col=own&&own.length===2&&TEAMS.get(opp)?.full?'X':batColour({batMode:M.batMode,date:M.date,fmt:M.fmt},pid,i+1,opp);
     const f=formLevel(pid,M.statFmt||M.fmt,col);
     if(f.bat)mods.bat[pid]=f.bat;
     if(f.bowl)mods.bowl[pid]=-f.bowl;

@@ -101,7 +101,7 @@ const takeoverDate=()=>S.startFrom&&S.startFrom>careerDate()?S.startFrom:careerD
 // Build the match for a fixture (not tossed yet). ODI knockouts can be re-seeded from your tables.
 function buildMatch(fx){
   if(fx.fmt!=='ODI'||fx.custom){
-    const xi=t=>(fx.real&&testXI(fx.f.cid,t,fx.date))||nearestXI(t,fx.date);
+    const xi=t=>(fx.real&&testXI(fx.f.cid,t,fx.date))||nearestXI(t,fx.date,{fmt:fx.fmt});
     const home=fx.real?(VENUE_HOME.get(fx.venue)||fx.a):fx.a;
     const M=newMatch({fmt:fx.fmt,a:fx.a,b:fx.b,home,date:fx.date,venue:fx.venue,city:fx.city,sid:fx.sid,series:fx.title,stage:fx.stage||fx.label,realCid:fx.real?fx.f.cid:null,
       xiA:fx.xiA||xi(fx.a),xiB:fx.xiB||xi(fx.b)});

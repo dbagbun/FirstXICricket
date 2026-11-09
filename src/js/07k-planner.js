@@ -19,7 +19,7 @@ function myUpcoming(team,days=365){
 }
 // The XI you'd field: the real one where there is one, through your squad, injuries and rest.
 function probableXI(fx,team){
-  const base=(fx.f&&WORLD.xi[fx.f.cid]&&WORLD.xi[fx.f.cid][team]&&fixtureXI(fx.f.cid,team))||(fx.real&&testXI(fx.f.cid,team,fx.date))||nearestXI(team,fx.date);
+  const base=(fx.f&&WORLD.xi[fx.f.cid]&&WORLD.xi[fx.f.cid][team]&&fixtureXI(fx.f.cid,team))||(fx.real&&testXI(fx.f.cid,team,fx.date))||nearestXI(team,fx.date,{fmt:fx.fmt});
   return pickXI(fx,team,base).xi.bat;
 }
 const statFmtOf=fx=>fx.cup&&cupById(fx.sid)?.league?'LEAGUE':fx.fmt;

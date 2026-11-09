@@ -153,7 +153,7 @@ const batChip=c=>`<span class="bchip b${c}" title="Falls to ${c==='B'?'BLUE wick
 function xiTable(M,t){
   const x=M.xi[t],mine=t===managedTeam();
   const notes=mine&&M.selNotes&&M.selNotes.length?`<div class="muted" style="font-size:12px;margin-bottom:6px">${M.selNotes.map(n=>`${esc(pName(n.inn))} in for ${esc(pName(n.out))} (${n.why})`).join(' · ')}</div>`:'';
-  return notes+`<table>${x.bat.map((p,i)=>{const a=pAttr(p,M.date),f=M.mods&&((M.mods.bat[p]||0)-(M.mods.bowl[p]||0));return`<tr><td class="muted">${i+1}</td><td>${batChip(batColour(M,p,i+1,otherTeam(M,t)))} ${plink(p)}${p===x.cap?' <span class="gold">(c)</span>':''}${p===x.wk?' <span class="cyan">†</span>':''}${f>0?' <span class="green" title="In form">▲</span>':f<0?' <span class="red" title="Out of form or tired">▼</span>':''}${mine?' '+fatigueTag(p,M.date):''}</td>
+  return notes+`<table>${x.bat.map((p,i)=>{const a=pAttr(p,M.date,M.fmt),f=M.mods&&((M.mods.bat[p]||0)-(M.mods.bowl[p]||0));return`<tr><td class="muted">${i+1}</td><td>${batChip(batColour(M,p,i+1,otherTeam(M,t)))} ${plink(p)}${p===x.cap?' <span class="gold">(c)</span>':''}${p===x.wk?' <span class="cyan">†</span>':''}${f>0?' <span class="green" title="In form">▲</span>':f<0?' <span class="red" title="Out of form or tired">▼</span>':''}${mine?' '+fatigueTag(p,M.date):''}</td>
     <td class="r muted" style="font-size:12px">${a.style==='N'?'':STYLE_NAME[a.style]+' '+'●'.repeat(6-Math.min(a.rating,5))}</td><td class="r"><button class="btn sm" data-swap="${t}:${i}">Swap</button></td></tr>`;}).join('')}</table>`;
 }
 function renderPre(el,M){
@@ -194,7 +194,7 @@ function openSwap(M,t,i){
   const mine=t===managedTeam();
   const x=M.xi[t],cur=x.bat[i],pool=(mine?squadFor(M.sid,t,M.date):squadAround(t,M.date,500)).filter(p=>!x.bat.includes(p)&&!(mine&&isInjured(p,M.date))).slice(0,30);
   openModal(`<h2>Replace ${esc(pName(cur))}</h2><p class="muted">${mine?'From your squad for this series (fit players only).':`Players who turned out for ${esc(teamName(t))} around this date.`}</p>
-    <div class="grid g2">${pool.map(p=>{const a=pAttr(p,M.date);return`<button class="btn" data-rep="${p}" style="text-align:left">${esc(pName(p))} <span class="muted">${a.style==='N'?'':STYLE_NAME[a.style]+' r'+a.rating}</span></button>`;}).join('')||'<p class="muted">No one else available.</p>'}</div>
+    <div class="grid g2">${pool.map(p=>{const a=pAttr(p,M.date,M.fmt);return`<button class="btn" data-rep="${p}" style="text-align:left">${esc(pName(p))} <span class="muted">${a.style==='N'?'':STYLE_NAME[a.style]+' r'+a.rating}</span></button>`;}).join('')||'<p class="muted">No one else available.</p>'}</div>
     <h3 style="margin-top:14px">Batting order</h3><div class="row"><button class="btn sm" id="sw-up">Move up</button><button class="btn sm" id="sw-dn">Move down</button><button class="btn sm" id="sw-wk">Make keeper</button><button class="btn sm" id="sw-cap">Make captain</button></div>`);
   $$('[data-rep]').forEach(b=>b.onclick=()=>{const p=+b.dataset.rep;if(x.wk===cur)x.wk=p;if(x.cap===cur)x.cap=p;x.bat[i]=p;delete M.plans[t];M.mods=matchMods(M);closeModal();rerender();});
   const mv=d=>{const j=i+d;if(j<0||j>10)return;[x.bat[i],x.bat[j]]=[x.bat[j],x.bat[i]];closeModal();rerender();};

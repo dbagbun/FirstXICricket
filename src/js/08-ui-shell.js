@@ -61,8 +61,9 @@ function openPlayer(pid){
   <div class="row muted" style="margin-bottom:10px">${rows.length?rows[0][1].teams.map(badge).join(' '):''}
     <span>Batting: <b>${esc(a.bat?BAT_NAME[a.bat]:'by position')}</b> <span class="pill">${a.batSrc==='h'?'from your Excel BatGroup':a.batSrc==='e'?'edited':a.batSrc==='c'?'from real averages':a.batSrc==='g'?'new player':'derived'}</span></span>
     <span>Bowling: ${a.style==='N'?'does not bowl':`${STYLE_NAME[a.style]}, rating ${a.rating}${a.rating>=5?' (part-timer)':a.rating===1?' (elite)':''}`}
-    <span class="pill">${a.src==='h'?'from your Excel ratings':a.src==='e'?'edited':'from real spells'}</span></span>
+    <span class="pill">${a.src==='h'?'from your Excel ratings':a.src==='e'?'edited':'from real spells'}</span> <span class="muted">(ODI)</span></span>
     <button class="btn sm" id="pa-edit">Edit</button><button class="btn sm" id="pa-cmp">Compare / graphs</button></div>
+  ${WORLD.fx&&WORLD.fx[pid]&&!S.attrEdits[pid]?`<div class="muted" style="font-size:12px;margin:-4px 0 6px">By format: ${[['ODI','ODI'],['TEST','Test'],['T20','T20I']].map(([f,n])=>{const x=pAttr(pid,undefined,f);return`${n} ${x.style!=='N'?'r'+x.rating+' ':''}${x.bat?batChip(x.bat[0]):''}`;}).join(' · ')}</div>`:''}
   ${era.length>1&&!S.attrEdits[pid]?`<div class="muted" style="font-size:12px;margin:-4px 0 10px">By season: ${era.map(e=>`${e[0]} ${bowls&&(WORLD.players[pid][4]!=='h')?'r'+e[1]+' ':''}${e[2]?batChip(e[2].length===2?e[2][0]:e[2]):''}`).join(' · ')}${a.era?' (as of '+fmtDate(careerDate()).slice(-4)+')':''}</div>`:''}
   <div id="pa-form" class="hidden card" style="margin-bottom:10px"><div class="row">
     <label>Style <select id="pa-style">${['P','S','M','N'].map(s=>`<option value="${s}" ${a.style===s?'selected':''}>${s==='N'?'Does not bowl':STYLE_NAME[s]}</option>`).join('')}</select></label>

@@ -8,15 +8,24 @@ const pName=pid=>{const p=WORLD.players[pid];if(p)return p[0];const g=typeof gen
 // batting colour: B/G/R against everyone, or two letters = against associates + against Test nations
 // ('BG': BLUE v associates, GREEN v Test nations; '' = by position), batSrc].
 // era: [[year, rating, colour], ...] - his rating and colour as of that year (see tools/extract.py).
-// pAttr(pid, date): as of `date` (default: your career date), unless Settings -> Ratings is 'career'.
+// pAttr(pid, date, fmt): as of `date` (default: your career date), unless Settings -> Ratings is 'career'.
 // Edits in S.attrEdits win (bowling fields and/or bat).
+// fmt 'TEST' / 'T20': his rating and colour in that format (WORLD.fx, tools/format_ratings.py: from the real Test and
+// T20I scorecards, by era) where he has a record in it; ODIs (and no fmt) use the workbook's own.
 function eraEntry(p,date){
   const E=p[7];if(!E||!E.length||!date)return null;
   const y=+date.slice(0,4);let e=E[0];
   for(const x of E){if(x[0]<=y)e=x;else break;}
   return e;
 }
-function pAttr(pid,date){
+const FX_KEY={TEST:'T',T20:'I',LEAGUE:'I'};
+// The format's era entry [year, rating, colour] (or the career one), or null.
+function fmtEntry(pid,date,fmt){
+  const F=WORLD.fx&&FX_KEY[fmt]&&WORLD.fx[pid];if(!F)return null;const k=FX_KEY[fmt];
+  if(typeof S!=='undefined'&&S&&S.settings.ratings==='career'){const c=F[k+'c'];return c?[0,c[0],c[1]]:null;}
+  return eraEntry([0,0,0,0,0,0,0,F[k]],date);
+}
+function pAttr(pid,date,fmt){
   const hasS=typeof S!=='undefined'&&S;
   const e=hasS&&S.attrEdits&&S.attrEdits[pid];
   if(date===undefined&&hasS&&typeof careerDate==='function')date=careerDate();
@@ -27,6 +36,12 @@ function pAttr(pid,date){
   const bw=e&&e.style?e:{style:p[1],rating:era&&p[1]!=='N'?era[1]:p[2],max:p[3]};
   const bat=e&&e.bat!==undefined?e.bat:(era?era[2]:(p[5]||''));
   const out={style:bw.style,rating:bw.rating,max:bw.max,src:e&&e.style?'e':p[4],bat,batSrc:e&&e.bat!==undefined?'e':(p[6]||'d'),era:!!era};
+  const fe=fmt&&fmt!=='ODI'&&fmtEntry(pid,date,fmt);
+  if(fe){
+    if(fe[1]&&!(e&&e.style)){out.rating=fe[1];out.src='f';if(out.style==='N'){out.style='M';out.max=10;}}   // he bowls in this format
+    if(fe[2]&&!(e&&e.bat!==undefined)){out.bat=fe[2];out.batSrc='c';}
+    out.fmt=fmt;
+  }
   return hasS&&S.gen&&date&&date>LAST_REAL&&!e?futureAttr(pid,date,out):out;   // real players age after the data ends
 }
 const STYLE_NAME={P:'Pace',S:'Spin',M:'Medium',N:'-'};
@@ -117,9 +132,18 @@ for(const f of FIX)for(const t of[f.a,f.b])if(WORLD.xi[f.cid]&&WORLD.xi[f.cid][t
 // First appearance in the data (debut, or the start of the data for players already playing in 2002).
 const DEBUT=new Map();
 for(const f of FIX)if(WORLD.xi[f.cid])for(const t in WORLD.xi[f.cid])for(const p of WORLD.xi[f.cid][t].slice(0,11))if(!DEBUT.has(p))DEBUT.set(p,f.date);
+// opts.fmt 'TEST' / 'T20': the nearest real XI in that format (FMT_GAMES) within FMT_NEAR_DAYS, before falling back to
+// the ODI one - a Test series you schedule picks a Test side (Kumble, not the ODI XI's Chawla).
+const FMT_GAMES={TEST:new Map(),T20:new Map()},FMT_NEAR_DAYS=550;
+for(const[k,L]of[['TEST',TFIX],['T20',IFIX]])for(const f of L)for(const t of[f.a,f.b]){const m=FMT_GAMES[k];if(!m.has(t))m.set(t,[]);m.get(t).push(f);}
 function nearestXI(tid,date,opts={}){
   if(typeof isFranchise==='function'&&isFranchise(tid))return leagueXI(+tid,date);   // (engine-only runs don't load the league)
   if(typeof S!=='undefined'&&S&&S.gen&&isFuture(date)){const x=genXI(+tid,date);if(x)return x;}
+  if(opts.fmt&&FMT_GAMES[opts.fmt]&&!opts.sid){
+    let best=null,bd=FMT_NEAR_DAYS;
+    for(const f of FMT_GAMES[opts.fmt].get(+tid)||[]){let d=Math.abs(daysBetween(f.date,date));if(f.date>date)d+=30;if(d<bd){bd=d;best=f;}}
+    const x=best&&testXI(best.cid,+tid,best.date);if(x)return x;
+  }
   const games=TEAM_GAMES.get(+tid)||[];
   let best=null,bd=1e9;
   for(const f of games){
