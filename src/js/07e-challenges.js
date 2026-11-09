@@ -69,8 +69,8 @@ function fakeInnings(M,I,runs,wkts,balls,closed,why){
 }
 function buildChallengeMatch(def){
   const fmt=def.fmt,date=def.date,home=def.bowl;
-  const rf=def.cid&&FIX.find(f=>f.cid===def.cid),v=rf?{venue:rf.venue,city:rf.city}:(HOME_VENUES.get(home)||[{venue:teamName(home)+' Oval',city:''}])[0];
-  const xi=t=>(def.cid&&fixtureXI(def.cid,t))||nearestXI(t,date);
+  const rf=def.cid&&(FIX.find(f=>f.cid===def.cid)||IFIX.find(f=>f.cid===def.cid)),v=rf?{venue:rf.venue,city:rf.city}:(HOME_VENUES.get(home)||[{venue:teamName(home)+' Oval',city:''}])[0];
+  const xi=t=>(def.cid&&(fixtureXI(def.cid,t)||testXI(def.cid,t,date)))||nearestXI(t,date,{fmt});
   const M=newMatch({fmt,a:def.bowl,b:def.bat,date,venue:v.venue,city:v.city,series:(def.real?'Relive: ':'Challenge: ')+def.title,stage:def.stage||'',
     xiA:xi(def.bowl),xiB:xi(def.bat),home:rf?(VENUE_HOME.get(rf.venue)||home):home,maxOv:def.maxOv});
   M.noWeather=true;M.challenge=def;M.key='CH.'+def.id;M.mods={bat:{},bowl:{}};

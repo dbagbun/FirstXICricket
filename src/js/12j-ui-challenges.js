@@ -1,6 +1,32 @@
 // ═══ CHALLENGES & ACHIEVEMENTS SCREEN ═══
-let PLAY_TAB='list',RELIVE={team:0,side:'chase'};
+let PLAY_TAB='list',RELIVE={team:0,side:'chase',mode:'famous',fmt:'',year:'',page:0};
+// Any real ODI or T20I chase from any over (07l chaseAt), once the real scorecards are unpacked.
+function reliveAnyHTML(){
+  if(!HIST){if(histAvailable()&&!RELIVE.loading){RELIVE.loading=true;loadHist().then(()=>{RELIVE.loading=false;rerender();});}
+    return`<div class="card"><p class="sub">${histAvailable()?'Unpacking the real scorecards…':'The real scorecards are not available in this browser.'}</p></div>`;}
+  const all=reliveAnyList().filter(x=>(!RELIVE.fmt||x.fmt===RELIVE.fmt)&&(!RELIVE.team||x.a===RELIVE.team||x.b===RELIVE.team)&&(!RELIVE.year||x.date.slice(0,4)===RELIVE.year));
+  const years=[...new Set(reliveAnyList().map(x=>x.date.slice(0,4)))].sort().reverse(),teams=[...new Set(reliveAnyList().flatMap(x=>[x.a,x.b]))].sort((a,b)=>teamName(a).localeCompare(teamName(b)));
+  const per=30,page=Math.min(RELIVE.page,Math.max(0,Math.ceil(all.length/per)-1)),list=all.slice(page*per,page*per+per);
+  return`<div class="card"><div class="row"><div class="seg">${[['','All'],['ODI','ODIs'],['T20','T20Is']].map(([k,n])=>`<button data-rlf="${k}" class="${RELIVE.fmt===k?'on':''}">${n}</button>`).join('')}</div>
+      <select id="rl-team"><option value="0">All teams</option>${teams.map(t=>`<option value="${t}" ${t===RELIVE.team?'selected':''}>${esc(teamName(t))}</option>`).join('')}</select>
+      <select id="rl-year"><option value="">Every year</option>${years.map(y=>`<option ${y===RELIVE.year?'selected':''}>${y}</option>`).join('')}</select>
+      <span class="muted">${plural(all.length,'match','matches')}</span></div>
+    <p class="muted" style="font-size:12px;margin:6px 0 0">Pick an over: the real score, wickets and the pair at the crease at its start (their scores are exact at each wicket and shared out in between).</p></div>
+    <div class="grid g2" style="margin-top:14px">${list.map(fx=>{const H=HIST[fx.f.cid],I1=H.i[0],I2=H.i[1],R=WORLD.real[fx.f.cid];
+      const overs=[...Array(I2[10].length).keys()].filter(k=>chaseAt(H,fx.f.cid,k));
+      return`<div class="card stack"><div class="spread"><b>${badge(I1[0])} ${I1[1]}/${I1[2]} · ${badge(I2[0])} ${I2[1]}/${I2[2]}</b><span class="pill">${fx.fmt==='T20'?'T20I':'ODI'}</span></div>
+        <div class="sub">${esc(fx.title)}${fx.stage?' · '+esc(fx.stage):''} · ${fmtDate(fx.date)}</div>${R?`<div class="muted" style="font-size:12px">In reality: ${esc(realText(R))}</div>`:''}
+        <div class="row"><select data-rao="${fx.key}">${overs.map(k=>{const p=chaseAt(H,fx.f.cid,k);return`<option value="${k}">${k?`Over ${k+1}: ${p[1]} off ${p[0]}, ${10-p[2]} wkts`:`The start: chase ${p[1]}`}</option>`;}).join('')}</select>
+          <button class="btn sm pri" data-rag="${fx.key}">Play</button></div></div>`;}).join('')}</div>
+    ${all.length>per?`<div class="row" style="margin-top:10px"><button class="btn sm" data-rlp="-1" ${page?'':'disabled'}>Newer</button><span class="muted">${page+1} / ${Math.ceil(all.length/per)}</span><button class="btn sm" data-rlp="1" ${(page+1)*per<all.length?'':'disabled'}>Older</button></div>`:''}`;
+}
 function reliveHTML(){
+  const modes=`<div class="card" style="margin-bottom:14px"><div class="row"><div class="seg">${[['famous','Famous chases'],['any','Any match']].map(([k,n])=>`<button data-rlm="${k}" class="${RELIVE.mode===k?'on':''}">${n}</button>`).join('')}</div>
+    <div class="seg">${[['chase','I bat (chase)'],['defend','I bowl (defend)']].map(([k,n])=>`<button data-rls="${k}" class="${RELIVE.side===k?'on':''}">${n}</button>`).join('')}</div></div></div>`;
+  if(RELIVE.mode==='any')return modes+reliveAnyHTML();
+  return modes+reliveFamousHTML();
+}
+function reliveFamousHTML(){
   const all=famousMatches();
   if(!all.length)return`<div class="card stack" style="max-width:720px"><h3>Relive history</h3>
     <p class="sub">Start famous real ODIs from where they really stood - the real XIs, the real target, the real pair at the crease with ten, five, two or one overs left - and see if you can change history.</p>
@@ -8,7 +34,7 @@ function reliveHTML(){
   const teams=[...new Set(all.flatMap(x=>[x.f.a,x.f.b]))].sort((a,b)=>teamName(a).localeCompare(teamName(b)));
   const list=all.filter(x=>!RELIVE.team||x.f.a===RELIVE.team||x.f.b===RELIVE.team).reverse().slice(0,60),st=readStars();
   return`<div class="card"><div class="row"><select id="rl-team"><option value="0">All teams (${plural(all.length,'match','matches')})</option>${teams.map(t=>`<option value="${t}" ${t===RELIVE.team?'selected':''}>${esc(teamName(t))}</option>`).join('')}</select>
-    <div class="seg">${[['chase','I bat (chase)'],['defend','I bowl (defend)']].map(([k,n])=>`<button data-rls="${k}" class="${RELIVE.side===k?'on':''}">${n}</button>`).join('')}</div></div></div>
+</div></div>
     <div class="grid g2" style="margin-top:14px">${list.map(({f,R})=>{const bat=R.inn[1][0],bowl=R.inn[0][0];
       return`<div class="card stack"><div class="spread"><b>${badge(bowl)} ${R.inn[0][1]}/${R.inn[0][2]} · ${badge(bat)} chase</b><span class="pill">${FAM_NAME[R.fam]||''}</span></div>
       <div class="sub">${esc(R.ev||seriesOf(f).title)} · ${esc(f.venue)} · ${fmtDate(f.date)}</div><div class="muted" style="font-size:12px">In reality: ${esc(realText(R))}</div>
@@ -58,7 +84,12 @@ RENDER.play=(el)=>{
   $$('[data-chal]').forEach(b=>b.onclick=()=>startChallenge(challengeById(b.dataset.chal)));
   $$('[data-code]').forEach(b=>b.onclick=()=>showCode(challengeById(b.dataset.code)));
   if(PLAY_TAB==='dream')dreamWire();
-  $('#rl-team')&&($('#rl-team').onchange=e=>{RELIVE.team=+e.target.value;rerender();});
+  $('#rl-team')&&($('#rl-team').onchange=e=>{RELIVE.team=+e.target.value;RELIVE.page=0;rerender();});
+  $('#rl-year')&&($('#rl-year').onchange=e=>{RELIVE.year=e.target.value;RELIVE.page=0;rerender();});
+  $$('[data-rlm]').forEach(b=>b.onclick=()=>{RELIVE.mode=b.dataset.rlm;RELIVE.team=0;rerender();});
+  $$('[data-rlf]').forEach(b=>b.onclick=()=>{RELIVE.fmt=b.dataset.rlf;RELIVE.page=0;rerender();});
+  $$('[data-rlp]').forEach(b=>b.onclick=()=>{RELIVE.page=Math.max(0,RELIVE.page+ +b.dataset.rlp);rerender();});
+  $$('[data-rag]').forEach(b=>b.onclick=()=>{const fx=fixtureByKey(b.dataset.rag),k=+$(`[data-rao="${b.dataset.rag}"]`).value,d=fx&&reliveAnyDef(fx,HIST[fx.f.cid],k,RELIVE.side);if(d)startChallenge(d);});
   $$('[data-rls]').forEach(b=>b.onclick=()=>{RELIVE.side=b.dataset.rls;rerender();});
   $$('[data-rl]').forEach(b=>b.onclick=()=>{const[cid,bl]=b.dataset.rl.split(':'),f=FIX.find(x=>x.cid===cid),R=WORLD.real[cid],p=R.pos.find(x=>x[0]===+bl);startChallenge(reliveDef(f,R,p,RELIVE.side));});
   if(PLAY_TAB==='build'){

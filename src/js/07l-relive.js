@@ -38,3 +38,37 @@ function reliveCrease(I,c){
   I.ex.lb=Math.max(0,I.runs-sumBat()-fixed);
 }
 const reliveReal=def=>def&&def.cid&&HAS_REAL&&WORLD.real[def.cid]?realText(WORLD.real[def.cid]):'';
+// ---------- any real ODI or T20I chase, from the start of any over (needs the real scorecards, 07q) ----------
+// The position at the start of over k of the chase comes from the scorecard: runs from the over-by-over line, wickets
+// from the fall of wickets, the pair at the crease from the partnerships (their scores exact at each wicket, shared
+// out in proportion within a stand).
+const realRow=(cid,tid)=>((WORLD.xi[cid])||(WORLD.t20xi&&WORLD.t20xi[cid])||{})[tid]||null;
+function chaseAt(H,cid,k){
+  const I1=H.i[0],I2=H.i[1];if(!I1||!I2)return null;
+  const bat=I2[0],row=realRow(cid,bat);if(!row)return null;
+  const target=I2[11]||I1[1]+1,maxBalls=(I2[12]||I1[12]||50)*6,ov=I2[10],fow=I2[8],parts=I2[9];
+  let runs=0;for(let o=0;o<k;o++)runs+=ov.charCodeAt(o)-48;
+  const lb=6*k,wk=fow.filter(f=>f[2]<=lb).length;
+  if(k>=ov.length||wk>=10||runs>=target)return null;
+  const P=parts[wk];if(!P)return null;
+  const s0=wk?fow[wk-1][0]:0,b0=wk?fow[wk-1][2]:0,fr=P[2]?clamp((runs-s0)/P[2],0,1):0,fb=P[3]?clamp((lb-b0)/P[3],0,1):0;
+  const before=i=>parts.slice(0,wk).reduce((a,q)=>a+(q[0]===i?q[6]:q[1]===i?q[7]:0),0);
+  const bt=i=>I2[6].find(b=>b[0]===i);
+  const man=(i,share)=>{const r=before(i)+Math.round(share*fr),B=bt(i);return[row[i]||0,r,B&&B[1]?Math.round(B[2]*r/B[1]):Math.round(fb*(P[3]/2))];};
+  if(P[0]<0||P[1]<0)return null;
+  return[maxBalls-lb,target-runs,wk,...man(P[0],P[6]),...man(P[1],P[7])];
+}
+function reliveAnyDef(fx,H,k,kind){
+  const p=chaseAt(H,fx.f.cid,k);if(!p)return null;
+  const I1=H.i[0],I2=H.i[1],bat=I2[0],bowl=I1[0],fmt=fx.fmt,target=I2[11]||I1[1]+1,maxBalls=p[0]+6*k;
+  return{id:`ra-${fx.f.cid}-${k}-${kind}`,title:`${teamShort(bat)} v ${teamShort(bowl)} ${fx.date.slice(0,4)}${k?' · from over '+(k+1):''}`,
+    desc:k?`${teamName(bat)} need ${p[1]} off ${plural(p[0],'ball')} with ${plural(10-p[2],'wicket')} left against ${teamName(bowl)}.`:`${teamName(bat)} chase ${target} against ${teamName(bowl)}.`,
+    kind,fmt,bat,bowl,date:fx.date,target,need:p[1],balls:p[0],wkts:p[2],cid:fx.f.cid,crease:k?p.slice(3):null,
+    first:[I1[2],I1[3]],maxOv:Math.ceil(maxBalls/6),stage:fx.stage&&/final|semi|quarter/i.test(fx.stage)?fx.stage:(fx.fmt==='ODI'?(()=>{const Ed=edition(fx.sid);return Ed?stageName(Ed.stageOf.get(fx.f.no),Ed):'';})():''),real:1};
+}
+// Every real ODI and T20I with a chase, newest first.
+function reliveAnyList(){
+  if(!HIST)return[];
+  return[...ODI_FX.filter(x=>x.playable),...REAL_T20_FX].filter(x=>{const H=HIST[x.f.cid];return H&&H.i.length===2&&H.i[1][10].length>0;})
+    .sort((a,b)=>a.date<b.date?1:-1);
+}
