@@ -3,7 +3,7 @@
 A single self-contained HTML cricket career sim, ported from the Excel/VBA "First XI" workbook. Every ODI from Jun 2002 to Jan 2026 (Cricsheet fixtures, real XIs and real bowling plans) played ball by ball with the First XI run-rate cards, plus Test cricket. No framework, no runtime dependencies. `npm run build` bundles `src/` + `data/world.json` into **`dist/first-xi.html`** - that one file is the product.
 
 ## No Node on your machine?
-The repo root holds a prebuilt `first-xi.html` (double-click to open). **After any source or data change, rebuild and copy everything in `dist/` (the page plus `manifest.webmanifest`, `sw.js`, `icon.svg`) to the repo root before committing** (`npm run check` fails if the page is stale). The extra three files only matter when the page is hosted (GitHub Pages): it then installs as an app and plays offline.
+The repo root holds a prebuilt `first-xi.html` (double-click to open). **After any source or data change, rebuild and copy everything in `dist/` (the page plus `manifest.webmanifest`, `sw.js`, `icon.svg`) to the repo root before committing** (`npm run check` fails if any of them is stale - a stale `sw.js` would keep installed copies on an old version). The extra three files only matter when the page is hosted (GitHub Pages): it then installs as an app and plays offline. `index.html` at the root just forwards to `first-xi.html`, so the bare Pages address opens the game.
 
 ## The rules (sacred - this is the board game)
 - Each over: a run-rate card RR_3 / 4A / 4B / 5 / 6 / 7 is picked by weighted random from the bowler's rating (`CARD_WEIGHTS[fmt][rating]`), shifted by the situation (`situationShift`, port of `CalcSituationShift`; `applyShift` ports `ApplyShift` including its lossy overflow).
