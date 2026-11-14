@@ -207,6 +207,24 @@ function parseToken(tok){
 }
 const wicketCounts=(group,color)=>group==='B'?color==='BLUE':group==='G'?(color==='BLUE'||color==='GREEN'):color!=='';
 const COL_RANK={B:0,G:1,R:2};
+// Bowler quality and wickets. The workbook's weights give a part-timer the fast cards and those carry the BLUE
+// wickets (RR_7: 52), so left alone a part-timer gets top-order batters out far more often than an elite bowler,
+// who almost never draws RR_7 - the reverse of real cricket. So for a wicket token only, the batter's colour moves a
+// step with the bowler: against BOWL_EDGE[format][rating] = [shift, chance] a BLUE batter can play GREEN (elite bowlers) or a
+// GREEN one BLUE (part-timers; a BLUE one gets a let-off). The cards, the dice and the weights are untouched; the ball's hash decides it (as
+// stumpOf does), so no dice are used. Tuned so wickets by rating track real ODI figures (tests/e2e52.js).
+// Settings -> Bowler quality and wickets 'off' (M.bowlEdge false) gives the workbook's own rule.
+const BOWL_EDGE={ODI:{1:[1,.28],2:[1,.15],3:[-1,.05],4:[-1,.42],5:[-1,.62],6:[-1,.72]},
+  TEST:{1:[1,.3],2:[1,.15],3:[0,0],4:[-1,.2],5:[-1,.35],6:[-1,.45]},
+  T20:{1:[1,.2],2:[1,.1],3:[0,0],4:[-1,.08],5:[-1,.2],6:[-1,.3]}};
+function bowlEdgeCol(M,I,C,bcol,roll,col){
+  if(M.bowlEdge===false||!I.eng)return bcol;
+  const b=I.eng.B[C.bi];if(!b)return bcol;
+  const[sh,p]=(BOWL_EDGE[M.fmt]||BOWL_EDGE.ODI)[clamp(b.rating|0,1,6)]||[0,0];if(!sh)return bcol;
+  const h=(((C.over*37+C.n*13+roll*11+col*5+I.no*7+3)*2246822519>>>0)%1000)/1000;
+  if(h>=p)return bcol;
+  return sh<0&&bcol==='B'?'':'BGR'[clamp(COL_RANK[bcol]+sh,0,2)];   // '' = a let-off: a BLUE batter edges a part-timer short
+}
 // The weakest associates, by era: their batters play a colour lower against Test nations (BLUE plays GREEN,
 // GREEN plays RED), so a Namibia or a USA beats a full member a few times in a hundred, not one in five.
 // Kenya until 2007 and Ireland from 2007 (and the Netherlands and Scotland throughout) keep their colours.
@@ -512,14 +530,15 @@ function bowlBall(M,manualRoll){
   const t=parseToken(tok);
   const striker=I.st,pos=I.order.indexOf(striker)+1;
   let voided=false;const bcol=batColour(M,striker,pos,I.bowl),how0=t.how;
-  if(t.w&&!wicketCounts(bcol,t.color)){voided=true;Object.assign(t,{w:false,color:'',how:'',bat:0,ex:0,exType:''});}
-  const D={roll,col,tok,t,voided,bcol};
+  const gcol=t.w?bowlEdgeCol(M,I,C,bcol,roll,col):bcol;
+  if(t.w&&(gcol===''||!wicketCounts(gcol,t.color))){voided=true;Object.assign(t,{w:false,color:'',how:'',bat:0,ex:0,exType:''});}
+  const D={roll,col,tok,t,voided,bcol,gcol};
   if(M.drs){const R=umpireCheck(M,I,t,how0,voided);if(R){C.rev={...R,D};return reviewStep(M,I,null);}}
   return applyBall(M,I,D);
 }
 // The rest of a delivery, once its outcome (and any umpire's decision) is settled.
 function applyBall(M,I,D){
-  const C=M.cur,{roll,col,tok,t,voided,bcol}=D,striker=I.st;
+  const C=M.cur,{roll,col,tok,t,voided,bcol,gcol}=D,striker=I.st;
   const illegal=t.exType==='wd'||t.exType==='nb';
   const runs=t.bat+t.ex,B=I.bt[striker],W=I.bw[C.bowler];
   C.n++;
@@ -535,6 +554,7 @@ function applyBall(M,I,D){
   if(striker===P.a)P.ra+=t.bat;else P.rb+=t.bat;
   const ball={inn:I.no,over:C.over,n:C.n,legal:0,card:C.card,roll,col,tok,st:striker,ns:I.ns,bowler:C.bowler,
     bat:t.bat,ex:t.ex,exType:t.exType,w:0,how:'',fielder:0,out:0,runs:I.runs,wkts:I.wkts,voided,bcol,ev:[]};
+  if(gcol!==undefined&&gcol!==bcol)ball.gcol=gcol;   // the colour the bowler's quality made it (bowlEdgeCol), '' = a let-off
   if(D.ump){ball.ump=D.ump;fire(M,ball,{t:'drs',...D.ump,pid:striker,bowler:C.bowler});}
   if(illegal){
     C.comp=true;

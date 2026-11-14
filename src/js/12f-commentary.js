@@ -35,7 +35,7 @@ function commLine(b,M){
   const style=pAttr(b.bowler,M&&M.date).style,ph=phrase(b,style);
   const who=`${esc(pName(b.bowler))} to ${esc(pName(b.st))}`;
   let t=b.w?`<span class="w">${ph}</span> ${dismissalText(b.how,b.bowler,b.fielder||0)}`
-    :b.voided?`<span class="sub">${esc(String(b.tok).split('_')[1]||'')} wicket on the card - ${esc(pName(b.st))} is ${BAT_NAME[b.bcol]||'?'} and survives</span>`
+    :b.voided?`<span class="sub">${esc(String(b.tok).split('_')[1]||'')} wicket on the card - ${esc(pName(b.st))} ${b.gcol===''?'edges it short off the part-timer - a let-off':`is ${BAT_NAME[b.gcol!==undefined?b.gcol:b.bcol]||'?'}${b.gcol!==undefined?' against this bowler':''} and survives`}</span>`
     :b.bat>=4?`<b>${ph}</b>`:ph;
   const ev=(b.ev||[]).filter(e=>e.t!=='innsEnd'&&e.t!=='w').map(e=>' <span class="ms">'+evText(e)+'</span>').join('');
   return`<div><span class="ov">${b.over-1}.${b.legal||b.n}</span>${who}, ${t}${ev} <span class="muted mono" style="font-size:11px">RR_${b.card} · ${b.roll} · c${b.col}</span></div>`;

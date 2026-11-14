@@ -101,7 +101,7 @@ const takeoverDate=()=>S.startFrom&&S.startFrom>careerDate()?S.startFrom:careerD
 // Build the match for a fixture (not tossed yet). ODI knockouts can be re-seeded from your tables.
 function buildMatch(fx){
   if(fx.fmt!=='ODI'||fx.custom){
-    const xi=t=>(fx.real&&testXI(fx.f.cid,t,fx.date))||nearestXI(t,fx.date,{fmt:fx.fmt});
+    const xi=t=>(fx.real&&battingOrder(testXI(fx.f.cid,t,fx.date),fx.fmt,fx.date))||nearestXI(t,fx.date,{fmt:fx.fmt});
     const home=fx.real?(VENUE_HOME.get(fx.venue)||fx.a):fx.a;
     const M=newMatch({fmt:fx.fmt,a:fx.a,b:fx.b,home,date:fx.date,venue:fx.venue,city:fx.city,sid:fx.sid,series:fx.title,stage:fx.stage||fx.label,realCid:fx.real?fx.f.cid:null,
       xiA:fx.xiA||xi(fx.a),xiB:fx.xiB||xi(fx.b)});
@@ -129,6 +129,7 @@ function selectAndMods(M,fx){
   if(my&&!fx.friendly&&M.teams.includes(my)&&M.xi[my]){const r=pickXI(fx,my,M.xi[my]);M.xi[my]=r.xi;M.selNotes=r.notes;}
   meIntoXI(M);
   M.assocTiers=S.settings.assocTiers!=='off';
+  M.bowlEdge=S.settings.bowlEdge!=='off';   // bowler quality and wickets (03-engine BOWL_EDGE)
   M.mods=matchMods(M);drsSetup(M);M.t20cards=S.settings.t20cards||'designed';
 }
 

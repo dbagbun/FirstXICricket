@@ -116,6 +116,25 @@ function pickCaptain(bat,date,near){
   const s=p=>sum(led(p).filter(([d])=>Math.abs(daysBetween(d,date))<=730))*1000+sum(led(p))*10+(near&&p===near.cap?5:0)+(R.apps.get(p)||0)/1000;
   return bat.slice().sort((a,b)=>s(b)-s(a))[0];
 }
+// Batting order for a real Test XI. The stored order is the first innings' (Cricsheet has no batting order), so
+// a nightwatchman shows at 4 and an injured opener at 9 - and would bat there all match. A man 3+ places from where he
+// usually bats (median of his positions in that format within 3 years) goes back to his usual slot; the rest keep the
+// real order. Only the order changes: the stored rows stay as they are (scorecards and bowling plans index into them).
+let USUAL_POS=null;
+function usualPos(pid,fmt,date){
+  if(!USUAL_POS){USUAL_POS={TEST:new Map(),T20:new Map()};
+    for(const[k,L]of[['TEST',TFIX],['T20',IFIX]])for(const f of L)for(const t of[f.a,f.b]){const r=realXIRow(f.cid,t);if(!r)continue;
+      r.slice(0,11).forEach((p,i)=>{const m=USUAL_POS[k];if(!m.has(p))m.set(p,[]);m.get(p).push([f.date,i+1]);});}}
+  const L=(USUAL_POS[fmt]||new Map()).get(pid);if(!L)return 0;
+  let near=L.filter(([d])=>Math.abs(daysBetween(d,date))<=1095);if(near.length<3)near=L;
+  const ps=near.map(x=>x[1]).sort((a,b)=>a-b);return ps[ps.length>>1];
+}
+function battingOrder(X,fmt,date){
+  if(!X||fmt!=='TEST')return X;   // a T20I side bats once: its order is the real one
+  const key=X.bat.map((p,i)=>{const u=usualPos(p,fmt,date);return u&&Math.abs(u-(i+1))>=3?u+.5:i+1;});
+  const bat=X.bat.map((p,i)=>[p,key[i],i]).sort((a,b)=>a[1]-b[1]||a[2]-b[2]).map(x=>x[0]);
+  return{...X,bat};
+}
 function testXI(cid,tid,date){
   const x=realXIRow(cid,tid);
   if(!x)return null;
@@ -142,7 +161,7 @@ function nearestXI(tid,date,opts={}){
   if(opts.fmt&&FMT_GAMES[opts.fmt]&&!opts.sid){
     let best=null,bd=FMT_NEAR_DAYS;
     for(const f of FMT_GAMES[opts.fmt].get(+tid)||[]){let d=Math.abs(daysBetween(f.date,date));if(f.date>date)d+=30;if(d<bd){bd=d;best=f;}}
-    const x=best&&testXI(best.cid,+tid,best.date);if(x)return x;
+    const x=best&&battingOrder(testXI(best.cid,+tid,best.date),opts.fmt,best.date);if(x)return x;
   }
   const games=TEAM_GAMES.get(+tid)||[];
   let best=null,bd=1e9;

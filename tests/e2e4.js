@@ -38,8 +38,9 @@ w.startFixture(G('nextFixture().key'));
 ok($('#view').innerHTML.includes('bchip'),'pre-match XIs show colour chips');
 $('#toss-go').click();$('#c-sim').click();
 const E=G('S.matches[0]');
-const vb=G(`(()=>{const M=LM;return M.inns.flatMap(I=>I.balls.filter(b=>b.voided||b.w).map(b=>({v:b.voided,c:b.bcol,col:String(b.tok).split('_')[1]})));})()`);
-ok(vb.length>0&&vb.every(b=>b.v?!G(`wicketCounts('${b.c}','${b.col}')`):G(`wicketCounts('${b.c}','${b.col}')`)),'every wicket card is decided by the batter\'s colour ('+vb.length+')');
+const vb=G(`(()=>{const M=LM;return M.inns.flatMap(I=>I.balls.filter(b=>b.voided||b.w).map(b=>({v:b.voided,c:b.gcol!==undefined?b.gcol:b.bcol,col:String(b.tok).split('_')[1]})));})()`);
+const counts=b=>b.c!==''&&G(`wicketCounts('${b.c}','${b.col}')`);   // (the colour after the bowler's quality; '' = a let-off)
+ok(vb.length>0&&vb.every(b=>b.v?!counts(b):counts(b)),'every wicket card is decided by the batter\'s colour ('+vb.length+')');
 w.closeModal();
 w.eval(`MATCH_TAB='comm';go('match')`);
 ok(!vb.some(b=>b.v)||$('#mtab').innerHTML.includes('and survives'),'commentary explains a survived wicket card');

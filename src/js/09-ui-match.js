@@ -32,7 +32,7 @@ function ballText(b){
   const who=`${esc(pName(b.bowler))} to ${esc(pName(b.st))}`;
   let t;
   if(b.w)t=`<span class="w">OUT! ${dismissalText(b.how,b.bowler,b.fielder||0)}</span>`;
-  else if(b.voided)t=`<span class="sub">${esc(String(b.tok).split('_')[1]||'')} wicket on the card - ${esc(pName(b.st))} is ${BAT_NAME[b.bcol]||'?'} and survives: dot ball</span>`;
+  else if(b.voided)t=`<span class="sub">${esc(String(b.tok).split('_')[1]||'')} wicket on the card - ${esc(pName(b.st))} ${b.gcol===''?'edges it short off the part-timer - a let-off':`is ${BAT_NAME[b.gcol!==undefined?b.gcol:b.bcol]||'?'}${b.gcol!==undefined?' against this bowler':''} and survives`}: dot ball</span>`;
   else if(b.exType==='wd')t='wide';
   else if(b.exType==='nb')t='no-ball';
   else if(b.exType==='lb')t=plural(b.ex,'leg bye');
