@@ -61,7 +61,10 @@ RENDER.settings=(el)=>{
   const st=S.settings;
   const slots=SLOT_KEYS.map((_,i)=>slotInfo(i));
   const seg=(k,opts)=>`<div class="seg">${opts.map(([v,n])=>`<button data-set="${k}" data-val="${v}" class="${String(st[k])===String(v)?'on':''}">${n}</button>`).join('')}</div>`;
-  el.innerHTML=`<div class="grid g2">
+  const hosted=typeof location!=='undefined'&&/^https?:/.test(location.protocol);
+  el.innerHTML=`<div class="card" style="margin-bottom:14px"><div class="spread"><span>Game version <b class="num" id="st-ver">${typeof BUILD_ID!=='undefined'?BUILD_ID:'dev'}</b>${hosted?' <span class="muted" style="font-size:12px">- online it loads the latest version each time you open it</span>':''}</span>
+    ${hosted?'<button class="btn sm" id="st-update">Check for updates</button>':''}</div></div>
+  <div class="grid g2">
   <div class="card stack"><h3>Game</h3>
     <div class="spread"><span>Dice</span>${seg('dice',[['auto','Automatic'],['manual','I roll']])}</div>
     <div class="spread"><span>Captaincy (bowling changes, batting order, attitude, declarations)</span>${seg('captain',[['auto','AI'],['manual','Me']])}</div>
@@ -96,11 +99,10 @@ RENDER.settings=(el)=>{
       <div class="row">${d&&i!==SLOT?`<button class="btn sm" data-load="${i}">Load</button>`:''}${!d?`<button class="btn sm" data-new="${i}">New career</button>`:''}${d&&i!==SLOT?`<button class="btn sm warn" data-del="${i}">Delete</button>`:''}</div></div>`).join('')}
     <div class="row"><button class="btn" id="st-exp">Back up now (JSON)</button><label class="btn">Import<input type="file" id="st-imp" accept=".json,application/json" hidden></label>
       ${canSaveToFile()?`<button class="btn" id="st-file">${FILE_HANDLE?'Saving to '+esc(FILE_HANDLE.name):'Auto-save to a file…'}</button>`:''}</div>
-    <div class="muted" style="font-size:12px">Game version <b class="num" id="st-ver">${typeof BUILD_ID!=='undefined'?BUILD_ID:'dev'}</b>${typeof location!=='undefined'&&/^https?:/.test(location.protocol)?' · online it loads the latest version each time you open it':''}</div>
     <div class="muted" style="font-size:12px" id="st-storage">${STORE.ok?'Saved in this browser\'s database (no size limit). ':'Saved in this browser\'s local storage (about 5MB). '}${S.backupAt?`Last backup at match ${S.backupAt}.`:'Not backed up yet.'}</div>
     <div class="row"><button class="btn" id="st-rebuild">Rebuild stats from scorecards</button><button class="btn warn" id="st-reset">Start this slot again</button></div></div>
   </div>
-  <div class="card" style="margin-top:14px"><h3>Data</h3><p class="sub">${FIX.length.toLocaleString()} ODI fixtures from Cricsheet (${fmtDate(FIX[0].date)} - ${fmtDate(FIX[FIX.length-1].date)}), ${Object.keys(WORLD.xi).length.toLocaleString()} real XIs and bowling plans, ${Object.keys(WORLD.players).length.toLocaleString()} players. Built from ${esc(WORLD.source||'the First XI workbook')}.</p></div>`;
+  <div class="card" style="margin-top:14px"><h3>Data</h3><p class="sub">From Cricsheet: ${FIX.length.toLocaleString()} ODIs, ${TFIX.length.toLocaleString()} Tests and ${IFIX.length.toLocaleString()} T20Is (${fmtDate(CAREER_START)} - ${fmtDate(LAST_REAL)}) with their real XIs and bowling plans, ${Object.keys(WORLD.players).length.toLocaleString()} players. Built from ${esc(WORLD.source||'the First XI workbook')}.</p></div>`;
   $$('[data-set]').forEach(b=>b.onclick=()=>{const k=b.dataset.set,v=b.dataset.val;st[k]=k==='ballDelay'?+v:v==='true'?true:v==='false'?false:v;
     if(S.live&&S.live.state!=='done'){if(k==='dice')S.live.manual=v==='manual';if(k==='captain')S.live.manualCaptain=v==='manual'?captainOf(S.live):null;if(k==='batColours')S.live.batMode=v;if(k==='t20cards')S.live.t20cards=v;if(k==='assocTiers')S.live.assocTiers=v!=='off';if(k==='bowlEdge')S.live.bowlEdge=v!=='off';}
     if(k==='broadcast'||k==='font')applyBroadcast();
@@ -108,6 +110,7 @@ RENDER.settings=(el)=>{
     if(k==='t20is')fxDirty();
     saveGame();rerender();});
   $('#st-team').onchange=e=>{st.myTeam=+e.target.value;saveGame();};
+  $('#st-update')&&($('#st-update').onclick=()=>{saveGame();checkForUpdate();});
   $$('[data-intro]').forEach(b=>b.onclick=()=>{try{localStorage.setItem(INTRO_KEY,b.dataset.intro);}catch(e){}rerender();});
   $$('[data-thm]').forEach(b=>b.onclick=()=>{try{localStorage.setItem(THEME_KEY,b.dataset.thm);}catch(e){}applyTheme();rerender();});
   $('#st-voice')&&($('#st-voice').onchange=e=>{st.voiceName=e.target.value;saveGame();voiceTest();});

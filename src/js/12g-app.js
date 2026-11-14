@@ -11,6 +11,14 @@ function appInit(){
     if(navigator.serviceWorker)navigator.serviceWorker.register('sw.js').catch(()=>{});
   }catch(e){}
 }
+// Settings -> Check for updates: ask for a new offline cache, drop the cached page and reload (saves are in IndexedDB /
+// localStorage, which this doesn't touch). Online the page is network-first anyway; this is for a stuck home-screen app.
+async function checkForUpdate(){
+  try{if(typeof STORE!=='undefined'&&STORE.ok)await storeFlush();}catch(e){}
+  try{const r=navigator.serviceWorker&&await navigator.serviceWorker.getRegistration();if(r)await r.update();}catch(e){}
+  try{if(typeof caches!=='undefined')for(const k of await caches.keys())await caches.delete(k);}catch(e){}
+  location.reload();
+}
 // Ask the browser not to clear our storage when space runs low (best effort, no prompt in most browsers).
 function askPersist(){try{if(navigator.storage&&navigator.storage.persist&&!askPersist.done){askPersist.done=true;navigator.storage.persist();}}catch(e){}}
 function backupNow(){
