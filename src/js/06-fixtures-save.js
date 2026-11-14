@@ -161,7 +161,7 @@ function recordMatch(E,M){
   applyStats(E);
   const rkBefore=!M.sim&&!M.real&&!S.prefill&&!S.sandbox?rankSnapshot(E.fmt):null;   // ranking moves, for matches you play
   applyRankings(E);
-  if(rkBefore){const mv=rankMoves(rkBefore,rankSnapshot(E.fmt));if(mv.length)E.rk=mv;}
+  if(rkBefore){const mv=rankMoves(rkBefore,rankSnapshot(E.fmt),E);if(mv.length)E.rk=mv;}
   updateForm(E);
   const cn=coachAfter(E);pressAfter(E);restAfter(M);meAfter(E);
   const ms=checkMilestones(E),pos=playerOfSeries(E.sid),aw=yearEnd(E);

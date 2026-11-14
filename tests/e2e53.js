@@ -1,6 +1,7 @@
 // e2e53: milestones say how many got there first ("2,000 career runs - the 1st player to get there"), per format;
 // a match you play lists the ranking moves (teams that moved, players into or out of the top 10, a new No.1) with the
-// new and the old position, in the result and on the scorecard. Quick sims don't work them out.
+// new and the old position, in the result and on the scorecard - only for the two sides and the men playing, unless
+// someone else goes to No.1. Quick sims don't work them out.
 const {JSDOM}=require('jsdom'),fs=require('fs');
 const html=fs.readFileSync(process.argv[2]||'dist/first-xi.html','utf8');
 let fail=0;const ok=(c,m)=>{if(!c){fail++;console.log('FAIL',m);}};
@@ -18,9 +19,11 @@ ok(G(`S.ms.filter(m=>m.cat==='Hat-trick').every(m=>!m.nth)`),'one-off moments ar
 ok(JSON.stringify(G(`(()=>{const a=JSON.stringify(S.msN);delete S.msN;return JSON.stringify(msCount())===a;})()`))==='true','the counts rebuild from the milestones (older saves)');
 ok(G(`S.matches.every(E=>!E.rk)`),'quick sims skip the ranking moves');
 // a match you play
-const r=G(`(()=>{const fx=nextFixture();const M=buildMatch(fx);doToss(M);simMatch(M);const E=S.matches[S.matches.length-1];return{rk:E.rk||[],fmt:E.fmt,id:E.id};})()`);
+const r=G(`(()=>{const fx=nextFixture();const M=buildMatch(fx);doToss(M);simMatch(M);const E=S.matches[S.matches.length-1];return{rk:E.rk||[],fmt:E.fmt,id:E.id,teams:E.teams,men:E.teams.flatMap(t=>E.xi[t].slice(0,11))};})()`);
 let found=r.rk.length?r:null;
-for(let i=0;i<8&&!found;i++){const x=G(`(()=>{const fx=nextFixture();const M=buildMatch(fx);doToss(M);simMatch(M);const E=S.matches[S.matches.length-1];return{rk:E.rk||[],fmt:E.fmt,id:E.id};})()`);if(x.rk.length)found=x;}
+const all=[r];
+for(let i=0;i<30;i++){const x=G(`(()=>{const fx=nextFixture();const M=buildMatch(fx);doToss(M);simMatch(M);const E=S.matches[S.matches.length-1];return{rk:E.rk||[],fmt:E.fmt,id:E.id,teams:E.teams,men:E.teams.flatMap(t=>E.xi[t].slice(0,11))};})()`);all.push(x);if(x.rk.length&&!found)found=x;}
+ok(all.every(m=>m.rk.every(x=>x.to===1||(x.k==='team'?m.teams.includes(x.id):m.men.includes(x.id)))),'only the sides and men playing, unless someone goes to No.1');
 ok(found,'a played match brings ranking moves');
 if(found){
   const txt=found.rk.map(x=>G(`rankMoveText(${JSON.stringify(x)},'${found.fmt}')`));

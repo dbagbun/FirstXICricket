@@ -57,7 +57,8 @@ function playerRanking(fmt,kind,n=20){
   return L.sort((x,y)=>y.v-x.v).slice(0,n);
 }
 // Ranking moves from one match (recordMatch, for matches you play): the team table and the top 10 batters, bowlers and
-// all-rounders of that format, before and after. Teams: every move. Players: into or out of the top 10, and a new No.1.
+// all-rounders of that format, before and after - for the two sides playing and the men in the match (teams: any move;
+// players: into or out of the top 10, or a new No.1). Anyone else only if he (or it) goes to No.1.
 // E.rk = [{k:'team'|'bat'|'bowl'|'ar', id, from, to}] (0 = unranked); rankMoveText words one.
 const RANK_TOP=10,RANK_KINDS=[['bat','batter'],['bowl','bowler'],['ar','all-rounder']];
 function rankSnapshot(fmt){
@@ -66,14 +67,17 @@ function rankSnapshot(fmt){
   for(const[k]of RANK_KINDS)o[k]=playerRanking(fmt,k,200).map(r=>r.pid);
   return o;
 }
-function rankMoves(a,b){
+function rankMoves(a,b,E){
   if(!a||!b)return[];
-  const out=[],pos=(L,x)=>L.indexOf(x)+1;
-  for(const t of new Set([...a.team,...b.team])){const f=pos(a.team,t),to=pos(b.team,t);if(f!==to&&to)out.push({k:'team',id:t,from:f,to});}
+  const out=[],pos=(L,x)=>L.indexOf(x)+1,newTop=(f,to)=>to===1&&f!==1;
+  const sides=new Set(E?E.teams:[]),men=new Set(E?E.teams.flatMap(t=>E.xi[t].slice(0,11)):[]);
+  for(const t of new Set([...a.team,...b.team])){const f=pos(a.team,t),to=pos(b.team,t);
+    if(f!==to&&to&&(!E||sides.has(t)||newTop(f,to)))out.push({k:'team',id:t,from:f,to});}
   for(const[k]of RANK_KINDS){
     const top=L=>new Set(L.slice(0,RANK_TOP));const A=top(a[k]),B=top(b[k]);
     for(const p of new Set([...A,...B])){const f=pos(a[k],p),to=pos(b[k],p);
-      if(A.has(p)!==B.has(p)||(to===1&&f!==1))out.push({k,id:p,from:f,to});}
+      if(!(A.has(p)!==B.has(p)||newTop(f,to)))continue;
+      if(!E||men.has(p)||newTop(f,to))out.push({k,id:p,from:f,to});}
   }
   return out;
 }
