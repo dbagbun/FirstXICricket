@@ -1,4 +1,5 @@
-// e2e53: milestones say how many got there first ("2,000 career runs - the 1st player to get there"), per format;
+// e2e53: milestones say how many got there first ("2,000 career runs - the 1st player to get there"), per format -
+// only for the first 10, and never for a maiden century or a first five-for;
 // a match you play lists the ranking moves (teams that moved, players into or out of the top 10, a new No.1) with the
 // new and the old position, in the result and on the scorecard - only for the two sides and the men playing, unless
 // someone else goes to No.1. Quick sims don't work them out.
@@ -13,7 +14,9 @@ G(`for(let i=0;i<700;i++)simFixture(nextFixture())`);
 // milestones in order
 const ms=G(`S.ms.filter(m=>m.fmt==='ODI'&&m.cat==='Career Runs'&&m.thr===1000)`);
 ok(ms.length>=3,'several 1,000-run ODI careers ('+ms.length+')');
-ok(ms.every((m,i)=>m.nth===i+1&&m.text.endsWith(`the ${G(`ordinal(${i+1})`)} player to get there`)),'numbered in order: '+ms.slice(0,3).map(m=>m.text).join(' | '));
+ok(ms.every((m,i)=>m.nth===i+1),'counted in order');
+ok(ms.every((m,i)=>i<10?m.text.endsWith(`the ${G(`ordinal(${i+1})`)} player to get there`):!/player to get there/.test(m.text)),'said for the first 10 only: '+ms.slice(0,3).map(m=>m.text).join(' | '));
+ok(G(`S.ms.filter(m=>m.thr===1&&(m.cat==='Centuries'||m.cat==='Five-wicket hauls')).every(m=>!/player to get there/.test(m.text))`),'not for a maiden century or a first five-for');
 ok(G(`S.ms.filter(m=>m.fmt==='TEST'&&m.cat==='Career Runs'&&m.thr===1000)[0]?.nth`)===1,'counted per format');
 ok(G(`S.ms.filter(m=>m.cat==='Hat-trick').every(m=>!m.nth)`),'one-off moments are not numbered');
 ok(JSON.stringify(G(`(()=>{const a=JSON.stringify(S.msN);delete S.msN;return JSON.stringify(msCount())===a;})()`))==='true','the counts rebuild from the milestones (older saves)');
