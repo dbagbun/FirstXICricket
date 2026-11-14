@@ -96,6 +96,7 @@ RENDER.settings=(el)=>{
       <div class="row">${d&&i!==SLOT?`<button class="btn sm" data-load="${i}">Load</button>`:''}${!d?`<button class="btn sm" data-new="${i}">New career</button>`:''}${d&&i!==SLOT?`<button class="btn sm warn" data-del="${i}">Delete</button>`:''}</div></div>`).join('')}
     <div class="row"><button class="btn" id="st-exp">Back up now (JSON)</button><label class="btn">Import<input type="file" id="st-imp" accept=".json,application/json" hidden></label>
       ${canSaveToFile()?`<button class="btn" id="st-file">${FILE_HANDLE?'Saving to '+esc(FILE_HANDLE.name):'Auto-save to a file…'}</button>`:''}</div>
+    <div class="muted" style="font-size:12px">Game version <b class="num" id="st-ver">${typeof BUILD_ID!=='undefined'?BUILD_ID:'dev'}</b>${typeof location!=='undefined'&&/^https?:/.test(location.protocol)?' · online it loads the latest version each time you open it':''}</div>
     <div class="muted" style="font-size:12px" id="st-storage">${STORE.ok?'Saved in this browser\'s database (no size limit). ':'Saved in this browser\'s local storage (about 5MB). '}${S.backupAt?`Last backup at match ${S.backupAt}.`:'Not backed up yet.'}</div>
     <div class="row"><button class="btn" id="st-rebuild">Rebuild stats from scorecards</button><button class="btn warn" id="st-reset">Start this slot again</button></div></div>
   </div>

@@ -15,7 +15,9 @@ const js=fs.readdirSync(path.join(root,'src/js')).filter(f=>f.endsWith('.js')).s
 const data=fs.readFileSync(process.argv[3]||path.join(root,'data/world.json'),'utf8').trim().replace(/<\//g,'<\\/');
 let t=fs.readFileSync(path.join(root,'src/template.html'),'utf8');
 const histF=path.join(root,'data/hist.json.gz'),hist=fs.existsSync(histF)?fs.readFileSync(histF).toString('base64'):'';
-t=t.replace('/*@@CSS@@*/',()=>css).replace('/*@@DATA@@*/',()=>'const WORLD='+data+';\nconst HIST_GZ="'+hist+'";').replace('/*@@JS@@*/',()=>js);
+// The game's version (Settings shows it): a hash of everything that goes into the page, so the same sources give the same build.
+const buildId=require('crypto').createHash('sha1').update(css).update(js).update(data).update(hist).digest('hex').slice(0,8);
+t=t.replace('/*@@CSS@@*/',()=>css).replace('/*@@DATA@@*/',()=>'const WORLD='+data+';\nconst HIST_GZ="'+hist+'";\nconst BUILD_ID="'+buildId+'";').replace('/*@@JS@@*/',()=>js);
 fs.mkdirSync(path.dirname(out),{recursive:true});fs.writeFileSync(out,t);
 // For hosting (GitHub Pages etc.): manifest, icon and an offline service worker next to the page.
 // They are only used when the page is served over http(s); opening the file from disk ignores them.
@@ -23,10 +25,15 @@ const dir=path.dirname(out),page=path.basename(out),ver=require('crypto').create
 fs.writeFileSync(path.join(dir,'manifest.webmanifest'),JSON.stringify({name:'First XI Cricket',short_name:'First XI',start_url:page,display:'standalone',
   background_color:'#0a0e1a',theme_color:'#0f172a',icons:[{src:'icon.svg',sizes:'any',type:'image/svg+xml',purpose:'any maskable'}]},null,1));
 fs.writeFileSync(path.join(dir,'icon.svg'),'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="96" fill="#0a0e1a"/><circle cx="256" cy="256" r="150" fill="#b91c1c"/><path d="M150 180q106 76 212 0M150 332q106-76 212 0" stroke="#fde2e2" stroke-width="10" fill="none" stroke-dasharray="18 14"/><text x="256" y="470" font-family="system-ui,sans-serif" font-size="64" font-weight="800" fill="#06b6d4" text-anchor="middle">FIRST XI</text></svg>');
-fs.writeFileSync(path.join(dir,'sw.js'),`// First XI offline cache (${ver}) - cache-first for the page, manifest and icon.
+fs.writeFileSync(path.join(dir,'sw.js'),`// First XI offline cache (${ver}). Online, the page comes from the network (so a new version shows on the next
+// open) and the cached copy is refreshed; offline, the cached copy. The manifest and icon are cache-first.
 const C='first-xi-${ver}',FILES=['${page}','manifest.webmanifest','icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(C).then(c=>c.addAll(FILES)).then(()=>self.skipWaiting()));});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==C).map(x=>caches.delete(x)))).then(()=>self.clients.claim()));});
-self.addEventListener('fetch',e=>{if(e.request.method!=='GET')return;e.respondWith(caches.match(e.request,{ignoreSearch:true}).then(r=>r||fetch(e.request)));});
+self.addEventListener('fetch',e=>{if(e.request.method!=='GET')return;
+  const page=e.request.mode==='navigate'||/\\.html?(\\?|$)/.test(new URL(e.request.url).pathname);
+  if(page){e.respondWith(fetch(e.request,{cache:'no-cache'}).then(r=>{if(r&&r.ok){const c=r.clone();caches.open(C).then(x=>x.put(e.request,c));}return r;})
+    .catch(()=>caches.match(e.request,{ignoreSearch:true}).then(r=>r||caches.match('${page}'))));return;}
+  e.respondWith(caches.match(e.request,{ignoreSearch:true}).then(r=>r||fetch(e.request)));});
 `);
 console.log('built',out,Math.round(t.length/1024)+'KB');
