@@ -7,7 +7,7 @@ function hof(){if(!S.hof)S.hof={retired:{},inducted:{},ballots:{},onBallot:{},no
 function careerOf(pid){
   const out={m:0,r:0,w:0,c100:0,w5:0,ct:0,st:0,motm:0,last:'',first:'',teams:new Set()};
   for(const f of FORMATS){const s=S.stats[f][pid];if(!s)continue;
-    out.m+=s.m;out.r+=s.r;out.w+=s.bw;out.c100+=s.c100;out.w5+=s.w5;out.ct+=s.ct;out.st+=s.st;out.motm+=s.motm;
+    out.m+=s.m;out.r+=s.r;out.w+=s.bw;out.c100+=s.c100;out.w5+=s.w5;out.ct+=s.ct+(s.ctk||0);out.st+=s.st;out.motm+=s.motm;
     if(!out.last||s.last>out.last)out.last=s.last;if(!out.first||s.first<out.first)out.first=s.first;s.teams.forEach(t=>out.teams.add(t));}
   return out;
 }

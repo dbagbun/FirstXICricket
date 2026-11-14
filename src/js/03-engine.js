@@ -216,11 +216,17 @@ const COL_RANK={B:0,G:1,R:2};
 // Settings -> Bowler quality and wickets 'off' (M.bowlEdge false) gives the workbook's own rule.
 const BOWL_EDGE={ODI:{1:[1,.28],2:[1,.15],3:[-1,.05],4:[-1,.42],5:[-1,.62],6:[-1,.72]},
   TEST:{1:[1,.3],2:[1,.15],3:[0,0],4:[-1,.2],5:[-1,.35],6:[-1,.45]},
-  T20:{1:[1,.2],2:[1,.1],3:[0,0],4:[-1,.08],5:[-1,.2],6:[-1,.3]}};
+  T20:{1:[1,.2],2:[1,.1],3:[0,0],4:[-1,.08],5:[-1,.2],6:[-1,.3]},
+  // an ODI innings with no real plan: the AI gives its best bowlers more of the overs than real captains did, so their
+  // edge is smaller (keeps custom series, cups and the future at ~245 for ~7.5, tests/e2e41.js)
+  ODI_AI:{1:[1,.12],2:[1,.05],3:[-1,.05],4:[-1,.42],5:[-1,.62],6:[-1,.72]}};
 function bowlEdgeCol(M,I,C,bcol,roll,col){
   if(M.bowlEdge===false||!I.eng)return bcol;
   const b=I.eng.B[C.bi];if(!b)return bcol;
-  const[sh,p]=(BOWL_EDGE[M.fmt]||BOWL_EDGE.ODI)[clamp(b.rating|0,1,6)]||[0,0];if(!sh)return bcol;
+  const tab=M.fmt==='ODI'&&!I.eng.plan?BOWL_EDGE.ODI_AI:(BOWL_EDGE[M.fmt]||BOWL_EDGE.ODI);
+  const[sh,p]=tab[clamp(b.rating|0,1,6)]||[0,0];if(!sh)return bcol;
+  // an associate's top rating is mostly earned against associates: no edge for it against a Test nation's batters
+  if(sh>0&&!TEAMS.get(+I.bowl)?.full&&TEAMS.get(+I.bat)?.full)return bcol;
   const h=(((C.over*37+C.n*13+roll*11+col*5+I.no*7+3)*2246822519>>>0)%1000)/1000;
   if(h>=p)return bcol;
   return sh<0&&bcol==='B'?'':'BGR'[clamp(COL_RANK[bcol]+sh,0,2)];   // '' = a let-off: a BLUE batter edges a part-timer short
@@ -605,6 +611,7 @@ function endOverRecord(M,I){
   M.cur=null;
 }
 function pickFielder(M,I,how,bowler){
+  if(how==='b'||how==='lbw'||how==='hw')return 0;   // no fielder (one was drawn here before, and the records counted it)
   const x=M.xi[I.bowl];
   if(how==='ctwk'||how==='st')return x.wk;
   if(how==='ct'&&rnd()<.15)return bowler;

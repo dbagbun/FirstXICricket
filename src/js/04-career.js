@@ -6,6 +6,7 @@ function newCareer(opts={}){
     v:1,created:Date.now(),name:opts.name||'My career',
     settings:{dice:'auto',captain:'auto',knockouts:'timeline',batColours:'player',ratings:'era',history:'after',selection:'auto',form:'on',broadcast:'standard',font:'barlow',voice:false,voiceRate:1.05,future:'on',drs:'era',t20wc:'on',t20cards:'designed',assocTiers:'on',bowlEdge:'on',badges:'flags',t20is:'on',myTeam:+opts.myTeam||0,ballDelay:250,sound:false,tv:true},
     t20iFrom:'',      // real T20Is from this date ('' = all; old saves get theirs from where they were)
+    ctSplit:1,        // catches in the field and as keeper kept apart (older saves: splitCatches)
     done:{},          // fixture no / test id -> match id
     matches:[],       // archived scorecards (compact), oldest first
     logs:{},          // match id -> compact ball log, last LOG_KEEP matches only
@@ -56,11 +57,12 @@ function packBalls(M){return M.inns.map(I=>I.balls.map(b=>[b.over,b.legal,b.card
 // + 50/100/5-for bonuses (15/30/40), ×1.25 for the winning side.
 function playerMatchLines(E){
   const P={};
-  const g=(pid,team)=>P[pid]=P[pid]||{pid,team,r:0,b:0,bat:0,hs:0,w:0,bb:0,br:0,md:0,ct:0,st:0,ro:0,c50:0,c100:0,w5:0};
+  const g=(pid,team)=>P[pid]=P[pid]||{pid,team,r:0,b:0,bat:0,hs:0,w:0,bb:0,br:0,md:0,ct:0,ctk:0,st:0,ro:0,c50:0,c100:0,w5:0};
   for(const t of E.teams)E.xi[t].slice(0,11).forEach(p=>g(p,t));
   for(const I of E.inns){
     for(const r of I.bt){const L=g(r[0],I.bat);L.r+=r[1];L.b+=r[2];L.bat++;if(r[1]>=100)L.c100++;else if(r[1]>=50)L.c50++;
-      if(r[5]){const f=r[7];if(f&&(r[5]==='ct'||r[5]==='ctof'||r[5]==='ctwk'))g(f,I.bowl).ct++;if(f&&r[5]==='st')g(f,I.bowl).st++;if(f&&r[5]==='ro')g(f,I.bowl).ro++;}}
+      // ct = a catch in the field, ctk = a catch as the keeper (the records keep them apart, so do the stats)
+      if(r[5]){const f=r[7];if(f&&(r[5]==='ct'||r[5]==='ctof'||r[5]==='ctwk'))g(f,I.bowl)[r[5]==='ctwk'||f===E.xi[I.bowl][11]?'ctk':'ct']++;if(f&&r[5]==='st')g(f,I.bowl).st++;if(f&&r[5]==='ro')g(f,I.bowl).ro++;}}
     for(const w of I.bw){const L=g(w[0],I.bowl);L.bb+=w[1];L.md+=w[2];L.br+=w[3];L.w+=w[4];if(w[4]>=5)L.w5++;}
   }
   return P;
@@ -75,7 +77,7 @@ function motmScore(L,fmt){
   if(K.par&&L.b>0)s*=clamp(L.r/L.b/K.par,.7,1.4);
   s+=L.w*K.wk+L.md*K.md+L.c100*K.c100+L.c50*K.c50+L.w5*K.w5+(fmt==='TEST'&&L.w>=10?30:0);
   if(K.econ&&L.bb>=12)s+=(K.econ-L.br/(L.bb/6))*Math.min(L.bb/6,10)*2;
-  s+=L.ct*(fmt==='TEST'?4:5)+L.st*6+L.ro*8;
+  s+=L.ct*(fmt==='TEST'?4:5)+L.ctk*(fmt==='TEST'?3:4)+L.st*6+L.ro*8;
   return s;
 }
 function pickMOTM(E){
@@ -91,7 +93,7 @@ function pickMOTM(E){
 
 // ---------- career stats ----------
 function blankStats(){return{m:0,inn:0,no:0,r:0,b:0,hs:0,hsNo:0,f4:0,f6:0,c50:0,c100:0,c200:0,d0:0,
-  bb:0,br:0,bw:0,md:0,w5:0,w10:0,best:[0,0],ct:0,st:0,ro:0,motm:0,cm:0,cw:0,cl:0,cd:0,teams:[],last:'',first:''};}
+  bb:0,br:0,bw:0,md:0,w5:0,w10:0,best:[0,0],ct:0,ctk:0,st:0,ro:0,motm:0,cm:0,cw:0,cl:0,cd:0,teams:[],last:'',first:''};}
 function applyStats(E){
   const ST=S.stats[E.fmt],L=playerMatchLines(E);
   const g=pid=>ST[pid]=ST[pid]||blankStats();
@@ -114,7 +116,7 @@ function applyStats(E){
   }
   for(const pid in L){
     const l=L[pid],s=g(pid);
-    s.ct+=l.ct;s.st+=l.st;s.ro+=l.ro;
+    s.ct+=l.ct;s.ctk=(s.ctk||0)+l.ctk;s.st+=l.st;s.ro+=l.ro;
   }
   for(const I of E.inns)for(const w of I.bw){
     const s=g(w[0]);s.bb+=w[1];s.md+=w[2];s.br+=w[3];s.bw+=w[4];if(w[4]>=5)s.w5++;
@@ -122,6 +124,15 @@ function applyStats(E){
   }
   if(E.fmt==='TEST')for(const pid in L)if(L[pid].w>=10)g(pid).w10++;
   if(E.motm)g(E.motm).motm++;
+}
+// Saves from before catches as keeper were kept apart: recount ct / ctk from the scorecards, and mark keeping
+// milestones already passed as done (quietly - no back-dated entries), so the numbering of new ones is right.
+function splitCatches(){
+  if(S.ctSplit)return;S.ctSplit=1;
+  for(const f of FORMATS)for(const s of Object.values(S.stats[f]||{})){s.ct=0;s.ctk=0;}
+  for(const E of S.matches){const ST=S.stats[E.fmt];if(!ST)continue;for(const L of Object.values(playerMatchLines(E))){const s=ST[L.pid];if(s){s.ct+=L.ct;s.ctk+=L.ctk;}}}
+  const d=MS_DEFS.find(x=>x.cat==='Keeping dismissals'),N=msCount();
+  for(const f of FORMATS)for(const[pid,s]of Object.entries(S.stats[f]||{}))for(const t of d.thr)if(d.key(s)>=t){const k=f+':'+(+pid)+':'+d.cat+':'+t;if(!S.msKeys[k]){S.msKeys[k]=1;N[f+':'+d.cat+':'+t]=(N[f+':'+d.cat+':'+t]||0)+1;}}
 }
 function rebuildStats(){
   S.stats=perFmt(()=>({}));S.teams=perFmt(()=>({}));
@@ -142,6 +153,7 @@ const MS_DEFS=[
   {cat:'Career Wickets',key:s=>s.bw,thr:[50,100,150,200,300,400,500],txt:t=>t+' career wickets'},
   {cat:'Five-wicket hauls',key:s=>s.w5,thr:[1,5,10,20],txt:t=>t===1?'First five-wicket haul':t+' five-wicket hauls'},
   {cat:'Career Catches',key:s=>s.ct,thr:[25,50,75,100,150],txt:t=>t+' career catches'},
+  {cat:'Keeping dismissals',key:s=>(s.ctk||0)+s.st,thr:[50,100,150,200,250,300,400],txt:t=>t+' dismissals as keeper'},
   {cat:'Caps',key:s=>s.m,thr:[50,100,150,200],txt:t=>t+' caps'},
   {cat:'All-rounder',key:s=>s.r>=1000&&s.bw>=50?1:0,thr:[1],txt:()=>'The double: 1,000 runs and 50 wickets'},
 ];
@@ -151,6 +163,7 @@ const MS_COUNTED=new Set(MS_DEFS.map(d=>d.cat));
 // The order is said only where it means something: never for a first (maiden century, first five-for), and only for the
 // first MS_NTH_SHOW to get there (the 6th to 5,000 runs, not the 45th to 1,000). It's counted either way.
 const MS_NTH_SHOW=10,msIsFirst=(cat,thr)=>thr===1&&(cat==='Centuries'||cat==='Five-wicket hauls');
+const MS_NTH_MIN={'Career Runs':5000,'Centuries':10,'Career Wickets':200,'Five-wicket hauls':10,'Career Catches':100,'Caps':100,'Keeping dismissals':100,'All-rounder':1};
 function msCount(){if(!S.msN){S.msN={};for(const m of S.ms)if(MS_COUNTED.has(m.cat)){const k=m.fmt+':'+m.cat+':'+m.thr;S.msN[k]=(S.msN[k]||0)+1;}}return S.msN;}
 function logMilestone(fmt,pid,cat,thr,E,text,extra){
   const k=fmt+':'+(+pid)+':'+cat+':'+thr;
@@ -158,7 +171,7 @@ function logMilestone(fmt,pid,cat,thr,E,text,extra){
   S.msKeys[k]=1;
   let nth=0;
   if(MS_COUNTED.has(cat)){const N=msCount(),c=fmt+':'+cat+':'+thr;nth=N[c]=(N[c]||0)+1;
-    if(nth<=MS_NTH_SHOW&&!msIsFirst(cat,thr))text+=` - the ${ordinal(nth)} player to get there`;}
+    if(nth<=MS_NTH_SHOW&&!msIsFirst(cat,thr)&&thr>=(MS_NTH_MIN[cat]??Infinity))text+=` - the ${ordinal(nth)} player to get there`;}
   const m={fmt,pid:+pid,cat,thr,mid:E?E.id:'',date:E?E.date:'',text,team:extra?.team||0};
   if(nth)m.nth=nth;
   S.ms.push(m);return m;

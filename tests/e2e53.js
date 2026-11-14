@@ -1,5 +1,5 @@
-// e2e53: milestones say how many got there first ("2,000 career runs - the 1st player to get there"), per format -
-// only for the first 10, and never for a maiden century or a first five-for;
+// e2e53: milestones say how many got there first ("5,000 career runs - the 1st player to get there"), per format -
+// only for the big ones and the first 10, never for a maiden century or a first five-for;
 // a match you play lists the ranking moves (teams that moved, players into or out of the top 10, a new No.1) with the
 // new and the old position, in the result and on the scorecard - only for the two sides and the men playing, unless
 // someone else goes to No.1. Quick sims don't work them out.
@@ -15,7 +15,10 @@ G(`for(let i=0;i<700;i++)simFixture(nextFixture())`);
 const ms=G(`S.ms.filter(m=>m.fmt==='ODI'&&m.cat==='Career Runs'&&m.thr===1000)`);
 ok(ms.length>=3,'several 1,000-run ODI careers ('+ms.length+')');
 ok(ms.every((m,i)=>m.nth===i+1),'counted in order');
-ok(ms.every((m,i)=>i<10?m.text.endsWith(`the ${G(`ordinal(${i+1})`)} player to get there`):!/player to get there/.test(m.text)),'said for the first 10 only: '+ms.slice(0,3).map(m=>m.text).join(' | '));
+// said only for the big ones (MS_NTH_MIN: 5,000 runs, 10 hundreds ...) and the first 10 - not for 1,000 runs
+ok(G(`S.ms.filter(m=>m.nth).every(m=>/player to get there/.test(m.text)===(m.nth<=10&&m.thr>=MS_NTH_MIN[m.cat]&&!msIsFirst(m.cat,m.thr)))`),'said for the big milestones and the first 10 only');
+ok(ms.every(m=>!/player to get there/.test(m.text)),'not for 1,000 runs');
+ok(G(`(()=>{const m=logMilestone('ODI',1,'Career Runs',5000,null,'5,000 career runs');return m&&m.text;})()`).endsWith('player to get there'),'said for 5,000 runs');
 ok(G(`S.ms.filter(m=>m.thr===1&&(m.cat==='Centuries'||m.cat==='Five-wicket hauls')).every(m=>!/player to get there/.test(m.text))`),'not for a maiden century or a first five-for');
 ok(G(`S.ms.filter(m=>m.fmt==='TEST'&&m.cat==='Career Runs'&&m.thr===1000)[0]?.nth`)===1,'counted per format');
 ok(G(`S.ms.filter(m=>m.cat==='Hat-trick').every(m=>!m.nth)`),'one-off moments are not numbered');

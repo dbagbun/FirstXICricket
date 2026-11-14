@@ -60,8 +60,10 @@ function recordsData(fmt){
       for(const r of I.bt){
         if(r[8])f50.push({pid:r[0],v:r[8],txt:r[8]+' balls',...sub});
         if(r[9])f100.push({pid:r[0],v:r[9],txt:r[9]+' balls',...sub});
-        const f=r[7];if(!f||!r[5]||r[5]==='ro')continue;
-        const m=f===E.xi[I.bowl][11]?keepers:fielders;
+        // catches in the field to the fielders; the keeper's catches and stumpings to the keepers (nothing else: an old
+        // scorecard can carry a fielder on a bowled or lbw)
+        const f=r[7],how=r[5];if(!f||!(how==='ct'||how==='ctof'||how==='ctwk'||how==='st'))continue;
+        const m=how==='st'||how==='ctwk'||f===E.xi[I.bowl][11]?keepers:fielders;
         m.set(f,(m.get(f)||0)+1);
       }
       for(const p of I.parts)parts.push({v:p[2],txt:p[2]+(p[5]?'':'*'),w:p[4],a:p[0],b:p[1],...sub});

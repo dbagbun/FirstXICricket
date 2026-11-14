@@ -236,9 +236,10 @@ function loadSlot(i){
   for(const f of FORMATS)S.fast[f]=S.fast[f]||{f50:null,f100:null};
   if(S.rk)for(const k of['team','yr','bat','bowl'])for(const f of FORMATS)S.rk[k][f]=S.rk[k][f]||{};
   if(!S.rk)rebuildRankings();
+  splitCatches();
   return true;
 }
 function exportCareer(){return JSON.stringify(S);}
-function importCareer(text){const d=parseSave(text);if(!d)return false;S=d;realT20From();saveGame();return true;}
+function importCareer(text){const d=parseSave(text);if(!d)return false;S=d;realT20From();S.msKeys=S.msKeys||{};S.ms=S.ms||[];splitCatches();saveGame();return true;}
 // A career saved before the real T20Is were added picks them up from its current date, not back in 2005.
 function realT20From(){if(S&&S.t20iFrom==null)S.t20iFrom=S.matches&&S.matches.length?careerDate():'';}

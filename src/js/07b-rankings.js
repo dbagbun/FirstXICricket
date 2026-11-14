@@ -15,7 +15,7 @@ function matchScores(E,winnerBonus=true){
     let s=L.b>0?L.r*(L.r/L.b):L.r;
     s+=L.w*25+L.md*10;
     if(L.bb>0)s-=(L.br/(L.bb/6))*3;
-    s+=L.ct*10+L.st*15+L.ro*12+L.c100*30+L.c50*15+L.w5*40;
+    s+=L.ct*10+(L.ctk||0)*8+L.st*15+L.ro*12+L.c100*30+L.c50*15+L.w5*40;
     if(winnerBonus&&E.result.winner&&L.team===E.result.winner)s*=1.25;
     out[L.pid]={s,team:L.team,L};
   }
