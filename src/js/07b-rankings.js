@@ -56,6 +56,40 @@ function playerRanking(fmt,kind,n=20){
   else L=L.map(pid=>({pid,v:pts(kind,pid)}));
   return L.sort((x,y)=>y.v-x.v).slice(0,n);
 }
+// Ranking moves from one match (recordMatch, for matches you play): the team table and the top 10 batters, bowlers and
+// all-rounders of that format, before and after. Teams: every move. Players: into or out of the top 10, and a new No.1.
+// E.rk = [{k:'team'|'bat'|'bowl'|'ar', id, from, to}] (0 = unranked); rankMoveText words one.
+const RANK_TOP=10,RANK_KINDS=[['bat','batter'],['bowl','bowler'],['ar','all-rounder']];
+function rankSnapshot(fmt){
+  if(!R_().team[fmt])return null;
+  const o={team:teamRanking(fmt).map(r=>r.team)};
+  for(const[k]of RANK_KINDS)o[k]=playerRanking(fmt,k,200).map(r=>r.pid);
+  return o;
+}
+function rankMoves(a,b){
+  if(!a||!b)return[];
+  const out=[],pos=(L,x)=>L.indexOf(x)+1;
+  for(const t of new Set([...a.team,...b.team])){const f=pos(a.team,t),to=pos(b.team,t);if(f!==to&&to)out.push({k:'team',id:t,from:f,to});}
+  for(const[k]of RANK_KINDS){
+    const top=L=>new Set(L.slice(0,RANK_TOP));const A=top(a[k]),B=top(b[k]);
+    for(const p of new Set([...A,...B])){const f=pos(a[k],p),to=pos(b[k],p);
+      if(A.has(p)!==B.has(p)||(to===1&&f!==1))out.push({k,id:p,from:f,to});}
+  }
+  return out;
+}
+function rankMoveText(x,fmt){
+  const F=FMT_NAME[fmt]||fmt,was=x.from?ordinal(x.from):'unranked',now=x.to?ordinal(x.to):'unranked';
+  if(x.k==='team')return`${teamName(x.id)} ${x.to<x.from||!x.from?'up':'down'} to ${now} in the ${F} team rankings (was ${was})`;
+  const kind=RANK_KINDS.find(r=>r[0]===x.k)[1];
+  if(x.to===1)return`${pName(x.id)} is the new No.1 ${F} ${kind} (was ${was})`;
+  if(x.to&&x.to<=RANK_TOP)return`${pName(x.id)} into the top ${RANK_TOP} ${F} ${kind}s at ${now} (was ${was})`;
+  return`${pName(x.id)} out of the top ${RANK_TOP} ${F} ${kind}s: now ${now} (was ${was})`;
+}
+function rankMovesHTML(E){
+  if(!E.rk||!E.rk.length)return'';
+  const icon=x=>x.to&&(!x.from||x.to<x.from)?'<span class="green">▲</span>':'<span class="red">▼</span>';
+  return`<div class="banner" style="margin-top:10px"><b>Rankings</b>${E.rk.map(x=>`<div style="font-size:13px;margin-top:3px">${icon(x)} ${x.k==='team'?badge(x.id)+' ':''}${esc(rankMoveText(x,E.fmt))}</div>`).join('')}</div>`;
+}
 function teamRanking(fmt){
   const R=R_(),T=R.team[fmt],y=careerDate().slice(0,4),Y=(R.yr[fmt]||{})[y]||{};
   return Object.entries(T).filter(([t])=>(S.teams[fmt][t]||{}).p>0).map(([t,e])=>({team:+t,pts:rankPts(e),was:Y[t]!=null?rankPts(Y[t]):null,p:S.teams[fmt][t].p}))

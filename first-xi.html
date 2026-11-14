@@ -1540,11 +1540,18 @@ const MS_DEFS=[
   {cat:'Caps',key:s=>s.m,thr:[50,100,150,200],txt:t=>t+' caps'},
   {cat:'All-rounder',key:s=>s.r>=1000&&s.bw>=50?1:0,thr:[1],txt:()=>'The double: 1,000 runs and 50 wickets'},
 ];
+// How many players reached each career milestone before (per format, in this career's records): S.msN[fmt:cat:thr].
+// Rebuilt from S.ms for saves that don't have it yet.
+const MS_COUNTED=new Set(MS_DEFS.map(d=>d.cat));
+function msCount(){if(!S.msN){S.msN={};for(const m of S.ms)if(MS_COUNTED.has(m.cat)){const k=m.fmt+':'+m.cat+':'+m.thr;S.msN[k]=(S.msN[k]||0)+1;}}return S.msN;}
 function logMilestone(fmt,pid,cat,thr,E,text,extra){
   const k=fmt+':'+(+pid)+':'+cat+':'+thr;
   if(S.msKeys[k])return null;
   S.msKeys[k]=1;
+  let nth=0;
+  if(MS_COUNTED.has(cat)){const N=msCount(),c=fmt+':'+cat+':'+thr;nth=N[c]=(N[c]||0)+1;text+=` - the ${ordinal(nth)} player to get there`;}
   const m={fmt,pid:+pid,cat,thr,mid:E?E.id:'',date:E?E.date:'',text,team:extra?.team||0};
+  if(nth)m.nth=nth;
   S.ms.push(m);return m;
 }
 function checkMilestones(E){
@@ -2077,7 +2084,9 @@ function recordMatch(E,M){
   if(!M.real)S.logs[E.id]=packBalls(M);
   const ids=Object.keys(S.logs);if(ids.length>LOG_KEEP)for(const id of ids.slice(0,ids.length-LOG_KEEP))delete S.logs[id];
   applyStats(E);
+  const rkBefore=!M.sim&&!M.real&&!S.prefill&&!S.sandbox?rankSnapshot(E.fmt):null;   // ranking moves, for matches you play
   applyRankings(E);
+  if(rkBefore){const mv=rankMoves(rkBefore,rankSnapshot(E.fmt));if(mv.length)E.rk=mv;}
   updateForm(E);
   const cn=coachAfter(E);pressAfter(E);restAfter(M);meAfter(E);
   const ms=checkMilestones(E),pos=playerOfSeries(E.sid),aw=yearEnd(E);
@@ -2357,6 +2366,40 @@ function playerRanking(fmt,kind,n=20){
   if(kind==='ar')L=L.filter(pid=>R.bowl[fmt][pid]&&R.bowl[fmt][pid].n>=5).map(pid=>({pid,v:Math.round(pts('bat',pid)*pts('bowl',pid)/1000)}));
   else L=L.map(pid=>({pid,v:pts(kind,pid)}));
   return L.sort((x,y)=>y.v-x.v).slice(0,n);
+}
+// Ranking moves from one match (recordMatch, for matches you play): the team table and the top 10 batters, bowlers and
+// all-rounders of that format, before and after. Teams: every move. Players: into or out of the top 10, and a new No.1.
+// E.rk = [{k:'team'|'bat'|'bowl'|'ar', id, from, to}] (0 = unranked); rankMoveText words one.
+const RANK_TOP=10,RANK_KINDS=[['bat','batter'],['bowl','bowler'],['ar','all-rounder']];
+function rankSnapshot(fmt){
+  if(!R_().team[fmt])return null;
+  const o={team:teamRanking(fmt).map(r=>r.team)};
+  for(const[k]of RANK_KINDS)o[k]=playerRanking(fmt,k,200).map(r=>r.pid);
+  return o;
+}
+function rankMoves(a,b){
+  if(!a||!b)return[];
+  const out=[],pos=(L,x)=>L.indexOf(x)+1;
+  for(const t of new Set([...a.team,...b.team])){const f=pos(a.team,t),to=pos(b.team,t);if(f!==to&&to)out.push({k:'team',id:t,from:f,to});}
+  for(const[k]of RANK_KINDS){
+    const top=L=>new Set(L.slice(0,RANK_TOP));const A=top(a[k]),B=top(b[k]);
+    for(const p of new Set([...A,...B])){const f=pos(a[k],p),to=pos(b[k],p);
+      if(A.has(p)!==B.has(p)||(to===1&&f!==1))out.push({k,id:p,from:f,to});}
+  }
+  return out;
+}
+function rankMoveText(x,fmt){
+  const F=FMT_NAME[fmt]||fmt,was=x.from?ordinal(x.from):'unranked',now=x.to?ordinal(x.to):'unranked';
+  if(x.k==='team')return`${teamName(x.id)} ${x.to<x.from||!x.from?'up':'down'} to ${now} in the ${F} team rankings (was ${was})`;
+  const kind=RANK_KINDS.find(r=>r[0]===x.k)[1];
+  if(x.to===1)return`${pName(x.id)} is the new No.1 ${F} ${kind} (was ${was})`;
+  if(x.to&&x.to<=RANK_TOP)return`${pName(x.id)} into the top ${RANK_TOP} ${F} ${kind}s at ${now} (was ${was})`;
+  return`${pName(x.id)} out of the top ${RANK_TOP} ${F} ${kind}s: now ${now} (was ${was})`;
+}
+function rankMovesHTML(E){
+  if(!E.rk||!E.rk.length)return'';
+  const icon=x=>x.to&&(!x.from||x.to<x.from)?'<span class="green">▲</span>':'<span class="red">▼</span>';
+  return`<div class="banner" style="margin-top:10px"><b>Rankings</b>${E.rk.map(x=>`<div style="font-size:13px;margin-top:3px">${icon(x)} ${x.k==='team'?badge(x.id)+' ':''}${esc(rankMoveText(x,E.fmt))}</div>`).join('')}</div>`;
 }
 function teamRanking(fmt){
   const R=R_(),T=R.team[fmt],y=careerDate().slice(0,4),Y=(R.yr[fmt]||{})[y]||{};
@@ -4607,7 +4650,7 @@ function openScorecard(mid){
     <div class="muted" style="margin-bottom:10px">Toss: ${esc(teamName(E.toss[0]))}, chose to ${E.toss[1]}${E.pitch?' · '+PITCHES[E.pitch].name:''}${E.reseeded?' · re-seeded knockout':''}</div>
     ${E.real?`<div class="banner" style="margin-bottom:10px">As it really happened - filled in from the real scorecard before your career began.</div>`:''}
     <div class="row" style="margin-bottom:10px">${S.logs[E.id]?'<button class="btn sm" id="sc-hl">▶ Highlights</button>':''}<button class="btn sm" id="sc-img">Save as image</button><button class="btn sm" id="sc-replay">↺ Replay this match</button></div>
-    ${scorecardHTML(E)}<h3 style="margin-top:14px">Charts</h3>${chartsHTML(E)}
+    ${scorecardHTML(E)}${rankMovesHTML(E)}<h3 style="margin-top:14px">Charts</h3>${chartsHTML(E)}
     ${S.logs[E.id]?'<h3 style="margin-top:14px">Shots &amp; pitch maps</h3><div id="sc-field"></div>':''}
     <details style="margin-top:12px"><summary class="muted" style="cursor:pointer">Key moments</summary>${highlightsListHTML(E)}</details>`);
   const fe=$('#sc-field');if(fe){FIELD_SEL={inn:-1,bat:0,bowl:0};fe.innerHTML=fieldTabHTML(E,null);wireFieldTab(E,null,fe);}
@@ -6533,6 +6576,7 @@ uiDoneHook=(M,E,ms,pos,aw,cn)=>{
       ${E.motm?`<div class="banner" style="margin-top:10px">Man of the Match: <b>${plink(E.motm)}</b></div>`:''}
       ${ss&&SERIES.get(E.sid)?.kind!=='tournament'?`<p class="sub">${esc(ss.text)}</p>`:''}
       ${realOf(E)?`<p class="sub">In history: <b>${esc(realText(realOf(E)))}</b> ${sameAsHistory(E)===false?'<span class="pill ko">history changed</span>':sameAsHistory(E)?'<span class="pill win">as it happened</span>':''}</p>`:''}
+      ${rankMovesHTML(E)}
       ${pos?`<div class="banner" style="margin-top:10px">Player of the series (${esc(pos.title)}): <b>${plink(pos.pid)}</b></div>`:''}
       ${ms.length?`<h3 style="margin-top:12px">Milestones</h3>${ms.map(m=>`<div>🏅 ${plink(m.pid)} <span class="sub">${esc(m.text)}</span></div>`).join('')}`:''}
       ${cn&&cn.length?`<h3 style="margin-top:12px">From the board room</h3>${cn.map(n=>`<div class="${n.cls==='good'?'green':n.cls==='bad'?'red':''}">${esc(n.text)}</div>`).join('')}`:''}

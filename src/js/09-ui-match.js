@@ -432,7 +432,7 @@ function openScorecard(mid){
     <div class="muted" style="margin-bottom:10px">Toss: ${esc(teamName(E.toss[0]))}, chose to ${E.toss[1]}${E.pitch?' · '+PITCHES[E.pitch].name:''}${E.reseeded?' · re-seeded knockout':''}</div>
     ${E.real?`<div class="banner" style="margin-bottom:10px">As it really happened - filled in from the real scorecard before your career began.</div>`:''}
     <div class="row" style="margin-bottom:10px">${S.logs[E.id]?'<button class="btn sm" id="sc-hl">▶ Highlights</button>':''}<button class="btn sm" id="sc-img">Save as image</button><button class="btn sm" id="sc-replay">↺ Replay this match</button></div>
-    ${scorecardHTML(E)}<h3 style="margin-top:14px">Charts</h3>${chartsHTML(E)}
+    ${scorecardHTML(E)}${rankMovesHTML(E)}<h3 style="margin-top:14px">Charts</h3>${chartsHTML(E)}
     ${S.logs[E.id]?'<h3 style="margin-top:14px">Shots &amp; pitch maps</h3><div id="sc-field"></div>':''}
     <details style="margin-top:12px"><summary class="muted" style="cursor:pointer">Key moments</summary>${highlightsListHTML(E)}</details>`);
   const fe=$('#sc-field');if(fe){FIELD_SEL={inn:-1,bat:0,bowl:0};fe.innerHTML=fieldTabHTML(E,null);wireFieldTab(E,null,fe);}

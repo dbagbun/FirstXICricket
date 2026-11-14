@@ -145,11 +145,18 @@ const MS_DEFS=[
   {cat:'Caps',key:s=>s.m,thr:[50,100,150,200],txt:t=>t+' caps'},
   {cat:'All-rounder',key:s=>s.r>=1000&&s.bw>=50?1:0,thr:[1],txt:()=>'The double: 1,000 runs and 50 wickets'},
 ];
+// How many players reached each career milestone before (per format, in this career's records): S.msN[fmt:cat:thr].
+// Rebuilt from S.ms for saves that don't have it yet.
+const MS_COUNTED=new Set(MS_DEFS.map(d=>d.cat));
+function msCount(){if(!S.msN){S.msN={};for(const m of S.ms)if(MS_COUNTED.has(m.cat)){const k=m.fmt+':'+m.cat+':'+m.thr;S.msN[k]=(S.msN[k]||0)+1;}}return S.msN;}
 function logMilestone(fmt,pid,cat,thr,E,text,extra){
   const k=fmt+':'+(+pid)+':'+cat+':'+thr;
   if(S.msKeys[k])return null;
   S.msKeys[k]=1;
+  let nth=0;
+  if(MS_COUNTED.has(cat)){const N=msCount(),c=fmt+':'+cat+':'+thr;nth=N[c]=(N[c]||0)+1;text+=` - the ${ordinal(nth)} player to get there`;}
   const m={fmt,pid:+pid,cat,thr,mid:E?E.id:'',date:E?E.date:'',text,team:extra?.team||0};
+  if(nth)m.nth=nth;
   S.ms.push(m);return m;
 }
 function checkMilestones(E){

@@ -159,7 +159,9 @@ function recordMatch(E,M){
   if(!M.real)S.logs[E.id]=packBalls(M);
   const ids=Object.keys(S.logs);if(ids.length>LOG_KEEP)for(const id of ids.slice(0,ids.length-LOG_KEEP))delete S.logs[id];
   applyStats(E);
+  const rkBefore=!M.sim&&!M.real&&!S.prefill&&!S.sandbox?rankSnapshot(E.fmt):null;   // ranking moves, for matches you play
   applyRankings(E);
+  if(rkBefore){const mv=rankMoves(rkBefore,rankSnapshot(E.fmt));if(mv.length)E.rk=mv;}
   updateForm(E);
   const cn=coachAfter(E);pressAfter(E);restAfter(M);meAfter(E);
   const ms=checkMilestones(E),pos=playerOfSeries(E.sid),aw=yearEnd(E);
