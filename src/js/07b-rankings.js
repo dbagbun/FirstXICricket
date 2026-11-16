@@ -89,10 +89,42 @@ function rankMoveText(x,fmt){
   if(x.to&&x.to<=RANK_TOP)return`${pName(x.id)} into the top ${RANK_TOP} ${F} ${kind}s at ${now} (was ${was})`;
   return`${pName(x.id)} out of the top ${RANK_TOP} ${F} ${kind}s: now ${now} (was ${was})`;
 }
+// Career lists (matches you play): a man in the match who moves up the career runs or wickets list of the match's
+// format, or of all international cricket (ODI + Test + T20I), within or into the top CAREER_TOP 20.
+// E.lb = [{s:'r'|'bw', f:fmt|'ALL', id, from, to, v, passed:[pids]}] (from 0 = not on the list before).
+const CAREER_TOP=20,CAREER_FMTS=['ODI','TEST','T20'];
+function careerSnap(E){
+  if(!CAREER_FMTS.includes(E.fmt))return null;
+  const out={};
+  for(const f of[E.fmt,'ALL'])for(const s of['r','bw']){
+    const val=new Map();
+    for(const g of f==='ALL'?CAREER_FMTS:[f])for(const[p,x]of Object.entries(S.stats[g]||{}))if(x[s])val.set(+p,(val.get(+p)||0)+x[s]);
+    out[f+':'+s]={val,top:[...val.entries()].sort((a,b)=>b[1]-a[1]||a[0]-b[0]).slice(0,CAREER_TOP*2).map(x=>x[0])};
+  }
+  return out;
+}
+function careerMoves(a,b,E){
+  if(!a||!b)return[];
+  const men=E.teams.flatMap(t=>E.xi[t].slice(0,11)),out=[];
+  const rank=(L,p)=>{const v=L.val.get(p);if(!v)return 0;let n=1;for(const x of L.val.values())if(x>v)n++;return n;};
+  for(const k of Object.keys(b)){const[f,s]=k.split(':'),A=a[k],B=b[k];
+    for(const p of men){const to=rank(B,p),from=rank(A,p);
+      if(!to||to>CAREER_TOP||(from&&from<=to))continue;
+      const passed=(from?A.top.slice(to-1,from-1):A.top.slice(to-1,CAREER_TOP)).filter(q=>q!==p&&rank(B,q)>to).slice(0,2);
+      const v=B.val.get(p),joint=[...B.val.entries()].some(([q,x])=>q!==p&&x===v);
+      out.push({s,f,id:p,from:from>CAREER_TOP*2?0:from,to,v,passed,joint});}}
+  return out;
+}
+function careerMoveText(x){
+  const list=`career ${x.f==='ALL'?'international (all formats)':FMT_NAME[x.f]} ${x.s==='r'?'runs':'wickets'}`;
+  const was=x.from?ordinal(x.from):'outside the top '+(CAREER_TOP*2);
+  return`${pName(x.id)} ${x.from&&x.from<=CAREER_TOP?'up to':'into the top '+CAREER_TOP+' at'} ${x.joint?'joint ':''}${ordinal(x.to)} on the ${list} list with ${x.v.toLocaleString()} (was ${was})${x.passed.length?', passing '+x.passed.map(pName).join(' and '):''}`;
+}
 function rankMovesHTML(E){
-  if(!E.rk||!E.rk.length)return'';
+  const rk=E.rk||[],lb=E.lb||[];if(!rk.length&&!lb.length)return'';
   const icon=x=>x.to&&(!x.from||x.to<x.from)?'<span class="green">▲</span>':'<span class="red">▼</span>';
-  return`<div class="banner" style="margin-top:10px"><b>Rankings</b>${E.rk.map(x=>`<div style="font-size:13px;margin-top:3px">${icon(x)} ${x.k==='team'?badge(x.id)+' ':''}${esc(rankMoveText(x,E.fmt))}</div>`).join('')}</div>`;
+  return`<div class="banner" style="margin-top:10px">${rk.length?`<b>Rankings</b>${rk.map(x=>`<div style="font-size:13px;margin-top:3px">${icon(x)} ${x.k==='team'?badge(x.id)+' ':''}${esc(rankMoveText(x,E.fmt))}</div>`).join('')}`:''}
+    ${lb.length?`<b style="display:block;margin-top:${rk.length?8:0}px">Career lists</b>${lb.map(x=>`<div style="font-size:13px;margin-top:3px"><span class="green">▲</span> ${esc(careerMoveText(x))}</div>`).join('')}`:''}</div>`;
 }
 function teamRanking(fmt){
   const R=R_(),T=R.team[fmt],y=careerDate().slice(0,4),Y=(R.yr[fmt]||{})[y]||{};

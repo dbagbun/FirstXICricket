@@ -158,7 +158,9 @@ function recordMatch(E,M){
   if(S.cups&&S.cups.length&&cupById(E.sid))fxDirty();   // knockout slots in that tournament may now resolve
   if(!M.real)S.logs[E.id]=packBalls(M);
   const ids=Object.keys(S.logs);if(ids.length>LOG_KEEP)for(const id of ids.slice(0,ids.length-LOG_KEEP))delete S.logs[id];
+  const played=!M.sim&&!M.real&&!S.prefill&&!S.sandbox,lbBefore=played?careerSnap(E):null;   // career lists, before this match
   applyStats(E);
+  if(lbBefore){const mv=careerMoves(lbBefore,careerSnap(E),E);if(mv.length)E.lb=mv;}
   const rkBefore=!M.sim&&!M.real&&!S.prefill&&!S.sandbox?rankSnapshot(E.fmt):null;   // ranking moves, for matches you play
   applyRankings(E);
   if(rkBefore){const mv=rankMoves(rkBefore,rankSnapshot(E.fmt),E);if(mv.length)E.rk=mv;}
