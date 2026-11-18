@@ -2,7 +2,8 @@
 //  - bowler quality and wickets (03-engine BOWL_EDGE): over real ODIs with the real plans, the best-rated bowlers take
 //    their wickets cheapest and the part-timers dearest, as in the real figures - the workbook's own rule (Settings
 //    'Workbook only') has it the other way round;
-//  - batting order: a Test nightwatchman or injured opener goes back to his usual slot (battingOrder);
+//  - batting order: a Test nightwatchman or injured opener goes back to his usual slot (battingOrder); in an ODI the
+//    men who didn't bat for real (rain) go by their usual places (odiOrder);
 //  - the real XIs and bowling plans are used as they were.
 const {JSDOM}=require('jsdom'),fs=require('fs');
 const html=fs.readFileSync(process.argv[2]||'dist/first-xi.html','utf8');
@@ -30,8 +31,12 @@ ok(a.indexOf('VC Drakes')>=6,'Drakes no longer bats 4 (now '+(a.indexOf('VC Drak
 ok(b.indexOf('CH Gayle')<=1,'Gayle opens again (now '+(b.indexOf('CH Gayle')+1)+')');
 ok(G(`(()=>{const fx=REAL_T20_FX[5];return JSON.stringify(buildMatch(fx).xi[fx.a].bat)===JSON.stringify(testXI(fx.f.cid,fx.a,fx.date).bat);})()`),'a T20I keeps its real order');
 // the real XIs and bowling plans
-const r=G(`(()=>{let x=0,n=0,o=0,on=0;for(const fx of ODI_FX.filter((f,i)=>f.playable&&i%40===0)){const M=buildMatch(fx);for(const t of M.teams){n++;if(JSON.stringify(M.xi[t].bat)===JSON.stringify(fixtureXI(fx.f.cid,t).bat))x++;}
+const r=G(`(()=>{let x=0,n=0,o=0,on=0;for(const fx of ODI_FX.filter((f,i)=>f.playable&&i%40===0)){const M=buildMatch(fx);for(const t of M.teams){n++;const R=WORLD.real[fx.f.cid],inn=R&&R.inn.find(i=>i[0]===t),k=inn?Math.min(11,inn[2]+2):0,X=fixtureXI(fx.f.cid,t).bat,Y=M.xi[t].bat;
+    if(JSON.stringify(Y.slice(0,k))===JSON.stringify(X.slice(0,k))&&JSON.stringify([...Y].sort())===JSON.stringify([...X].sort()))x++;}
   doToss(M);simMatch(M);for(const I of M.inns){const P=M.plans[I.bowl]||[];for(const v of I.overs){const p=P[v.over-1];if(p){on++;if(v.bowler===p)o++;}}}}return[x,n,o,on];})()`);
-ok(r[0]===r[1],'ODI XIs and batting orders as they were ('+r[0]+'/'+r[1]+')');
+ok(r[0]===r[1],'ODI XIs as they were, the men who batted in the real order ('+r[0]+'/'+r[1]+')');
+// a side rain kept from batting: by where each usually bats (England, Port of Spain 2004, on the sheet as Anderson, Gough ...)
+const eng=G(`(()=>{const fx=ODI_FX.find(x=>x.f.cid==='64889');if(!fx)return null;const M=buildMatch(fx),t=[...TEAMS.values()].find(x=>x.short==='ENG').id;return M.xi[t].bat.map(pName);})()`);
+ok(!eng||(eng.indexOf('ME Trescothick')<=1&&eng.indexOf('JM Anderson')>=8),'England 2004: Trescothick opens, Anderson bats low ('+(eng||[]).slice(0,3).join(', ')+')');
 ok(r[2]/r[3]>.99,'the real bowler bowls the over ('+r[2]+'/'+r[3]+')');
 console.log(fail?`e2e52: ${fail} failing`:'e2e52 ok');process.exit(fail?1:0);

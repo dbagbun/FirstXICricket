@@ -122,7 +122,10 @@ function pickCaptain(bat,date,near){
 // real order. Only the order changes: the stored rows stay as they are (scorecards and bowling plans index into them).
 let USUAL_POS=null;
 function usualPos(pid,fmt,date){
-  if(!USUAL_POS){USUAL_POS={TEST:new Map(),T20:new Map()};
+  if(!USUAL_POS){USUAL_POS={TEST:new Map(),T20:new Map(),ODI:new Map()};
+    for(const f of FIX){const s=WORLD.xi[f.cid],R=WORLD.real&&WORLD.real[f.cid];if(!s||!R)continue;
+      for(const I of R.inn){const r=s[I[0]];if(!r)continue;const k=Math.min(11,I[2]+2);
+        r.slice(0,k).forEach((p,i)=>{const m=USUAL_POS.ODI;if(!m.has(p))m.set(p,[]);m.get(p).push([f.date,i+1]);});}}
     for(const[k,L]of[['TEST',TFIX],['T20',IFIX]])for(const f of L)for(const t of[f.a,f.b]){const r=realXIRow(f.cid,t);if(!r)continue;
       r.slice(0,11).forEach((p,i)=>{const m=USUAL_POS[k];if(!m.has(p))m.set(p,[]);m.get(p).push([f.date,i+1]);});}}
   const L=(USUAL_POS[fmt]||new Map()).get(pid);if(!L)return 0;
@@ -134,6 +137,16 @@ function battingOrder(X,fmt,date){
   const key=X.bat.map((p,i)=>{const u=usualPos(p,fmt,date);return u&&Math.abs(u-(i+1))>=3?u+.5:i+1;});
   const bat=X.bat.map((p,i)=>[p,key[i],i]).sort((a,b)=>a[1]-b[1]||a[2]-b[2]).map(x=>x[0]);
   return{...X,bat};
+}
+// A real ODI side's order: the men who batted (wickets + 2) keep the real order; the rest - all eleven when rain kept
+// a side from batting (England, Port of Spain 2004, are on the team sheet as Anderson, Gough, Clarke ...) - go by
+// where each usually bats in ODIs. Only the order changes; the stored row stays (plans and scorecards index it).
+function odiOrder(X,cid,tid,date){
+  const R=WORLD.real&&WORLD.real[cid];if(!X||!R)return X;
+  const inn=R.inn.find(i=>i[0]===+tid),k=inn?Math.min(11,inn[2]+2):0;
+  if(k>=11)return X;
+  const rest=X.bat.slice(k).map((p,i)=>[p,usualPos(p,'ODI',date)||99,i]).sort((a,b)=>a[1]-b[1]||a[2]-b[2]).map(x=>x[0]);
+  return{...X,bat:[...X.bat.slice(0,k),...rest]};
 }
 function testXI(cid,tid,date){
   const x=realXIRow(cid,tid);
@@ -171,7 +184,7 @@ function nearestXI(tid,date,opts={}){
     if(f.date>date)d+=30;   // prefer the squad he had going into the date
     if(d<bd){bd=d;best=f;}
   }
-  return best?fixtureXI(best.cid,tid):null;
+  return best?odiOrder(fixtureXI(best.cid,tid),best.cid,tid,best.date):null;
 }
 // Players who turned out for a team within `days` of a date, most appearances first.
 function squadAround(tid,date,days=400){

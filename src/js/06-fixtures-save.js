@@ -114,7 +114,7 @@ function buildMatch(fx){
   let a=f.a,b=f.b,reseeded=false;
   const ko=resolveFixture(f);
   if(ko&&!(ko.a===f.a&&ko.b===f.b)&&!(ko.a===f.b&&ko.b===f.a)){a=ko.a;b=ko.b;reseeded=true;}
-  const xiFor=t=>(t===f.a||t===f.b)?fixtureXI(f.cid,t):(nearestXI(t,f.date,{sid:f.sid})||nearestXI(t,f.date));
+  const xiFor=t=>(t===f.a||t===f.b)?odiOrder(fixtureXI(f.cid,t),f.cid,t,f.date):(nearestXI(t,f.date,{sid:f.sid})||nearestXI(t,f.date));
   const M=newMatch({fmt:'ODI',a,b,date:f.date,venue:f.venue,city:f.city,cid:f.cid,fid:f.no,sid:f.sid,series:seriesOf(f).title,
     stage:E?stageName(E.stageOf.get(f.no),E):'',xiA:xiFor(a),xiB:xiFor(b),home:VENUE_HOME.get(f.venue)||0});
   if(reseeded){M.reseeded={a:f.a,b:f.b};for(const t of M.teams)if(t!==f.a&&t!==f.b)delete M.plans[t];}
