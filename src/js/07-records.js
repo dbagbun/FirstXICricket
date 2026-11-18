@@ -3,7 +3,7 @@ const REC_MIN={ODI:{inn:20,balls:500,wkts:30,bb:600,cap:10},TEST:{inn:15,balls:1
 const REC_GROUPS=[
   ['Batting',['runs','hs','avg','sr','c100','c50','f6','f4','fast50','fast100','ducks']],
   ['Bowling',['wkts','bbi','bbm','bavg','econ','bsr','w5','md']],
-  ['Fielding',['ct','wkd','st','ro']],
+  ['Fielding',['ct','wkd','wkct','st','ro']],
   ['Captaincy',['capw','cappct']],
   ['Partnerships',['part','p1','p2','p3','p4','p5','p6','p7','p8','p9','p10']],
   ['Team',['tot','low','winr','winw','teamwl']],
@@ -12,7 +12,7 @@ const REC_GROUPS=[
 const REC_NAME={runs:'Most runs',hs:'Highest individual score',avg:'Highest batting average',sr:'Highest strike rate',c100:'Most hundreds',c50:'Most fifties',
   f6:'Most sixes',f4:'Most fours',fast50:'Fastest fifty',fast100:'Fastest hundred',ducks:'Most ducks',wkts:'Most wickets',bbi:'Best bowling in an innings',
   bbm:'Best bowling in a match',bavg:'Best bowling average',econ:'Best economy rate',bsr:'Best bowling strike rate',w5:'Most five-wicket hauls',md:'Most maidens',
-  ct:'Most catches (fielder)',wkd:'Most wicketkeeping dismissals',st:'Most stumpings',ro:'Most run outs',capw:'Most wins as captain',cappct:'Best win % as captain',
+  ct:'Most catches (fielder)',wkd:'Most wicketkeeping dismissals',wkct:'Most catches (wicketkeeper)',st:'Most stumpings',ro:'Most run outs',capw:'Most wins as captain',cappct:'Best win % as captain',
   part:'Highest partnership (any wicket)',tot:'Highest team totals',low:'Lowest completed totals',winr:'Biggest wins by runs',winw:'Biggest wins by wickets',
   teamwl:'Team results',motm:'Most Man of the Match awards',caps:'Most caps'};
 for(let w=1;w<=10;w++)REC_NAME['p'+w]=`Highest ${ordinal(w)}-wicket partnership`;
@@ -44,6 +44,7 @@ function recordsData(fmt){
   D.md=top(P,x=>x.s.md,x=>x.s.md,-1,x=>x.s.md>0);
   D.ro=top(P,x=>x.s.ro,x=>x.s.ro,-1,x=>x.s.ro>0);
   D.st=top(P,x=>x.s.st,x=>x.s.st,-1,x=>x.s.st>0);
+  D.wkct=top(P,x=>x.s.ctk||0,x=>x.s.ctk||0,-1,x=>(x.s.ctk||0)>0);   // catches taken keeping wicket (the stats' WkCt)
   D.motm=top(P,x=>x.s.motm,x=>x.s.motm,-1,x=>x.s.motm>0);
   D.caps=top(P,x=>x.s.m,x=>x.s.m);
   D.capw=top(P,x=>x.s.cw,x=>x.s.cw+' of '+x.s.cm,-1,x=>x.s.cw>0);

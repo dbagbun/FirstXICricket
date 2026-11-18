@@ -18,6 +18,9 @@ const cmp=G(`(()=>{const out=[];for(const f of['ODI','TEST']){const D=recordsDat
 const bad=cmp.filter(x=>x[3]!==x[4]);
 ok(cmp.length>30&&!bad.length,'the records match the players\' stats ('+cmp.length+' checked'+(bad.length?'; '+bad.slice(0,3).map(x=>x.join(' ')).join(' | '):'')+')');
 ok(G(`Object.values(S.stats.ODI).some(s=>s.ctk>20)`),'keepers have catches as keeper');
+const wk=G(`(()=>{const D=recordsData('ODI'),ST=S.stats.ODI;return{list:D.wkct.map(x=>[x.v,ST[x.pid].ctk]),sorted:D.wkct.every((x,i,a)=>!i||a[i-1].v>=x.v)};})()`);
+ok(wk.list.length>=5&&wk.list.every(([a,b])=>a===b)&&wk.sorted,'Most catches (wicketkeeper): the keepers\' WkCt, top first');
+G(`openPlayer(${G(`recordsData('ODI').ro[0].pid`)})`);ok(/RO/.test(w.document.querySelector('#modal-box').textContent),'the player page shows run outs');G(`closeModal()`);
 ok(G(`S.ms.some(m=>m.cat==='Keeping dismissals')`),'keeping dismissals milestones');
 // the order: only for the big milestones
 ok(G(`S.ms.filter(m=>/player to get there/.test(m.text)).every(m=>m.thr>=MS_NTH_MIN[m.cat]&&m.nth<=10)`),'the order only for the big ones and the first 10');
