@@ -33,8 +33,9 @@ ok(all.every(m=>m.rk.every(x=>x.to===1||(x.k==='team'?m.teams.includes(x.id):m.m
 ok(found,'a played match brings ranking moves');
 if(found){
   const txt=found.rk.map(x=>G(`rankMoveText(${JSON.stringify(x)},'${found.fmt}')`));
-  ok(txt.every(t=>/\(was (\d+(st|nd|rd|th)|unranked)\)/.test(t)),'each gives the old position: '+txt.slice(0,3).join(' | '));
-  ok(found.rk.every(x=>x.k==='team'?x.from!==x.to:(x.from<=10)!==(x.to<=10&&x.to>0)||x.to===1),'only moves of note');
+  ok(txt.every(t=>/\(was (\d+(st|nd|rd|th)|unranked)\)/.test(t)||/ stay \d+(st|nd|rd|th) in the /.test(t)||/ into the .* team rankings at /.test(t)),'each gives the old position (or stays put): '+txt.slice(0,3).join(' | '));
+  ok(found.rk.every(x=>x.k==='team'?true:(x.from<=10)!==(x.to<=10&&x.to>0)||x.to===1),'only moves of note');
+  ok(all.every(m=>m.teams.every(t=>m.rk.some(x=>x.k==='team'&&x.id===t))),'both sides every match, moved or not');
   G(`openScorecard(${JSON.stringify(found.id)})`);ok(/Rankings/.test($('#modal-box').textContent),'on the scorecard');G(`closeModal()`);
 }
 // the words
@@ -42,4 +43,5 @@ ok(G(`rankMoveText({k:'bat',id:+Object.keys(WORLD.players)[0],from:14,to:8},'ODI
 ok(G(`rankMoveText({k:'bowl',id:+Object.keys(WORLD.players)[0],from:9,to:12},'TEST')`).includes('out of the top 10 Test bowlers: now 12th (was 9th)'),'out of the top 10');
 ok(G(`rankMoveText({k:'bat',id:+Object.keys(WORLD.players)[0],from:3,to:1},'ODI')`).includes('new No.1 ODI batter (was 3rd)'),'a new No.1');
 ok(G(`rankMoveText({k:'team',id:1,from:4,to:3},'ODI')`).includes('up to 3rd in the ODI team rankings (was 4th)'),'teams');
+ok(G(`rankMoveText({k:'team',id:1,from:6,to:6},'ODI')`).includes('stay 6th in the ODI team rankings'),'a team that stays put');
 console.log(fail?`e2e53: ${fail} failing`:'e2e53 ok');process.exit(fail?1:0);

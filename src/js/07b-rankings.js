@@ -72,7 +72,8 @@ function rankMoves(a,b,E){
   const out=[],pos=(L,x)=>L.indexOf(x)+1,newTop=(f,to)=>to===1&&f!==1;
   const sides=new Set(E?E.teams:[]),men=new Set(E?E.teams.flatMap(t=>E.xi[t].slice(0,11)):[]);
   for(const t of new Set([...a.team,...b.team])){const f=pos(a.team,t),to=pos(b.team,t);
-    if(f!==to&&to&&(!E||sides.has(t)||newTop(f,to)))out.push({k:'team',id:t,from:f,to});}
+    if(!to)continue;
+    if(E?sides.has(t)||(f!==to&&newTop(f,to)):f!==to)out.push({k:'team',id:t,from:f,to});}   // both sides every match, moved or not
   for(const[k]of RANK_KINDS){
     const top=L=>new Set(L.slice(0,RANK_TOP));const A=top(a[k]),B=top(b[k]);
     for(const p of new Set([...A,...B])){const f=pos(a[k],p),to=pos(b[k],p);
@@ -83,7 +84,10 @@ function rankMoves(a,b,E){
 }
 function rankMoveText(x,fmt){
   const F=FMT_NAME[fmt]||fmt,was=x.from?ordinal(x.from):'unranked',now=x.to?ordinal(x.to):'unranked';
-  if(x.k==='team')return`${teamName(x.id)} ${x.to<x.from||!x.from?'up':'down'} to ${now} in the ${F} team rankings (was ${was})`;
+  if(x.k==='team'){
+    if(!x.from)return`${teamName(x.id)} into the ${F} team rankings at ${now}`;
+    if(x.to===x.from)return`${teamName(x.id)} stay ${now} in the ${F} team rankings`;
+    return`${teamName(x.id)} ${x.to<x.from?'up':'down'} to ${now} in the ${F} team rankings (was ${was})`;}
   const kind=RANK_KINDS.find(r=>r[0]===x.k)[1];
   if(x.to===1)return`${pName(x.id)} is the new No.1 ${F} ${kind} (was ${was})`;
   if(x.to&&x.to<=RANK_TOP)return`${pName(x.id)} into the top ${RANK_TOP} ${F} ${kind}s at ${now} (was ${was})`;
@@ -110,7 +114,7 @@ function careerMoves(a,b,E){
   for(const k of Object.keys(b)){const[f,s]=k.split(':'),A=a[k],B=b[k];
     for(const p of men){const to=rank(B,p),from=rank(A,p);
       if(!to||to>CAREER_TOP||(from&&from<=to))continue;
-      const passed=(from?A.top.slice(to-1,from-1):A.top.slice(to-1,CAREER_TOP)).filter(q=>q!==p&&rank(B,q)>to).slice(0,2);
+      const passed=(from?A.top.slice(to-1,from-1):A.top.slice(to-1,CAREER_TOP)).filter(q=>q!==p&&rank(B,q)>to).slice(0,2).map(q=>[q,B.val.get(q)]);
       const v=B.val.get(p),joint=[...B.val.entries()].some(([q,x])=>q!==p&&x===v);
       out.push({s,f,id:p,from:from>CAREER_TOP*2?0:from,to,v,passed,joint});}}
   return out;
@@ -118,11 +122,11 @@ function careerMoves(a,b,E){
 function careerMoveText(x){
   const list=`career ${x.f==='ALL'?'international (all formats)':FMT_NAME[x.f]} ${x.s==='r'?'runs':'wickets'}`;
   const was=x.from?ordinal(x.from):'outside the top '+(CAREER_TOP*2);
-  return`${pName(x.id)} ${x.from&&x.from<=CAREER_TOP?'up to':'into the top '+CAREER_TOP+' at'} ${x.joint?'joint ':''}${ordinal(x.to)} on the ${list} list with ${x.v.toLocaleString()} (was ${was})${x.passed.length?', passing '+x.passed.map(pName).join(' and '):''}`;
+  return`${pName(x.id)} ${x.from&&x.from<=CAREER_TOP?'up to':'into the top '+CAREER_TOP+' at'} ${x.joint?'joint ':''}${ordinal(x.to)} on the ${list} list with ${x.v.toLocaleString()} (was ${was})${x.passed.length?', passing '+x.passed.map(q=>Array.isArray(q)?`${pName(q[0])} (${q[1].toLocaleString()})`:pName(q)).join(' and '):''}`;
 }
 function rankMovesHTML(E){
   const rk=E.rk||[],lb=E.lb||[];if(!rk.length&&!lb.length)return'';
-  const icon=x=>x.to&&(!x.from||x.to<x.from)?'<span class="green">▲</span>':'<span class="red">▼</span>';
+  const icon=x=>x.to&&x.from===x.to?'<span class="muted">●</span>':x.to&&(!x.from||x.to<x.from)?'<span class="green">▲</span>':'<span class="red">▼</span>';
   return`<div class="banner" style="margin-top:10px">${rk.length?`<b>Rankings</b>${rk.map(x=>`<div style="font-size:13px;margin-top:3px">${icon(x)} ${x.k==='team'?badge(x.id)+' ':''}${esc(rankMoveText(x,E.fmt))}</div>`).join('')}`:''}
     ${lb.length?`<b style="display:block;margin-top:${rk.length?8:0}px">Career lists</b>${lb.map(x=>`<div style="font-size:13px;margin-top:3px"><span class="green">▲</span> ${esc(careerMoveText(x))}</div>`).join('')}`:''}</div>`;
 }

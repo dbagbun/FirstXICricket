@@ -23,6 +23,7 @@ ok(moves.every(x=>G(`(()=>{const v=${x.v},s='${x.s}',fs=${JSON.stringify(x.f==='
   for(const f of fs)for(const[p,y]of Object.entries(S.stats[f]))if(y[s])t[p]=(t[p]||0)+y[s];return Object.values(t).filter(y=>y>v).length+1;})()`)>=x.to),'the new place matches the stats (ties share)');
 const txt=moves.map(x=>G(`careerMoveText(${JSON.stringify(x)})`));
 ok(txt.every(t=>/on the career (ODI|Test|T20|international \(all formats\)) (runs|wickets) list with [\d,]+ \(was /.test(t)),'worded with total and old place: '+txt[0]);
-const withPass=moves.find(x=>x.passed.length);ok(!withPass||/passing /.test(G(`careerMoveText(${JSON.stringify(withPass)})`)),'names who he passed');
+const withPass=moves.find(x=>x.passed.length);ok(withPass&&/passing [^(]+ \([\d,]+\)/.test(G(`careerMoveText(${JSON.stringify(withPass)})`)),'names who he passed, with their totals: '+(withPass?G(`careerMoveText(${JSON.stringify(withPass)})`):''));
+ok(moves.every(x=>x.passed.every(q=>Array.isArray(q)&&q[1]<=x.v)),'the men passed have no more than him');
 const m=L.find(x=>x.lb.length);G(`openScorecard(${JSON.stringify(m.id)})`);ok(/Career lists/.test($('#modal-box').textContent),'on the scorecard');
 console.log(fail?`e2e55: ${fail} failing`:'e2e55 ok');process.exit(fail?1:0);
