@@ -2,7 +2,7 @@
 // Team ratings are Elo underneath (full members start 1500, Zimbabwe/Bangladesh 1400, associates 1250) and are
 // shown ICC-style: points = (Elo - 1000) / 5. Player rankings are an exponential average of match performances,
 // scaled by the opposition's rating, so form counts more than history.
-const RANK_K={ODI:24,TEST:32,T20:20,LEAGUE:20},RANK_ALPHA=.12,RANK_ACTIVE_DAYS=420,AWARD_MIN_MATCHES=15;
+const RANK_K={ODI:24,TEST:32,T20:20,LEAGUE:20},RANK_ACTIVE_DAYS=420,AWARD_MIN_MATCHES=15;
 const eloStart=t=>{const T=TEAMS.get(+t);return T&&T.full?([10,11].includes(+t)?1400:1500):1250;};
 const rankPts=elo=>Math.round((elo-1000)/5);
 function blankRankings(){const e=()=>({});return{team:perFmt(e),yr:perFmt(e),bat:perFmt(e),bowl:perFmt(e),pos:{},awards:{},awardYear:0};}
@@ -45,12 +45,18 @@ function applyRankings(E){
     }
   }
 }
-function upd(tab,pid,perf,date){const x=tab[pid]||(tab[pid]={p:0,n:0,d:date});x.p=x.p*(1-RANK_ALPHA)+perf*RANK_ALPHA;x.n++;x.d=date;}
+// Steadiness: each match moves the average by RANK_CFG.alpha (was .12 - one big score could take a man from 11th to
+// 1st; now a hundred is worth a few places near the top). The average starts at 0, so rankVal corrects for that
+// (divides by 1-(1-alpha)^n) and then holds a newcomer back until he has RANK_CFG.ramp matches in that format (a Test
+// is one line for both innings): a proper record, not three good knocks, gets you to the top.
+const RANK_CFG={alpha:.05,ramp:{ODI:20,TEST:10,T20:15,LEAGUE:12}};
+function upd(tab,pid,perf,date){const x=tab[pid]||(tab[pid]={p:0,n:0,d:date});const a=RANK_CFG.alpha;x.p=x.p*(1-a)+perf*a;x.n++;x.d=date;}
+function rankVal(x,fmt){if(!x||!x.n)return 0;const a=RANK_CFG.alpha;return x.p/(1-Math.pow(1-a,x.n))*Math.min(1,x.n/(RANK_CFG.ramp[fmt]||12));}
 const PLAYER_SCALE={bat:{ODI:16,TEST:10,T20:24,LEAGUE:24},bowl:{ODI:14,TEST:12,T20:16,LEAGUE:16}};
 const COMPOSITE=new Set(WORLD.teams.filter(t=>/ XI$/.test(t.name)).map(t=>t.id));   // Africa XI, Asia XI, ICC World XI
 function playerRanking(fmt,kind,n=20){
   const R=R_(),now=careerDate(),tab=R[kind==='ar'?'bat':kind][fmt];
-  const pts=(k,pid)=>{const x=R[k][fmt][pid];return x?Math.max(0,Math.round(x.p*PLAYER_SCALE[k][fmt])):0;};
+  const pts=(k,pid)=>{const x=R[k][fmt][pid];return x?Math.max(0,Math.round(rankVal(x,fmt)*PLAYER_SCALE[k][fmt])):0;};
   let L=Object.entries(tab).filter(([,x])=>x.n>=5&&daysBetween(x.d,now)<=RANK_ACTIVE_DAYS).map(([pid])=>+pid);
   if(kind==='ar')L=L.filter(pid=>R.bowl[fmt][pid]&&R.bowl[fmt][pid].n>=5).map(pid=>({pid,v:Math.round(pts('bat',pid)*pts('bowl',pid)/1000)}));
   else L=L.map(pid=>({pid,v:pts(kind,pid)}));
@@ -191,6 +197,14 @@ function yearEnd(E){
     R.awardYear=yy;
   }
   return out;
+}
+// Saves from before the steadier player rankings (RANK_CFG): recount the batting and bowling averages from the
+// scorecards once at the new weight. Team ratings, awards and the history are left as they are.
+function rankSteady(){
+  if(S.rkSteady)return;S.rkSteady=1;
+  if(!S.rk||!S.matches||!S.matches.length)return;
+  const keep=S.rk;S.rk=blankRankings();
+  try{for(const E of S.matches)applyRankings(E);keep.bat=S.rk.bat;keep.bowl=S.rk.bowl;}finally{S.rk=keep;}
 }
 function rebuildRankings(){
   S.rk=blankRankings();
