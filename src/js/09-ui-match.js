@@ -163,8 +163,9 @@ function renderPre(el,M){
   el.innerHTML=`<div class="card hi stack">
     <div class="spread"><div><div class="sub">${esc(M.series)}${M.stage?' · <span class="gold">'+esc(M.stage)+'</span>':''}</div>
       <h2 style="margin:4px 0">${tlabel(M.teams[0])} <span class="muted">v</span> ${tlabel(M.teams[1])}</h2>
-      <div class="muted">${esc(M.venue)}${M.city&&!M.venue.includes(M.city)?', '+esc(M.city):''} · ${fmtDate(M.date)} · ${M.fmt==='TEST'?'Test match (5 days)':M.maxOv+'-over '+(M.fmt==='T20'?'T20':'ODI')}</div></div>
-      <span class="pill ${M.fmt==='TEST'?'test':''}">${M.fmt==='TEST'?'TEST':'ODI'}</span></div>
+      <div class="muted">${esc(M.venue)}${M.city&&!M.venue.includes(M.city)?', '+esc(M.city):''} · ${fmtDate(M.date)} · ${M.fmt==='TEST'?'Test match (5 days)':M.maxOv+'-over '+(M.fmt==='T20'?'T20':'ODI')}</div>
+      ${matchRankLine(M)?`<div class="gold" style="font-size:13px;margin-top:4px" id="pre-rk">${esc(matchRankLine(M))}</div>`:''}</div>
+      <span class="pill ${M.fmt==='TEST'?'test':''}">${M.fmt==='TEST'?'TEST':M.fmt==='T20'?'T20':'ODI'}</span></div>
     ${reseed}
     ${P?`<div class="card"><b>Pitch report:</b> ${P.name}. <span class="sub">${P.desc}</span></div>`:''}
     <div class="grid g2"><div class="card"><h3>${esc(teamName(M.teams[0]))}</h3>${xiTable(M,M.teams[0])}</div><div class="card"><h3>${esc(teamName(M.teams[1]))}</h3>${xiTable(M,M.teams[1])}</div></div>
@@ -228,7 +229,7 @@ function renderLive(el,M){
   const P=I.part;
   const pend=M.pending&&M.pending.type==='followon',prev=M.pending&&M.pending.type==='review'&&M.pending;
   el.innerHTML=`<div class="stack">
-  <div class="sub">${esc(M.series)}${M.stage?' · <span class="gold">'+esc(M.stage)+'</span>':''} · ${esc(M.venue)}</div>
+  <div class="sub">${esc(M.series)}${M.stage?' · <span class="gold">'+esc(M.stage)+'</span>':''} · ${esc(M.venue)}${matchRankLine(M)?` · <span class="gold" id="live-rk">${esc(matchRankLine(M))}</span>`:''}</div>
   ${S.settings.broadcast&&S.settings.broadcast!=='standard'?scorebugHTML(M):`<div class="scorebar">
     <div class="sb-team">${badge(A)}<div><div class="sb-score">${sc(A)||'-'}<small>${ovs(A)}</small></div><div class="sub">${esc(teamName(A))}</div></div></div>
     <div class="sb-mid">${done?`<div class="result-big">${esc(M.result.text)}</div>`:`<b>${ordinal(I.no)} innings</b><br>${statusLine(M,I)}`}

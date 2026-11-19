@@ -130,6 +130,13 @@ function rankMovesHTML(E){
   return`<div class="banner" style="margin-top:10px">${rk.length?`<b>Rankings</b>${rk.map(x=>`<div style="font-size:13px;margin-top:3px">${icon(x)} ${x.k==='team'?badge(x.id)+' ':''}${esc(rankMoveText(x,E.fmt))}</div>`).join('')}`:''}
     ${lb.length?`<b style="display:block;margin-top:${rk.length?8:0}px">Career lists</b>${lb.map(x=>`<div style="font-size:13px;margin-top:3px"><span class="green">▲</span> ${esc(careerMoveText(x))}</div>`).join('')}`:''}</div>`;
 }
+// Both teams' places in that format's rankings, as the match starts (kept on M, so they don't change when it ends):
+// pre-match under the venue and above the scoreboard while it's played.
+function matchRanks(M){if(!M.rkPre){const L=teamRanking(M.fmt).map(r=>r.team);M.rkPre=Object.fromEntries(M.teams.map(t=>[t,L.indexOf(t)+1]));}return M.rkPre;}
+function matchRankLine(M){
+  if(!['ODI','TEST','T20'].includes(M.fmt)||M.challenge||M.statFmt==='LEAGUE'||!S||!S.rk)return'';
+  const R=matchRanks(M);return`${FMT_NAME[M.fmt]} rankings: `+M.teams.map(t=>`${teamShort(t)} ${R[t]?ordinal(R[t]):'unranked'}`).join(' v ');
+}
 function teamRanking(fmt){
   const R=R_(),T=R.team[fmt],y=careerDate().slice(0,4),Y=(R.yr[fmt]||{})[y]||{};
   return Object.entries(T).filter(([t])=>(S.teams[fmt][t]||{}).p>0).map(([t,e])=>({team:+t,pts:rankPts(e),was:Y[t]!=null?rankPts(Y[t]):null,p:S.teams[fmt][t].p}))
