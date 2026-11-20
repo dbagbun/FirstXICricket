@@ -1,7 +1,10 @@
 // ═══ RANKINGS & AWARDS — team ratings, player rankings, player of the series, the year's awards ═══
-// Team ratings are Elo underneath (full members start 1500, Zimbabwe/Bangladesh 1400, associates 1250) and are
-// shown ICC-style: points = (Elo - 1000) / 5. Player rankings are an exponential average of match performances,
-// scaled by the opposition's rating, so form counts more than history.
+// Team rankings work like the real ones: a rating = points / matches over the last 3-4 years (see TEAM RATINGS
+// below), with an annual update every 1 May. An Elo rating per team is still kept underneath (R.team: full members
+// start 1500, Zimbabwe/Bangladesh 1400, associates 1250) to weigh the opposition in player rankings. Player rankings
+// are an exponential average of match performances, scaled by the opposition's Elo, so form counts more than
+// history. Both tables change after every match and are "released" weekly (Wednesdays): R.wk.prev keeps the places
+// at the last release, so the tables show each side's and man's move since last week.
 const RANK_K={ODI:24,TEST:32,T20:20,LEAGUE:20},RANK_ACTIVE_DAYS=420,AWARD_MIN_MATCHES=15;
 const eloStart=t=>{const T=TEAMS.get(+t);return T&&T.full?([10,11].includes(+t)?1400:1500):1250;};
 const rankPts=elo=>Math.round((elo-1000)/5);
@@ -23,6 +26,8 @@ function matchScores(E,winnerBonus=true){
 }
 function applyRankings(E){
   const R=R_(),T=R.team[E.fmt],[a,b]=E.teams,y=E.date.slice(0,4);
+  rankRelease(E.date);R.wk.last=E.date;
+  if(!E.teams.some(t=>COMPOSITE.has(+t)))teamRateMatch(E);
   for(const t of E.teams)if(T[t]==null)T[t]=eloStart(t);
   if(!R.yr[E.fmt][y])R.yr[E.fmt][y]={...T};     // ratings going into the year
   for(const t of E.teams)if(R.yr[E.fmt][y][t]==null)R.yr[E.fmt][y][t]=T[t];
@@ -54,8 +59,8 @@ function upd(tab,pid,perf,date){const x=tab[pid]||(tab[pid]={p:0,n:0,d:date});co
 function rankVal(x,fmt){if(!x||!x.n)return 0;const a=RANK_CFG.alpha;return x.p/(1-Math.pow(1-a,x.n))*Math.min(1,x.n/(RANK_CFG.ramp[fmt]||12));}
 const PLAYER_SCALE={bat:{ODI:16,TEST:10,T20:24,LEAGUE:24},bowl:{ODI:14,TEST:12,T20:16,LEAGUE:16}};
 const COMPOSITE=new Set(WORLD.teams.filter(t=>/ XI$/.test(t.name)).map(t=>t.id));   // Africa XI, Asia XI, ICC World XI
-function playerRanking(fmt,kind,n=20){
-  const R=R_(),now=careerDate(),tab=R[kind==='ar'?'bat':kind][fmt];
+function playerRanking(fmt,kind,n=20,now=careerDate()){
+  const R=R_(),tab=R[kind==='ar'?'bat':kind][fmt];
   const pts=(k,pid)=>{const x=R[k][fmt][pid];return x?Math.max(0,Math.round(rankVal(x,fmt)*PLAYER_SCALE[k][fmt])):0;};
   let L=Object.entries(tab).filter(([,x])=>x.n>=5&&daysBetween(x.d,now)<=RANK_ACTIVE_DAYS).map(([pid])=>+pid);
   if(kind==='ar')L=L.filter(pid=>R.bowl[fmt][pid]&&R.bowl[fmt][pid].n>=5).map(pid=>({pid,v:Math.round(pts('bat',pid)*pts('bowl',pid)/1000)}));
@@ -143,10 +148,58 @@ function matchRankLine(M){
   if(!['ODI','TEST','T20'].includes(M.fmt)||M.challenge||M.statFmt==='LEAGUE'||!S||!S.rk)return'';
   const R=matchRanks(M);return`${FMT_NAME[M.fmt]} rankings: `+M.teams.map(t=>`${teamShort(t)} ${R[t]?ordinal(R[t]):'unranked'}`).join(' v ');
 }
-function teamRanking(fmt){
-  const R=R_(),T=R.team[fmt],y=careerDate().slice(0,4),Y=(R.yr[fmt]||{})[y]||{};
-  return Object.entries(T).filter(([t])=>(S.teams[fmt][t]||{}).p>0).map(([t,e])=>({team:+t,pts:rankPts(e),was:Y[t]!=null?rankPts(Y[t]):null,p:S.teams[fmt][t].p}))
-    .sort((a,b)=>b.pts-a.pts);
+// ---------- TEAM RATINGS, the way the real rankings work ----------
+// Each rated match earns each side points from the two ratings going into it: within 40 of each other, a win is
+// worth the opponent's rating + 50, a loss the opponent's rating - 50, a tie or draw the opponent's rating; 40 or
+// more apart, the stronger side gets its own rating +10 for a win, -40 for a draw, -90 for a loss (the weaker side
+// +90 / +40 / -10). No-results and composite XIs are not rated. Rating = points / matches, over matches since 1 May
+// three years before the last annual update: those since the May before it count in full, the two years before
+// that at half. Every 1 May (TEAM_UPD) the oldest year drops off and the next one halves. A side new to the table
+// starts with TEAM_SEED_N pretend matches at its seed rating (rankPts(eloStart)), dated its first game, so they
+// age out the same way. R.icc[fmt] = [[date, team, points, seed?]].
+const TEAM_SEED_N=4,TEAM_UPD='05-01',TEAM_CACHE=new WeakMap();
+function teamTab(fmt){const R=R_();R.icc=R.icc||{};return R.icc[fmt]=R.icc[fmt]||[];}
+const teamUpdYear=d=>+d.slice(0,4)-(d.slice(5)>=TEAM_UPD?0:1);   // year of the last annual update on or before d
+function teamWt(d,now){const Y=teamUpdYear(now);return d>=(Y-1)+'-'+TEAM_UPD?1:d>=(Y-3)+'-'+TEAM_UPD?.5:0;}
+function teamRatings(fmt,now=careerDate()){
+  const tab=teamTab(fmt),c=TEAM_CACHE.get(tab);if(c&&c.len===tab.length&&c.now===now)return c.v;
+  const v={};for(const[d,t,p,seed]of tab){const w=teamWt(d,now);if(!w)continue;const x=v[t]=v[t]||{pts:0,w:0,n:0};x.pts+=p*w;x.w+=w;if(!seed)x.n++;}
+  for(const x of Object.values(v))x.r=x.pts/x.w;
+  TEAM_CACHE.set(tab,{len:tab.length,now,v});return v;
+}
+const teamRating=(fmt,t,now)=>{const x=teamRatings(fmt,now)[t];return x?Math.round(x.r):rankPts(eloStart(t));};
+function teamMatchPts(r,o,s){
+  if(Math.abs(r-o)<40)return o+(s===1?50:s===0?-50:0);
+  return r>o?r+(s===1?10:s===0?-90:-40):r+(s===1?90:s===0?-10:40);
+}
+function teamRateMatch(E){
+  const tab=teamTab(E.fmt),d=E.date,res=E.result||{};
+  if(tab.length&&!teamWt(tab[0][0],d)){const keep=tab.filter(x=>teamWt(x[0],d));tab.length=0;tab.push(...keep);}   // the annual update drops the oldest year
+  const have=teamRatings(E.fmt,d);
+  for(const t of E.teams)if(!have[t])for(let i=0;i<TEAM_SEED_N;i++)tab.push([d,+t,rankPts(eloStart(t)),1]);
+  if(res.type==='nr')return;
+  const[a,b]=E.teams,ra=teamRating(E.fmt,a,d),rb=teamRating(E.fmt,b,d),sa=res.winner===a?1:res.winner===b?0:.5;
+  tab.push([d,+a,teamMatchPts(ra,rb,sa)],[d,+b,teamMatchPts(rb,ra,1-sa)]);
+}
+// The table: sides with a rated match in the window, best first. {team, pts (the rating), p (rated matches)}
+function teamRanking(fmt,now=careerDate()){
+  return Object.entries(teamRatings(fmt,now)).filter(([,x])=>x.n>0).map(([t,x])=>({team:+t,pts:Math.round(x.r),p:x.n,r:x.r}))
+    .sort((a,b)=>b.r-a.r||a.team-b.team);
+}
+// ---------- weekly releases (Wednesdays) ----------
+function rankWeek(d){const t=Date.UTC(+d.slice(0,4),+d.slice(5,7)-1,+d.slice(8,10)),back=(new Date(t).getUTCDay()+4)%7;return new Date(t-back*864e5).toISOString().slice(0,10);}
+const RANK_REL_N=100;
+function rankRelease(date){
+  const R=R_(),k=rankWeek(date);if(R.wk&&R.wk.k===k)return;
+  const prev={},now=R.wk?R.wk.last||date:date;
+  for(const f of FORMATS){const o={team:teamRanking(f,now).map(r=>r.team)};for(const[kk]of RANK_KINDS)o[kk]=playerRanking(f,kk,RANK_REL_N,now).map(r=>r.pid);
+    if(o.team.length||o.bat.length)prev[f]=o;}
+  R.wk={k,prev,last:date};
+}
+// places moved since last week's release: a number (+ up), 'new', or null (no release yet)
+function rankMv(fmt,list,id,pos){
+  const R=R_(),P=R.wk&&R.wk.prev&&R.wk.prev[fmt];if(!P||!P[list])return null;
+  const i=P[list].indexOf(id);return i<0?'new':i+1-pos;
 }
 
 // ---------- player of the series: best total match score over a finished series ----------
@@ -200,11 +253,12 @@ function yearEnd(E){
 }
 // Saves from before the steadier player rankings (RANK_CFG): recount the batting and bowling averages from the
 // scorecards once at the new weight. Team ratings, awards and the history are left as they are.
+// (2: also the team ratings and the weekly releases.)
 function rankSteady(){
-  if(S.rkSteady)return;S.rkSteady=1;
+  if(S.rkSteady>=2)return;S.rkSteady=2;
   if(!S.rk||!S.matches||!S.matches.length)return;
   const keep=S.rk;S.rk=blankRankings();
-  try{for(const E of S.matches)applyRankings(E);keep.bat=S.rk.bat;keep.bowl=S.rk.bowl;}finally{S.rk=keep;}
+  try{for(const E of S.matches)applyRankings(E);for(const k of['bat','bowl','icc','wk'])keep[k]=S.rk[k];}finally{S.rk=keep;}
 }
 function rebuildRankings(){
   S.rk=blankRankings();

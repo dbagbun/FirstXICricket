@@ -9,7 +9,7 @@ const boot=store=>new JSDOM(html,{runScripts:'dangerously',pretendToBeVisual:tru
   w.addEventListener('error',e=>{fail++;console.log('PAGE ERROR',e.message);});}}).window;
 let w=boot();const G=k=>w.eval(k);
 w.document.querySelector('#sp-go').click();
-ok(G('S.rkSteady')===1,'a new career is already at the new weight');
+ok(G('S.rkSteady')===2,'a new career is already at the new weight');
 G(`for(let i=0;i<600;i++)simFixture(nextFixture())`);
 // how far the top 20 ODI batters move after an innings
 const m=G(`(()=>{const mv=[];let top3=0;
@@ -30,7 +30,7 @@ const want=G(`JSON.stringify({bat:S.rk.bat,bowl:S.rk.bowl})`),team=G(`JSON.strin
 G(`for(const k of['bat','bowl'])for(const f of FORMATS)for(const x of Object.values(S.rk[k][f]))x.p*=1.7;delete S.rkSteady;saveGame();`);
 const st={};for(let i=0;i<w.localStorage.length;i++){const k=w.localStorage.key(i);st[k]=w.localStorage.getItem(k);}
 w=boot(st);w.eval(`if(document.querySelector('#ti-go'))document.querySelector('#ti-go').click()`);
-ok(w.eval('S.rkSteady')===1,'the save is marked');
+ok(w.eval('S.rkSteady')===2,'the save is marked');
 ok(w.eval(`JSON.stringify({bat:S.rk.bat,bowl:S.rk.bowl})`)===want,'player averages recounted from the scorecards');
 ok(w.eval(`JSON.stringify([S.rk.team,S.rk.awards])`)===team,'team ratings and awards untouched');
 console.log(fail?`e2e57: ${fail} failing`:'e2e57 ok');process.exit(fail?1:0);

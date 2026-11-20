@@ -106,7 +106,7 @@ function pickXI(fx,team,base){
 // ---------- coach career ----------
 const COACH_SACK=15,COACH_RENEW=50,CONTRACT_DAYS=730;
 function newCoach(team,date){return{team:+team,start:date,until:addDays(date,CONTRACT_DAYS),conf:60,objs:[],history:[],offers:[],news:[]};}
-function rankPtsOf(t,fmt='ODI'){const e=R_().team[fmt][t];return e==null?rankPts(eloStart(t)):rankPts(e);}
+function rankPtsOf(t,fmt='ODI'){return teamRating(fmt,t);}
 function stageRank(st){return{group:1,super:2,playoff:2,quarter:3,semi:4,final:5}[st]||(String(st).startsWith('final')?5:0);}
 function coachNews(text,cls=''){S.coach.news.push({date:careerDate(),text,cls});if(S.coach.news.length>40)S.coach.news.shift();}
 // Objectives for a series as soon as your next match belongs to it.

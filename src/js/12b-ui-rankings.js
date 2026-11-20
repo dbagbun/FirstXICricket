@@ -8,20 +8,26 @@ function honoursHTML(years){
   return years.map(y=>{const A=S.rk.awards[y];return`<div class="card"><div class="spread"><h3 style="margin:0">${y}</h3><span class="row"><button class="btn sm pri" data-go="season" data-arg="${y}">Full review</button><button class="btn sm" data-simg="${y}">Save as image</button></span></div><table>${AWARD_NAMES.filter(([k])=>A[k]).map(([k,n,u])=>`<tr><td class="sub">${n}</td><td>${awardLine(A,k,u)}</td></tr>`).join('')}
     ${A.team?`<tr><td class="sub">Team of the Year</td><td>${tlabel(A.team.team)} <span class="muted">${A.team.w} wins from ${A.team.p}</span></td></tr>`:''}</table></div>`;}).join('');
 }
+// ▲▼ places since last week's rankings (rankMv)
+function mvCell(m){
+  const c=m==null||m===0?['muted','–']:m==='new'?['muted','new']:m>0?['green','▲'+m]:['red','▼'+(-m)];
+  return`<td class="${c[0]} rk-mv" style="font-size:12px;white-space:nowrap">${c[1]}</td>`;
+}
+const rankWhen=()=>{const R=R_();return R.wk?`Updated after every match. ▲▼ = places moved since last week's rankings (Wednesday ${fmtDate(R.wk.k)}).`:'';};
 RENDER.rank=(el)=>{
   const R=R_(),f=RK_F.fmt;
   const tabs=[['teams','Teams'],['bat','Batting'],['bowl','Bowling'],['ar','All-rounders'],['wtc','Test Championship'],['honours','Honours'],['legends','Legends'],['pos','Players of the series']];
   let body='';
   if(RK_F.tab==='teams'){
-    const L=teamRanking(f);
-    body=L.length?`<table class="num"><tr><th>#</th><th>Team</th><th class="r">Matches</th><th class="r">Rating</th><th class="r">This year</th></tr>
-      ${L.map((r,i)=>`<tr class="${r.team===S.settings.myTeam?'me':''}"><td class="muted">${i+1}</td><td>${tlabel(r.team)}</td><td class="r">${r.p}</td><td class="r"><b>${r.pts}</b></td>
-      <td class="r ${r.was==null?'muted':r.pts>r.was?'green':r.pts<r.was?'red':'muted'}">${r.was==null?'new':(r.pts>=r.was?'+':'')+(r.pts-r.was)}</td></tr>`).join('')}</table>`:'<div class="empty">Play some matches to see the rankings.</div>';
+    const L=teamRanking(f),Y=teamUpdYear(careerDate());
+    body=L.length?`<table class="num"><tr><th>#</th><th></th><th>Team</th><th class="r">Matches</th><th class="r">Rating</th></tr>
+      ${L.map((r,i)=>`<tr class="${r.team===S.settings.myTeam?'me':''}"><td class="muted">${i+1}</td>${mvCell(rankMv(f,'team',r.team,i+1))}<td>${tlabel(r.team)}</td><td class="r">${r.p}</td><td class="r"><b>${r.pts}</b></td></tr>`).join('')}</table>
+      <div class="muted rk-note" style="font-size:12px;margin-top:8px">${rankWhen()} Rating = points per match from results since 1 May ${Y-3}: matches since 1 May ${Y-1} count in full, the two years before at half. A win earns more against a stronger side. Each 1 May the oldest year drops off (last update 1 May ${Y}).</div>`:'<div class="empty">Play some matches to see the rankings.</div>';
   }else if(RK_F.tab==='wtc'){body=wtcHTML();
   }else if(['bat','bowl','ar'].includes(RK_F.tab)){
     const L=playerRanking(f,RK_F.tab);
-    body=L.length?`<table class="num"><tr><th>#</th><th>Player</th><th class="r">Points</th></tr>${L.map((r,i)=>`<tr><td class="muted">${i+1}</td><td>${plink(r.pid)} <span class="muted" style="font-size:11px">${(S.stats[f][r.pid]?.teams||[]).map(teamShort).join('/')}</span></td><td class="r"><b>${r.v}</b></td></tr>`).join('')}</table>
-      <div class="muted" style="font-size:12px;margin-top:8px">Form over recent matches, weighted by the strength of the opposition. Players need 5 matches and a game in the last ${Math.round(RANK_ACTIVE_DAYS/30)} months.</div>`:'<div class="empty">Nobody qualifies yet.</div>';
+    body=L.length?`<table class="num"><tr><th>#</th><th></th><th>Player</th><th class="r">Points</th></tr>${L.map((r,i)=>`<tr><td class="muted">${i+1}</td>${mvCell(rankMv(f,RK_F.tab,r.pid,i+1))}<td>${plink(r.pid)} <span class="muted" style="font-size:11px">${(S.stats[f][r.pid]?.teams||[]).map(teamShort).join('/')}</span></td><td class="r"><b>${r.v}</b></td></tr>`).join('')}</table>
+      <div class="muted rk-note" style="font-size:12px;margin-top:8px">${rankWhen()} Form over recent matches, weighted by the strength of the opposition; newcomers count in full after ${RANK_CFG.ramp[f]} matches. Players need 5 matches and a game in the last ${Math.round(RANK_ACTIVE_DAYS/30)} months.</div>`:'<div class="empty">Nobody qualifies yet.</div>';
   }else if(RK_F.tab==='honours'){
     const ys=Object.keys(R.awards).sort().reverse();
     body=ys.length?`<div class="grid g2">${honoursHTML(ys)}</div>`:'<div class="empty">Awards are given when each year is over.</div>';
