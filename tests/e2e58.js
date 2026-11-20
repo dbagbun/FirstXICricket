@@ -14,6 +14,7 @@ $('#sp-go').click();
 // the points rule
 ok(G(`[teamMatchPts(110,100,1),teamMatchPts(110,100,0),teamMatchPts(110,100,.5)].join()`)==='150,50,100','close sides: opponent +50 / -50 / level');
 ok(G(`[teamMatchPts(130,80,1),teamMatchPts(130,80,.5),teamMatchPts(130,80,0)].join()`)==='140,90,40','the stronger side: own +10 / -40 / -90');
+ok(G(`[teamMatchPts(5,60,0),teamMatchPts(20,30,0)].join()`)==='0,0','never below 0');
 ok(G(`[teamMatchPts(80,130,1),teamMatchPts(80,130,.5),teamMatchPts(80,130,0)].join()`)==='170,120,70','the weaker side: own +90 / +40 / -10');
 // the window and the annual update
 ok(G(`[teamWt('2006-06-01','2007-12-11'),teamWt('2006-04-30','2007-12-11'),teamWt('2004-05-01','2007-12-11'),teamWt('2004-04-30','2007-12-11')].join()`)==='1,0.5,0.5,0','in full since May the year before the update, half for two years before, then dropped');

@@ -141,6 +141,48 @@ function rankMovesHTML(E){
   return`<div class="banner" style="margin-top:10px">${rk.length?`<b>Rankings</b>${rk.map(x=>`<div style="font-size:13px;margin-top:3px">${icon(x)} ${x.k==='team'?badge(x.id)+' ':''}${esc(rankMoveText(x,E.fmt))}</div>`).join('')}`:''}
     ${lb.length?`<b style="display:block;margin-top:${rk.length?8:0}px">Career lists</b>${lb.map(x=>`<div style="font-size:13px;margin-top:3px"><span class="green">▲</span> ${esc(careerMoveText(x))}</div>`).join('')}`:''}</div>`;
 }
+// Leaderboards after a match you play (recordMatch): the team table and the top LB_TOP batters, bowlers and
+// all-rounders of the format, and the career runs / wickets lists (the format and all internationals), each entry
+// with its place before the match - so the men who held their place show too. E.lbd = {team:[[id,rating,from]],
+// bat|bowl|ar:[[pid,pts,from]], 'c:FMT:r'|'c:ALL:bw'...:[[pid,total,from,to]]} (from 0 = not on the list before;
+// career places are joint for equal totals). Kept on the last LB_KEEP played matches.
+const LB_TOP=10,LB_KEEP=200;
+function careerPos(L,p){const v=L.val.get(p);if(!v)return 0;let n=1;for(const x of L.val.values())if(x>v)n++;return n;}
+function leaderboards(rkA,lbA,lbB,E){
+  const o={};
+  if(rkA){o.team=teamRanking(E.fmt).map(r=>[r.team,r.pts,rkA.team.indexOf(r.team)+1]);
+    for(const[k]of RANK_KINDS)o[k]=playerRanking(E.fmt,k,LB_TOP).map(r=>[r.pid,r.v,rkA[k].indexOf(r.pid)+1]);}
+  if(lbA&&lbB)for(const key of Object.keys(lbB)){const A=lbA[key],B=lbB[key];
+    o['c:'+key]=B.top.slice(0,LB_TOP).map(p=>{const f=careerPos(A,p);return[p,B.val.get(p),f>CAREER_TOP*2?0:f,careerPos(B,p)];});}
+  return o;
+}
+function lbTrim(){let n=0;for(let i=S.matches.length-1;i>=0;i--)if(S.matches[i].lbd&&++n>LB_KEEP)delete S.matches[i].lbd;}
+let LB_TAB='team';
+function leaderboardsHTML(E){
+  const L=E.lbd;if(!L)return'';
+  const men=new Set(E.teams.flatMap(t=>(E.xi[t]||[]).slice(0,11))),sides=new Set(E.teams),F=FMT_NAME[E.fmt]||E.fmt;
+  const mv=(from,to)=>from?from-to:'new';
+  const tabs=[['team','Teams'],['bat','Batting'],['bowl','Bowling'],['ar','All-rounders'],['r','Career runs'],['bw','Career wickets']]
+    .filter(([k])=>k==='r'||k==='bw'?Object.keys(L).some(x=>x.endsWith(':'+k)):L[k]&&L[k].length);
+  if(!tabs.length)return'';
+  const tab=tabs.some(t=>t[0]===LB_TAB)?LB_TAB:tabs[0][0];
+  const rows=(list,isTeam)=>list.map(([id,v,from],i)=>`<tr class="${(isTeam?sides:men).has(id)?'lb-hl':''}"><td class="muted">${i+1}</td>${mvCell(mv(from,i+1))}<td>${isTeam?tlabel(id):plink(id)}</td><td class="r"><b>${v}</b></td></tr>`).join('');
+  const crows=list=>list.map(([id,v,from,to],i)=>{const joint=list.some((x,j)=>j!==i&&x[1]===v);return`<tr class="${men.has(id)?'lb-hl':''}"><td class="muted">${joint?'=':''}${to}</td>${mvCell(mv(from,to))}<td>${plink(id)}</td><td class="r"><b>${v.toLocaleString()}</b></td></tr>`;}).join('');
+  const panel=k=>{
+    if(k==='team')return`<table class="num lb"><tr><th>#</th><th></th><th>Team</th><th class="r">Rating</th></tr>${rows(L.team,true)}</table>`;
+    if(k==='r'||k==='bw')return Object.keys(L).filter(x=>x.endsWith(':'+k)).map(x=>{const f=x.split(':')[1];
+      return`<div class="sub" style="margin:6px 0 2px">${f==='ALL'?'All internationals':F}</div><table class="num lb"><tr><th>#</th><th></th><th>Player</th><th class="r">${k==='r'?'Runs':'Wkts'}</th></tr>${crows(L[x])}</table>`;}).join('');
+    return`<table class="num lb"><tr><th>#</th><th></th><th>Player</th><th class="r">Points</th></tr>${rows(L[k],false)}</table>`;
+  };
+  return`<div class="lbd" style="margin-top:12px"><h3 style="margin:0 0 6px">Leaderboards</h3>
+    <div class="seg lb-tabs" style="flex-wrap:wrap">${tabs.map(([k,n])=>`<button data-lbt="${k}" class="${k===tab?'on':''}">${n}</button>`).join('')}</div>
+    ${tabs.map(([k])=>`<div class="lb-panel" data-lbp="${k}"${k===tab?'':' hidden'}>${panel(k)}</div>`).join('')}
+    <div class="muted" style="font-size:12px;margin-top:6px">${F} after this match · ▲▼ = places moved in this match · highlighted = played in it</div></div>`;
+}
+function wireLeaderboards(root=document){
+  root.querySelectorAll('.lbd [data-lbt]').forEach(b=>b.onclick=()=>{LB_TAB=b.dataset.lbt;const box=b.closest('.lbd');
+    box.querySelectorAll('[data-lbt]').forEach(x=>x.classList.toggle('on',x===b));box.querySelectorAll('[data-lbp]').forEach(p=>p.hidden=p.dataset.lbp!==LB_TAB);});
+}
 // Both teams' places in that format's rankings, as the match starts (kept on M, so they don't change when it ends):
 // pre-match under the venue and above the scoreboard while it's played.
 function matchRanks(M){if(!M.rkPre){const L=teamRanking(M.fmt).map(r=>r.team);M.rkPre=Object.fromEntries(M.teams.map(t=>[t,L.indexOf(t)+1]));}return M.rkPre;}
@@ -152,7 +194,7 @@ function matchRankLine(M){
 // Each rated match earns each side points from the two ratings going into it: within 40 of each other, a win is
 // worth the opponent's rating + 50, a loss the opponent's rating - 50, a tie or draw the opponent's rating; 40 or
 // more apart, the stronger side gets its own rating +10 for a win, -40 for a draw, -90 for a loss (the weaker side
-// +90 / +40 / -10). No-results and composite XIs are not rated. Rating = points / matches, over matches since 1 May
+// +90 / +40 / -10). Points never go below 0. No-results and composite XIs are not rated. Rating = points / matches, over matches since 1 May
 // three years before the last annual update: those since the May before it count in full, the two years before
 // that at half. Every 1 May (TEAM_UPD) the oldest year drops off and the next one halves. A side new to the table
 // starts with TEAM_SEED_N pretend matches at its seed rating (rankPts(eloStart)), dated its first game, so they
@@ -168,9 +210,9 @@ function teamRatings(fmt,now=careerDate()){
   TEAM_CACHE.set(tab,{len:tab.length,now,v});return v;
 }
 const teamRating=(fmt,t,now)=>{const x=teamRatings(fmt,now)[t];return x?Math.round(x.r):rankPts(eloStart(t));};
-function teamMatchPts(r,o,s){
-  if(Math.abs(r-o)<40)return o+(s===1?50:s===0?-50:0);
-  return r>o?r+(s===1?10:s===0?-90:-40):r+(s===1?90:s===0?-10:40);
+function teamMatchPts(r,o,s){   // never below 0, so a rating can't go negative
+  if(Math.abs(r-o)<40)return Math.max(0,o+(s===1?50:s===0?-50:0));
+  return Math.max(0,r>o?r+(s===1?10:s===0?-90:-40):r+(s===1?90:s===0?-10:40));
 }
 function teamRateMatch(E){
   const tab=teamTab(E.fmt),d=E.date,res=E.result||{};
