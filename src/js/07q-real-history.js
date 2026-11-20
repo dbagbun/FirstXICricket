@@ -18,10 +18,10 @@ async function loadHist(){
 }
 const histCard=fx=>HIST&&fx&&fx.real!==false&&fx.f&&fx.f.cid?HIST[fx.f.cid]||extraCard(fx):null;
 // An ODI added after Cricsheet (tools/extra_odis.py) that was played but has no ball-by-ball card: a card from the
-// real result and the innings totals alone (no batting or bowling cards), so a career filled in from real results
-// still has it as it happened.
+// real result and the innings totals alone (no batting or bowling cards; no innings at all when only the result is
+// known), so a career filled in from real results still has it as it happened.
 function extraCard(fx){
-  const R=fx.fmt==='ODI'&&EXTRA_FX.includes(fx.key)&&WORLD.real[fx.f.cid];if(!R||!R.inn.length)return null;
+  const R=fx.fmt==='ODI'&&EXTRA_FX.includes(fx.key)&&WORLD.real[fx.f.cid];if(!R||R.ab||!R.r)return null;
   return{t:R.t||null,r:[R.r[0],R.r[1],R.r[2],R.r[3]?'D/L':''],pom:R.pom,
     i:R.inn.map(([bat,runs,wkts,lb],k)=>[bat,runs,wkts,lb,wkts>=10?'all out':k&&runs>R.inn[0][1]?'target':'overs',[0,0,0,0],[],[],[],[],'',k?R.inn[0][1]+1:0,50])};
 }
@@ -63,7 +63,7 @@ function realE(fx){
     ev:inns.flatMap((I,k)=>[...I.bt.flatMap(b=>[b[8]?['50',b[0],k,b[8]]:null,b[9]?['100',b[0],k,b[9]]:null]),
       ...I.bw.filter(b=>b[4]>=5).map(b=>['5w',b[0],k,b[4]])].filter(Boolean)),real:1};
   const inXI=p=>E.teams.some(t=>E.xi[t].slice(0,11).includes(p));
-  E.motm=H.pom&&inXI(H.pom)&&r.type!=='nr'?H.pom:pickMOTM(E);
+  E.motm=H.pom&&inXI(H.pom)&&r.type!=='nr'?H.pom:inns.length?pickMOTM(E):0;   // known only by its result: nobody to pick
   return E;
 }
 // Record a real match as if it had been played (from prefillTo).

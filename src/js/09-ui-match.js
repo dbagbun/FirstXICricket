@@ -365,8 +365,11 @@ function scorecardHTML(E,M){
     const dnb=E.xi[I.bat].slice(0,11).filter(p=>!I.bt.some(r=>r[0]===p));
     const live=M&&M.state!=='done'&&k===E.inns.length-1;
     const atCrease=live?[M.inns[k].st,M.inns[k].ns]:[];
-    return`<div style="margin-bottom:16px"><div class="spread"><h3 style="margin:0">${esc(teamName(I.bat))} - ${E.fmt!=='TEST'?'innings':ordinal(E.inns.filter((x,j)=>j<=k&&x.bat===I.bat).length)+' innings'}</h3>
-      <b class="num">${I.runs}${I.wkts<10?'/'+I.wkts:''}${I.why==='declared'?' dec':''} <span class="muted">(${oversTxt(I.lb)} ov${I.target?', target '+I.target:''})</span></b></div>
+    const head=`<div class="spread"><h3 style="margin:0">${esc(teamName(I.bat))} - ${E.fmt!=='TEST'?'innings':ordinal(E.inns.filter((x,j)=>j<=k&&x.bat===I.bat).length)+' innings'}</h3>
+      <b class="num">${I.runs}${I.wkts<10?'/'+I.wkts:''}${I.why==='declared'?' dec':''} <span class="muted">(${oversTxt(I.lb)} ov${I.target?', target '+I.target:''})</span></b></div>`;
+    // a real match known only from its totals (tools/extra_odis.py): no batting or bowling card to show
+    if(E.real&&!I.bt.length&&!I.bw.length)return`<div style="margin-bottom:16px">${head}<div class="muted" style="font-size:12px">Only the total is known - the full scorecard isn't available.</div></div>`;
+    return`<div style="margin-bottom:16px">${head}
     <div class="tbl-wrap"><table class="num"><tr><th>Batter</th><th class="hide-sm"></th><th class="r">R</th><th class="r">B</th><th class="r">4s</th><th class="r">6s</th><th class="r">SR</th></tr>
     ${I.bt.map(r=>`<tr><td>${plink(r[0])}${r[0]===E.xi[I.bat][12]?' (c)':''}${r[0]===E.xi[I.bat][11]?' †':''}${atCrease.includes(r[0])&&!r[5]?' <span class="cyan">*</span>':''}</td>
       <td class="hide-sm sub" style="font-size:12px">${r[5]?dismissalText(r[5],r[6],r[7]):live&&atCrease.includes(r[0])?'batting':'not out'}</td>
@@ -378,7 +381,7 @@ function scorecardHTML(E,M){
     ${I.bw.map(w=>`<tr><td>${plink(w[0])}</td><td class="r">${oversTxt(w[1])}</td><td class="r">${w[2]}</td><td class="r">${w[3]}</td><td class="r"><b>${w[4]}</b></td><td class="r">${w[1]?f2(w[3]/(w[1]/6)):'-'}</td><td class="r hide-sm">${w[5]}</td><td class="r hide-sm">${w[6]}</td></tr>`).join('')}</table></div>
     ${I.parts.length?`<details style="margin-top:6px"><summary class="muted" style="cursor:pointer">Partnerships</summary><table class="num">${I.parts.map(p=>`<tr><td>${ordinal(p[4])} wkt</td><td>${esc(pName(p[0]))} &amp; ${esc(pName(p[1]))}</td><td class="r"><b>${p[2]}</b>${p[5]?'':'*'}</td><td class="r muted">(${p[3]} balls)</td></tr>`).join('')}</table></details>`:''}
     </div>`;
-  }).join('')+(E.inns.length?'':'<div class="muted">No play yet.</div>')+(E.result&&E.motm&&(!M||M.state==='done')?`<div class="banner">Man of the Match: <b>${plink(E.motm)}</b></div>`:'')
+  }).join('')+(E.inns.length?'':`<div class="muted">${E.abandoned?'Abandoned - no play.':E.real&&E.result?'Only the result is known - no scorecard is available.':'No play yet.'}</div>`)+(E.result&&E.motm&&(!M||M.state==='done')?`<div class="banner">Man of the Match: <b>${plink(E.motm)}</b></div>`:'')
   +superOverHTML(E)+(E.dl?`<div class="muted" style="margin-top:6px">Rain: target revised by the D/L method to ${E.dl.target} from ${E.dl.overs} overs.</div>`:'')
   +(E.drs?`<div class="muted" style="margin-top:6px">📺 Reviews: ${esc(drsSummary(E))}</div>`:'')
   +(!M||M.state==='done'?realHTML(E)+realBlock(E):'');   // no spoilers mid-match
