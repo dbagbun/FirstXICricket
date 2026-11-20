@@ -1,0 +1,13 @@
+{
+  "about": "ODIs missing from Cricsheet (abandoned without a ball, or no ball-by-ball file), added by tools/extra_odis.py. Each entry names its source. xi 'series' = each side's most-used XI in the series (abandoned matches: the teams named are not known); xi 'from:<cid>' = the XIs of that match (a stand-in when the real XIs could not be fetched). Bowling plans = the bowlers' average overs in the series.",
+  "matches": [
+    {"cid": "66439", "date": "2004-10-11", "name": "Paktel Cup (Match 5)", "a": "Sri Lanka", "b": "Zimbabwe",
+     "venue": "Rawalpindi Cricket Stadium", "city": "Rawalpindi", "abandoned": true, "xi": "series",
+     "source": "https://en.wikipedia.org/wiki/2004%E2%80%9305_Paktel_Cup (5th ODI: abandoned without a ball bowled, no toss)"},
+    {"cid": "66382", "date": "2004-10-14", "name": "Paktel Cup (Match 6)", "a": "Sri Lanka", "b": "Pakistan",
+     "venue": "Gaddafi Stadium", "city": "Lahore", "xi": "from:66383", "toss": ["Pakistan", "bowl"],
+     "result": ["Pakistan", "wkts", 6], "inn": [["Sri Lanka", 293, 6, 300], ["Pakistan", 297, 4, 293]],
+     "pom": "MS Atapattu", "top": ["MS Atapattu", 111, 114], "bb": ["WPUJC Vaas", 2, 62],
+     "source": "https://en.wikipedia.org/wiki/2004%E2%80%9305_Paktel_Cup (6th ODI: SL 293/6 (50), PAK 297/4 (48.5), Pakistan won by 6 wickets; Atapattu 111 (114), Vaas 2/62, Rana Naved 2/65, Inzamam 76* (59); MOTM Atapattu; Pakistan won the toss and fielded). Full scorecard not reachable (ESPNcricinfo/howstat block automated access), so the XIs stand in from the final two days later."}
+  ]
+}

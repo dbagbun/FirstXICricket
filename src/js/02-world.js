@@ -200,4 +200,4 @@ function fixturePlan(cid,tid){
   const p=WORLD.plans[cid]&&WORLD.plans[cid][tid];
   return p?p.map:'';
 }
-function realFigures(cid,tid){const p=WORLD.plans[cid]&&WORLD.plans[cid][tid];return p?p.fig:[];}
+function realFigures(cid,tid){const p=WORLD.plans[cid]&&WORLD.plans[cid][tid];return p&&!p.avg?p.fig:[];}   // (avg: a plan built from series averages, not real figures)

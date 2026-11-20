@@ -66,7 +66,8 @@ let FX_CACHE=null;
 const fxDirty=()=>{FX_CACHE=null;};
 function allFixtures(){
   if(FX_CACHE&&FX_CACHE.S===S)return FX_CACHE.list;
-  const out=ODI_FX.concat(REAL_TEST_FX.filter(x=>!x.wtcFinal||inRealYears(x)),realT20s());
+  const sk=S.skipFx||{},odi=ODI_FX.map(x=>sk[x.key]?{...x,playable:false,skipped:true}:x);
+  const out=odi.concat(REAL_TEST_FX.filter(x=>!x.wtcFinal||inRealYears(x)),realT20s());
   for(const T of S.tests)T.fix.forEach((x,k)=>out.push(customFx(T,x,k)));
   for(const C of S.cups||[])for(const f of C.fix)out.push(cupFx(C,f));
   out.sort((x,y)=>x.date<y.date?-1:x.date>y.date?1:(x.fmt==='TEST')-(y.fmt==='TEST'));
@@ -234,7 +235,7 @@ function loadSlot(i){
   setSlot(i);S=d;
   S.settings=Object.assign(newCareer().settings,S.settings||{});
   for(const k of['tests','ms','matches','cups'])S[k]=S[k]||[];
-  realT20From();
+  realT20From();extraFxCheck();
   for(const k of['logs','msKeys','attrEdits','seen','reseed','done'])S[k]=S[k]||{};
   for(const k of['stats','teams'])for(const f of FORMATS)S[k][f]=S[k][f]||{};
   for(const f of FORMATS)S.fast[f]=S.fast[f]||{f50:null,f100:null};
@@ -244,6 +245,16 @@ function loadSlot(i){
   return true;
 }
 function exportCareer(){return JSON.stringify(S);}
-function importCareer(text){const d=parseSave(text);if(!d)return false;S=d;realT20From();S.msKeys=S.msKeys||{};S.ms=S.ms||[];splitCatches();rankSteady();saveGame();return true;}
+function importCareer(text){const d=parseSave(text);if(!d)return false;S=d;realT20From();extraFxCheck();S.msKeys=S.msKeys||{};S.ms=S.ms||[];splitCatches();rankSteady();saveGame();return true;}
 // A career saved before the real T20Is were added picks them up from its current date, not back in 2005.
+// ODIs added to the data after Cricsheet (tools/extra_odis.py, WORLD.extra): a save already past one when it first
+// sees it skips it (S.skipFx - unplayable there), so a career never jumps back in time; S.xfSeen = the ones seen.
+const EXTRA_FX=(WORLD.extra||[]).map(no=>'o'+no);
+function extraFxCheck(){
+  if(!S)return;S.xfSeen=S.xfSeen||[];S.skipFx=S.skipFx||{};
+  const now=S.matches&&S.matches.length?careerDate():'';
+  for(const k of EXTRA_FX){if(S.xfSeen.includes(k))continue;S.xfSeen.push(k);
+    const fx=ODI_FX_BY_KEY.get(k);if(fx&&now&&fx.date<now&&!S.done[k])S.skipFx[k]=1;}
+  fxDirty();
+}
 function realT20From(){if(S&&S.t20iFrom==null)S.t20iFrom=S.matches&&S.matches.length?careerDate():'';}

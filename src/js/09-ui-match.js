@@ -430,7 +430,7 @@ function openScorecard(mid){
   const E=S.matches.find(x=>x.id===mid);if(!E)return;
   openModal(`<div class="sub">${esc(E.series)}${E.stage?' · '+esc(E.stage):''} · ${esc(E.venue)} · ${fmtDate(E.date)}</div>
     <h2 style="margin:6px 0">${tlabel(E.teams[0])} v ${tlabel(E.teams[1])}</h2><div class="result-big" style="margin-bottom:10px">${esc(E.result.text)}</div>
-    <div class="muted" style="margin-bottom:10px">Toss: ${esc(teamName(E.toss[0]))}, chose to ${E.toss[1]}${E.pitch?' · '+PITCHES[E.pitch].name:''}${E.reseeded?' · re-seeded knockout':''}</div>
+    <div class="muted" style="margin-bottom:10px">${E.toss?`Toss: ${esc(teamName(E.toss[0]))}, chose to ${E.toss[1]}`:'No toss'}${E.pitch?' · '+PITCHES[E.pitch].name:''}${E.reseeded?' · re-seeded knockout':''}</div>
     ${E.real?`<div class="banner" style="margin-bottom:10px">As it really happened - filled in from the real scorecard before your career began.</div>`:''}
     <div class="row" style="margin-bottom:10px">${S.logs[E.id]?'<button class="btn sm" id="sc-hl">▶ Highlights</button>':''}<button class="btn sm" id="sc-img">Save as image</button><button class="btn sm" id="sc-replay">↺ Replay this match</button></div>
     ${scorecardHTML(E)}${rankMovesHTML(E)}${leaderboardsHTML(E)}<h3 style="margin-top:14px">Charts</h3>${chartsHTML(E)}

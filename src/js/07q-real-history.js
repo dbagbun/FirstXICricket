@@ -16,7 +16,15 @@ async function loadHist(){
   }catch(e){HIST=null;}
   return HIST;
 }
-const histCard=fx=>HIST&&fx&&fx.real!==false&&fx.f&&fx.f.cid?HIST[fx.f.cid]||null:null;
+const histCard=fx=>HIST&&fx&&fx.real!==false&&fx.f&&fx.f.cid?HIST[fx.f.cid]||extraCard(fx):null;
+// An ODI added after Cricsheet (tools/extra_odis.py) that was played but has no ball-by-ball card: a card from the
+// real result and the innings totals alone (no batting or bowling cards), so a career filled in from real results
+// still has it as it happened.
+function extraCard(fx){
+  const R=fx.fmt==='ODI'&&EXTRA_FX.includes(fx.key)&&WORLD.real[fx.f.cid];if(!R||!R.inn.length)return null;
+  return{t:R.t||null,r:[R.r[0],R.r[1],R.r[2],R.r[3]?'D/L':''],pom:R.pom,
+    i:R.inn.map(([bat,runs,wkts,lb],k)=>[bat,runs,wkts,lb,wkts>=10?'all out':k&&runs>R.inn[0][1]?'target':'overs',[0,0,0,0],[],[],[],[],'',k?R.inn[0][1]+1:0,50])};
+}
 // The archived match (the shape archiveMatch makes) for a real fixture.
 function realE(fx){
   const H=histCard(fx);if(!H)return null;
