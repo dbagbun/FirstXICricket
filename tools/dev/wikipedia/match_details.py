@@ -3,7 +3,7 @@ import json, glob, re, sys
 
 def blocks(s):
     out = []
-    for m in re.finditer(r'\{\{\s*(Single-innings cricket match|Limited[ -]overs? (?:international|match)e?s?|ODI match|Cricket match summary|One Day International)\s*\n?\|', s, re.I):
+    for m in re.finditer(r'\{\{\s*(Single-innings cricket match|Limited[ -]overs? (?:international|match)e?s?|ODI match|Cricket match summary|One Day International|Test match|Two-innings cricket match)\s*\n?\|', s, re.I):
         i, d = m.start(), 0
         j = i
         while j < len(s):
@@ -42,7 +42,7 @@ def clean(s):
 
 def score(s):
     s = clean(s)
-    m = re.match(r'(\d+)(?:/(\d+))?\s*(?:\(\s*(\d+)(?:\.(\d))?\s*overs?)?', s)
+    m = re.match(r'(\d+)(?:/(\d+))?\s*(?:declared|dec|d\b|all out|\(f/o\)|f/o|\s)*(?:\(\s*(\d+)(?:\.(\d))?\s*overs?)?', s, re.I)
     if not m: return None
     w = int(m.group(2)) if m.group(2) else 10
     r = int(m.group(1))
@@ -80,6 +80,18 @@ def parse(paths):
             for k in ('team1', 'team2'):
                 tm = re.search(r'\{\{\s*(?:cr|cr-rt|cricon)\s*\|\s*([^|}]+)', F.get(k, ''))
                 rec[k] = tm.group(1).strip() if tm else clean(F.get(k, ''))
+            if 'score-team1-inns1' in F:   # a Test: four innings, listed by side
+                rec['test'] = 1
+                for t in (1, 2):
+                    for i in (1, 2):
+                        k = 'team%d-inns%d' % (t, i)
+                        sc = F.get('score-' + k, '')
+                        rec['s' + k] = score(sc)
+                        if rec['s' + k]:
+                            rec['s' + k].append(1 if re.search(r'\bdec|\d\s*d\b', sc, re.I) else 0)
+                            rec['s' + k].append(1 if re.search(r'f/o|follow', sc, re.I) else 0)
+                        rec['r' + k] = people(F.get('runs-' + k, ''))
+                        rec['w' + k] = people(F.get('wickets-' + k, ''))
             rec['s1'] = score(F.get('score1', '')); rec['s2'] = score(F.get('score2', ''))
             rec['runs1'] = people(F.get('runs1', '')); rec['runs2'] = people(F.get('runs2', ''))
             rec['wk1'] = people(F.get('wickets1', '')); rec['wk2'] = people(F.get('wickets2', ''))

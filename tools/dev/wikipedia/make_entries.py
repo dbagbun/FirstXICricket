@@ -133,11 +133,13 @@ ALIAS = {'VCA Ground': 'Vidarbha Cricket Association Ground', 'MSC Ground': 'Mad
 
 def venue(v):
     v = re.sub(r'<[^>]*>|\{\{[^}]*\}\}', '', v).strip().strip(',')
-    if ',' in v:
-        gr, city = v.rsplit(',', 1)
-    else:
-        gr, city = v, ''
-    gr, city = gr.strip(), city.strip()
+    parts = [p.strip() for p in v.split(',')]
+    # 'Ground, City' - or 'Ground, City, Country/Province': the last part that is a known city, else the second
+    while len(parts) > 2 and (parts[-1].lower() in NAME or parts[-1].lower() not in city_venues):
+        parts.pop()
+    gr, city = (', '.join(parts[:-1]), parts[-1]) if len(parts) > 1 else (v, '')
+    if city and gr.endswith(', ' + city):
+        gr = gr[:-len(city) - 2]
     city = re.sub(r'\s*\(.*?\)', '', city)
     if gr in ALIAS:
         return ALIAS[gr], city

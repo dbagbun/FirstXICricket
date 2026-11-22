@@ -68,9 +68,9 @@ const boot=store=>new JSDOM(html,{runScripts:'dangerously',pretendToBeVisual:tru
     ok(/293/.test($('#modal-box').textContent)&&/297/.test($('#modal-box').textContent),'match 6 shows the real totals');G('closeModal()');
     const sa=G(`(()=>{const E=S.matches.find(E=>E.id==='h64782');return E&&{r:E.result.text,inn:E.inns.map(I=>I.runs+'/'+I.wkts),motm:pName(E.motm)};})()`);
     ok(sa&&/^South Africa won by 168 runs/.test(sa.r)&&sa.inn.join()==='301/8,133/10'&&sa.motm==='HH Gibbs','Bangladesh in South Africa as it ended ('+JSON.stringify(sa)+')');
-    const nw=G(`(()=>{const E=S.matches.find(E=>E.id==='h66291');return E&&{r:E.result.text,n:E.inns.length,ab:E.abandoned};})()`);
-    ok(nw&&/^India won by 63 runs/.test(nw.r)&&nw.n===0&&!nw.ab,'a match known only by its result keeps the real result ('+JSON.stringify(nw)+')');
-    G(`openScorecard('h66291')`);ok(/India won by 63 runs/.test($('#modal-box').textContent),'its scorecard opens');G('closeModal()');
+    const nw=G(`(()=>{const E=S.matches.find(E=>E.id==='h66338');return E&&{r:E.result.text,n:E.inns.length,ab:E.abandoned};})()`);
+    ok(nw&&/^Sri Lanka won by 93 runs/.test(nw.r)&&nw.n===0&&!nw.ab,'a match known only by its result keeps the real result ('+JSON.stringify(nw)+')');
+    G(`openScorecard('h66338')`);ok(/Only the result is known/.test($('#modal-box').textContent),'its scorecard opens');G('closeModal()');
     ok(G(`S.matches.filter(E=>E.real&&EXTRA_FX.includes('o'+E.fid)).length`)>=100,'the extra ODIs before 2005 all filled in');
   }
   console.log(fail?`e2e60: ${fail} failing`:'e2e60 ok');process.exit(fail?1:0);

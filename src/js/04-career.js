@@ -7,7 +7,7 @@ function newCareer(opts={}){
     settings:{dice:'auto',captain:'auto',knockouts:'timeline',batColours:'player',ratings:'era',history:'after',selection:'auto',form:'on',broadcast:'standard',font:'barlow',voice:false,voiceRate:1.05,future:'on',drs:'era',t20wc:'on',t20cards:'designed',assocTiers:'on',bowlEdge:'on',badges:'flags',t20is:'on',myTeam:+opts.myTeam||0,ballDelay:250,sound:false,tv:true},
     t20iFrom:'',      // real T20Is from this date ('' = all; old saves get theirs from where they were)
     ctSplit:1,        // catches in the field and as keeper kept apart (older saves: splitCatches)
-    xfSeen:(WORLD.extra||[]).map(no=>'o'+no),   // added ODIs this career already knows about (extraFxCheck)
+    xfSeen:[...EXTRA_FX],   // added ODIs, Tests and T20Is this career already knows about (extraFxCheck)
     rkSteady:2,       // steadier player rankings, real-style team ratings (older saves: rankSteady)
     done:{},          // fixture no / test id -> match id
     matches:[],       // archived scorecards (compact), oldest first

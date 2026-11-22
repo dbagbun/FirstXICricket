@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
-"""Add ODIs that Cricsheet does not have (tools/extra_odis.json) to data/world.json and data/hist.json.gz.
+"""Add ODIs, Tests and T20Is that Cricsheet does not have (tools/extra_odis.json) to data/world.json and data/hist.json.gz.
 
 Usage: python3 tools/extra_odis.py [tools/extra_odis.json] [data/world.json] [data/hist.json.gz]
 Run it after the Cricsheet tools (they rebuild the fixtures). Idempotent: an entry already present is replaced.
-  - fixtures: appended with new numbers after the highest (fixture keys of existing saves stay as they are);
-    WORLD.extra lists the numbers added, so the game can tell saves already past them.
+  - fmt: 'ODI' (default), 'Test' or 'T20I' - the list each goes to: fixtures / tests / t20s, XIs in xi / txi / t20xi.
+  - fixtures: appended with new numbers after the highest of that list (keys of existing saves stay as they are);
+    WORLD.extra / textra / iextra list the numbers added, so the game can tell saves already past them.
+    Run it after cricsheet_tests.py too: that rebuilds (and renumbers) the Tests and T20Is.
+  - Tests and T20Is: XIs from the other games of the series in that format, else the side's nearest ones, else its
+    nearest ODIs; keeper / captain -1 when not known (the game picks them, testXI); no bowling plans; innings
+    totals [team, runs, wkts, balls, declared].
   - xi: 'series' = each side's most-used XI over the other games of the series, batting in the order they
     usually batted (average position), keeper / captain the ones who held the job most; a side with no other
     games in the series uses its nearest real ODIs by date (or, failing those, its nearest T20Is);
@@ -38,7 +43,7 @@ def days(a, b):
 
 
 def team_games(world, skip):
-    """Every real ODI (with plan) and T20I XI of each side, by date: {tid: [(date, xi, plan, kind)]}."""
+    """Every real ODI (with plan), T20I and Test XI of each side, by date: {tid: [(date, xi, plan, kind, name)]}."""
     out = defaultdict(list)
     for r in world['fixtures']:
         if r[7] in skip:
@@ -46,18 +51,30 @@ def team_games(world, skip):
         for t, x in world['xi'].get(r[7], {}).items():
             out[int(t)].append((r[1], x, world['plans'].get(r[7], {}).get(t), 'odi', base(r[2])))
     for r in world.get('t20s', []):
+        if r[7] in skip:
+            continue
         for t, x in world.get('t20xi', {}).get(r[7], {}).items():
             out[int(t)].append((r[1], x, None, 't20', ''))
+    for r in world.get('tests', []):
+        if r[7] in skip:
+            continue
+        for t, x in world.get('txi', {}).get(r[7], {}).items():
+            out[int(t)].append((r[1], x, None, 'test', base(r[2])))
     for v in out.values():
         v.sort(key=lambda g: g[0])
     return out
 
 
+KIND = {'ODI': ('odi', 't20'), 'Test': ('test', 'odi'), 'T20I': ('t20', 'odi')}
+
+
 def source_games(TG, m, tid):
-    """The other real games of this series for that team (same name, within 45 days); else its 4 nearest ODIs;
-    else its 4 nearest T20Is."""
-    g = [x for x in TG[tid] if x[3] == 'odi' and x[4] == base(m['name']) and days(x[0], m['date']) <= 45]
-    for kind in ('odi', 't20'):
+    """The other real games of this series for that team in its format (same name, within 45 days - Tests 75);
+    else its 4 nearest games in that format; else (ODIs) its 4 nearest T20Is, (Tests, T20Is) its 4 nearest ODIs."""
+    fmt = m.get('fmt', 'ODI')
+    kinds = KIND[fmt]
+    g = [x for x in TG[tid] if x[3] == kinds[0] and x[4] == base(m['name']) and days(x[0], m['date']) <= (75 if fmt == 'Test' else 45)]
+    for kind in kinds:
         if g:
             break
         g = sorted((x for x in TG[tid] if x[3] == kind), key=lambda x: days(x[0], m['date']))[:4]
@@ -99,11 +116,13 @@ def name_score(wiki, cs):
 def resolver(world, TG):
     P = world['players']
 
-    def find(name, tid, date):
+    def find(name, tid, date, kinds=('odi', 't20')):
         if not name:
             return 0
         seen = {}
-        for d, x, _, _, _ in TG[tid]:
+        for d, x, _, k, _ in TG[tid]:
+            if k not in kinds:
+                continue
             for p in x[:11]:
                 if p and (p not in seen or days(d, date) < seen[p]):
                     seen[p] = days(d, date)
@@ -124,7 +143,7 @@ def resolver(world, TG):
     return find
 
 
-def put_in(xi, plan, games, p, role, pinned):
+def put_in(xi, plan, games, p, role, pinned, style=None):
     """Put player p into a stand-in XI (in place of the least-used man in the same kind of role)."""
     if p in xi[:11]:
         pinned.add(p)
@@ -133,6 +152,8 @@ def put_in(xi, plan, games, p, role, pinned):
     keeper = xi[11]
     is_wk = wk_n.get(p, 0) > 0 or any(x[x[11]] == p for _, x, _ in games if 0 <= x[11] < 11)
     overs = {f[0]: f[1] for f in (plan or {}).get('fig', [])}
+    if not plan and style:   # no plan (Tests, T20Is): a bowler is anyone with a bowling style
+        overs = {q: 1 for q in xi[:11] if style(q) != 'N'}
     cnt = Counter(q for _, x, _ in games for q in x[:11])
     cands = [i for i in range(11) if xi[i] not in pinned and (i != keeper or is_wk)]
     if not cands:
@@ -153,7 +174,17 @@ def put_in(xi, plan, games, p, role, pinned):
     pinned.add(p)
 
 
-def series_xi(games):
+def usual_pos(TG, tid, kind):
+    """Each player's median batting position over all his real games of that kind for that side."""
+    pos = defaultdict(list)
+    for d, x, _, k, _ in TG[tid]:
+        if k == kind:
+            for i, p in enumerate(x[:11]):
+                pos[p].append(i)
+    return {p: sorted(v)[len(v) // 2] for p, v in pos.items()}
+
+
+def series_xi(games, unknown=False, usual=None):
     cnt, last, pos, wk, cap = Counter(), {}, defaultdict(list), Counter(), Counter()
     for d, x, _ in games:
         for i, p in enumerate(x[:11]):
@@ -161,9 +192,13 @@ def series_xi(games):
         if 0 <= x[11] < 11: wk[x[x[11]]] += 1
         if 0 <= x[12] < 11: cap[x[x[12]]] += 1
     xi = sorted(cnt, key=lambda p: (-cnt[p], -int(last[p].replace('-', ''))))[:11]
-    xi.sort(key=lambda p: sum(pos[p]) / len(pos[p]))
+    avg = lambda p: sum(pos[p]) / len(pos[p])
+    # Tests / T20Is: in each man's usual place (a few series games can carry a nightwatchman's or a pinch-hitter's)
+    xi.sort(key=(lambda p: (usual.get(p, avg(p)), avg(p))) if usual else avg)
     k = max(xi, key=lambda p: (wk[p], -xi.index(p)))
     c = max(xi, key=lambda p: (cap[p], -xi.index(p)))
+    if unknown:   # Tests / T20Is: -1 = not known, the game picks (testXI)
+        return xi + [xi.index(k) if wk[k] else -1, xi.index(c) if cap[c] else -1]
     return xi + [xi.index(k), xi.index(c)]
 
 
@@ -223,42 +258,51 @@ def main():
     world = json.load(open(OUT))
     hist = json.load(gzip.open(HIST))
     tid = {t['name']: t['id'] for t in world['teams']}
-    have = {r[7]: r for r in world['fixtures']}
-    nxt = max(r[0] for r in world['fixtures']) + 1
-    extra = set(world.get('extra', []))
+    LISTS = {'ODI': ('fixtures', 'xi', 'extra'), 'Test': ('tests', 'txi', 'textra'), 'T20I': ('t20s', 't20xi', 'iextra')}
+    have = {f: {r[7]: r for r in world.get(LISTS[f][0], [])} for f in LISTS}
+    nxt = {f: max([r[0] for r in world.get(LISTS[f][0], [])] or [0]) + 1 for f in LISTS}
+    extras = {f: set(world.get(LISTS[f][2], [])) for f in LISTS}
+    style = lambda q: world['players'][str(q)][1]
     TG = team_games(world, {m['cid'] for m in spec['matches']})
     find = resolver(world, TG)
     unmatched = []
     for m in spec['matches']:
         a, b = tid[m['a']], tid[m['b']]
-        if m['cid'] in have:
-            no = have[m['cid']][0]
-            world['fixtures'] = [r for r in world['fixtures'] if r[7] != m['cid']]
+        fmt = m.get('fmt', 'ODI')
+        LK, XK, EK = LISTS[fmt]
+        odi = fmt == 'ODI'
+        kinds = ('odi', 't20') if odi else ('odi', 't20', 'test')
+        if m['cid'] in have[fmt]:
+            no = have[fmt][m['cid']][0]
+            world[LK] = [r for r in world[LK] if r[7] != m['cid']]
         else:
-            no = nxt; nxt += 1
-        world['fixtures'].append([no, m['date'], m['name'], a, b, m['venue'], m['city'], m['cid']])
-        extra.add(no)
+            no = nxt[fmt]; nxt[fmt] += 1
+        row = [no, m['date'], m['name'], a, b, m['venue'], m['city'], m['cid']]
+        if fmt == 'T20I':
+            row += [m.get('wc', 0), m.get('stage', '')]
+        world.setdefault(LK, []).append(row)
+        extras[fmt].add(no)
         xi, plans, games = {}, {}, {}
         for t in (a, b):
             g = games[t] = source_games(TG, m, t)
             if m['xi'] == 'series':
-                xi[str(t)] = series_xi(g)
+                xi[str(t)] = series_xi(g, unknown=not odi, usual=None if odi else usual_pos(TG, t, KIND[fmt][0]))
             else:
-                xi[str(t)] = list(world['xi'][m['xi'].split(':')[1]][str(t)])
-            plans[str(t)] = series_plan(g, xi[str(t)])
+                xi[str(t)] = list(world[XK][m['xi'].split(':')[1]][str(t)])
+            plans[str(t)] = series_plan(g, xi[str(t)]) if odi else None
         # the men known to have played: captains first, then the named batters / bowlers / man of the match
         pinned = {a: set(), b: set()}
         def place(name, t, role):
-            p = find(name, t, m['date'])
+            p = find(name, t, m['date'], kinds)
             if not p:
                 unmatched.append((m['cid'], name)); return 0
-            put_in(xi[str(t)], plans[str(t)], games[t], p, role, pinned[t])
+            put_in(xi[str(t)], plans[str(t)], games[t], p, role, pinned[t], None if odi else style)
             return p
         caps = m.get('caps') or []
         if isinstance(caps, dict):
             caps = list(caps.values())
         for name in caps:   # the side whose players include him (season tables don't always list home first)
-            t = next((t for t in (a, b) if find(name, t, m['date'])), None)
+            t = next((t for t in (a, b) if find(name, t, m['date'], kinds)), None)
             if not t:
                 unmatched.append((m['cid'], name)); continue
             p = place(name, t, 'cap')
@@ -266,17 +310,18 @@ def main():
                 xi[str(t)][12] = xi[str(t)].index(p)
         for tn, lst in (m.get('named') or {}).items():
             for name, role in lst:   # the side given first, else the other (pages differ on whose bowlers are listed where)
-                t = next((t for t in (tid[tn], b if tid[tn] == a else a) if find(name, t, m['date'])), None)
+                t = next((t for t in (tid[tn], b if tid[tn] == a else a) if find(name, t, m['date'], kinds)), None)
                 if t:
                     place(name, t, role)
                 else:
                     unmatched.append((m['cid'], name))
-        world['xi'][m['cid']] = xi
-        world['plans'][m['cid']] = {k: v for k, v in plans.items() if v}
+        world.setdefault(XK, {})[m['cid']] = xi
+        if odi:
+            world['plans'][m['cid']] = {k: v for k, v in plans.items() if v}
         def pid(name):
             if not name: return 0
             for t in (a, b):
-                p = find(name, t, m['date'])
+                p = find(name, t, m['date'], kinds)
                 if p and p in xi[str(t)][:11]: return p
             return 0
         if m.get('abandoned'):
@@ -287,18 +332,20 @@ def main():
             dl = m['result'][3] if len(m['result']) > 3 else 0
             top, bb = m.get('top') or [None, 0, 0], m.get('bb') or [None, 0, 0]
             world['real'][m['cid']] = {'r': [tid[w] if w else 0, kind, mar, dl],
-                                       'inn': [[tid[i[0]], i[1], i[2], i[3]] for i in m.get('inn', [])],
+                                       'inn': [[tid[i[0]]] + i[1:] for i in m.get('inn', [])],
                                        'pom': pid(m.get('pom')), 'top': [pid(top[0])] + top[1:],
                                        'bb': [pid(bb[0])] + bb[1:], 'ab': 0}
             if m.get('toss'):
                 world['real'][m['cid']]['t'] = [tid[m['toss'][0]], m['toss'][1]]
             hist.pop(m['cid'], None)   # no ball-by-ball card: a real-results career simulates it
-    world['extra'] = sorted(extra)
+    for f, (_, _, EK) in LISTS.items():
+        if extras[f] or EK in world:
+            world[EK] = sorted(extras[f])
     json.dump(world, open(OUT, 'w'), separators=(',', ':'))
     raw = json.dumps(hist, separators=(',', ':'), ensure_ascii=False).encode()
     with open(HIST, 'wb') as f:
         f.write(gzip.compress(raw, 9, mtime=0))   # as tools/cricsheet_cards.py: the same data gives the same file
-    print('added', len(spec['matches']), 'matches;', len(extra), 'extra fixtures;', len(unmatched), 'names not matched')
+    print('added', len(spec['matches']), 'matches;', {f: len(v) for f, v in extras.items()}, 'extra fixtures;', len(unmatched), 'names not matched')
     for c, n in unmatched[:40]:
         print('  not matched:', c, n)
 

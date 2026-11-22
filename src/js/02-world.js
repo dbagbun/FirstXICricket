@@ -55,7 +55,8 @@ const FIX=WORLD.fixtures.map(r=>({no:r[0],date:r[1],raw:r[2],a:r[3],b:r[4],venue
   mno:(/\((?:Match|Game)\s+(\d+)\)\s*$/i.exec(r[2])||[])[1]|0})).sort((x,y)=>x.date<y.date?-1:x.date>y.date?1:x.no-y.no);
 const FIX_BY_NO=new Map(FIX.map(f=>[f.no,f]));
 // Real Tests (optional, added by tools/cricsheet_tests.py): same shape as FIX, keyed 'r<no>'.
-const TFIX=(WORLD.tests||[]).map(r=>({no:r[0],date:r[1],raw:r[2],a:r[3],b:r[4],venue:r[5],city:r[6],cid:r[7],name:normSeries(r[2]),mno:0,test:true}));
+const TFIX=(WORLD.tests||[]).map(r=>({no:r[0],date:r[1],raw:r[2],a:r[3],b:r[4],venue:r[5],city:r[6],cid:r[7],name:normSeries(r[2]),mno:0,test:true}))
+  .sort((x,y)=>x.date<y.date?-1:x.date>y.date?1:x.no-y.no);   // Tests added after Cricsheet (extra_odis.py) come last in the data
 const TFIX_BY_NO=new Map(TFIX.map(f=>[f.no,f]));
 // Real T20Is (optional, tools/cricsheet_tests.py --t20; the T20 World Cups themselves are staged as cups): keyed 'i<no>'.
 // wc: a real T20 World Cup match (played only in years filled in from real results; otherwise the game stages its own cups).

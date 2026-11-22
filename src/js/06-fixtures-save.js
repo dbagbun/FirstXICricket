@@ -66,8 +66,8 @@ let FX_CACHE=null;
 const fxDirty=()=>{FX_CACHE=null;};
 function allFixtures(){
   if(FX_CACHE&&FX_CACHE.S===S)return FX_CACHE.list;
-  const sk=S.skipFx||{},odi=ODI_FX.map(x=>sk[x.key]?{...x,playable:false,skipped:true}:x);
-  const out=odi.concat(REAL_TEST_FX.filter(x=>!x.wtcFinal||inRealYears(x)),realT20s());
+  const sk=S.skipFx||{},skip=x=>sk[x.key]?{...x,playable:false,skipped:true}:x;
+  const out=ODI_FX.map(skip).concat(REAL_TEST_FX.filter(x=>!x.wtcFinal||inRealYears(x)).map(skip),realT20s().map(skip));
   for(const T of S.tests)T.fix.forEach((x,k)=>out.push(customFx(T,x,k)));
   for(const C of S.cups||[])for(const f of C.fix)out.push(cupFx(C,f));
   out.sort((x,y)=>x.date<y.date?-1:x.date>y.date?1:(x.fmt==='TEST')-(y.fmt==='TEST'));
@@ -247,9 +247,10 @@ function loadSlot(i){
 function exportCareer(){return JSON.stringify(S);}
 function importCareer(text){const d=parseSave(text);if(!d)return false;S=d;realT20From();extraFxCheck();S.msKeys=S.msKeys||{};S.ms=S.ms||[];splitCatches();rankSteady();saveGame();return true;}
 // A career saved before the real T20Is were added picks them up from its current date, not back in 2005.
-// ODIs added to the data after Cricsheet (tools/extra_odis.py, WORLD.extra): a save already past one when it first
-// sees it skips it (S.skipFx - unplayable there), so a career never jumps back in time; S.xfSeen = the ones seen.
-const EXTRA_FX=(WORLD.extra||[]).map(no=>'o'+no);
+// ODIs, Tests and T20Is added to the data after Cricsheet (tools/extra_odis.py: WORLD.extra / textra / iextra): a save
+// already past one when it first sees it skips it (S.skipFx - unplayable there), so a career never jumps back in time;
+// S.xfSeen = the ones seen.
+const EXTRA_FX=[...(WORLD.extra||[]).map(no=>'o'+no),...(WORLD.textra||[]).map(no=>'r'+no),...(WORLD.iextra||[]).map(no=>'i'+no)];
 function extraFxCheck(){
   if(!S)return;S.xfSeen=S.xfSeen||[];S.skipFx=S.skipFx||{};
   const now=S.matches&&S.matches.length?careerDate():'';

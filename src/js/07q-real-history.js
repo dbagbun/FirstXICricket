@@ -17,13 +17,18 @@ async function loadHist(){
   return HIST;
 }
 const histCard=fx=>HIST&&fx&&fx.real!==false&&fx.f&&fx.f.cid?HIST[fx.f.cid]||extraCard(fx):null;
-// An ODI added after Cricsheet (tools/extra_odis.py) that was played but has no ball-by-ball card: a card from the
-// real result and the innings totals alone (no batting or bowling cards; no innings at all when only the result is
-// known), so a career filled in from real results still has it as it happened.
+// An ODI, Test or T20I added after Cricsheet (tools/extra_odis.py) that was played but has no ball-by-ball card: a card
+// from the real result and the innings totals alone (no batting or bowling cards; no innings at all when only the
+// result is known), so a career filled in from real results still has it as it happened.
 function extraCard(fx){
-  const R=fx.fmt==='ODI'&&EXTRA_FX.includes(fx.key)&&WORLD.real[fx.f.cid];if(!R||R.ab||!R.r)return null;
-  return{t:R.t||null,r:[R.r[0],R.r[1],R.r[2],R.r[3]?'D/L':''],pom:R.pom,
-    i:R.inn.map(([bat,runs,wkts,lb],k)=>[bat,runs,wkts,lb,wkts>=10?'all out':k&&runs>R.inn[0][1]?'target':'overs',[0,0,0,0],[],[],[],[],'',k?R.inn[0][1]+1:0,50])};
+  const R=EXTRA_FX.includes(fx.key)&&WORLD.real[fx.f.cid];if(!R||R.ab||!R.r)return null;
+  const test=fx.fmt==='TEST',mo=fx.fmt==='T20'?20:test?undefined:50,I=R.inn,last=I.length-1;
+  // the target of the last innings: one more than it trailed by (a Test's fourth, a limited-overs chase)
+  const lead=t=>I.slice(0,last).reduce((s,x)=>s+(x[0]===t?x[1]:-x[1]),0);
+  const target=k=>k===last&&k===(test?3:1)?Math.max(0,-lead(I[k][0]))+1:0;   // a Test's chase is its fourth innings
+  return{t:R.t||null,r:[R.r[0],R.r[1],R.r[2],R.r[3]?'D/L':''],pom:R.pom,fo:test&&I.length>=3&&I[2][0]===I[1][0]?1:0,
+    i:I.map(([bat,runs,wkts,lb,dec],k)=>[bat,runs,wkts,lb,dec?'declared':wkts>=10?'all out':target(k)&&runs>=target(k)?'target':mo?'overs':'',
+      [0,0,0,0],[],[],[],[],'',target(k),mo])};
 }
 // The archived match (the shape archiveMatch makes) for a real fixture.
 function realE(fx){
