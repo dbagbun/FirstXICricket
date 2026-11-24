@@ -1,6 +1,6 @@
-// First XI offline cache (4fdf1e6f29). Online, the page comes from the network (so a new version shows on the next
+// First XI offline cache (eae896b95a). Online, the page comes from the network (so a new version shows on the next
 // open) and the cached copy is refreshed; offline, the cached copy. The manifest and icon are cache-first.
-const C='first-xi-4fdf1e6f29',FILES=['first-xi.html','manifest.webmanifest','icon.svg'];
+const C='first-xi-eae896b95a',FILES=['first-xi.html','manifest.webmanifest','icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(C).then(c=>c.addAll(FILES)).then(()=>self.skipWaiting()));});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==C).map(x=>caches.delete(x)))).then(()=>self.clients.claim()));});
 self.addEventListener('fetch',e=>{if(e.request.method!=='GET')return;

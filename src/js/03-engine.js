@@ -243,7 +243,10 @@ function batColour(M,pid,pos,bowlTeam){
   const a=pAttr(pid,M.date,M.fmt),c=a.bat||pc;
   const vsFull=!!TEAMS.get(+bowlTeam)?.full;
   const own=c.length===2?c[vsFull?1:0]:c;
-  let col=!a.bat||a.batSrc==='h'||a.batSrc==='e'||(c.length===2&&vsFull)?own:COL_RANK[pc]<COL_RANK[own]?'BGR'[COL_RANK[own]-1]:own;
+  // the position lift (a derived colour batting higher plays a step up) - in a Test only in the top six: a genuine
+  // tail-ender at 8 or 9 stays RED, or he bats like a No.6 for days (real Tests: No.9 averages 16, No.11 under 9)
+  const lift=COL_RANK[pc]<COL_RANK[own]&&(M.fmt!=='TEST'||pc==='B');
+  let col=!a.bat||a.batSrc==='h'||a.batSrc==='e'||(c.length===2&&vsFull)?own:lift?'BGR'[COL_RANK[own]-1]:own;
   const batTeam=M.teams?M.teams.find(t=>t!==+bowlTeam):0;
   if(vsFull&&batTeam&&weakAssoc(batTeam,M.date)&&M.assocTiers!==false)col='BGR'[Math.min(2,COL_RANK[col]+1)];
   const f=M.mods&&M.mods.bat[pid];   // form: hot +1 (GREEN plays BLUE), cold -1 (BLUE plays GREEN)
@@ -320,6 +323,27 @@ const SPELLS={
   T20:{P:[1,3,1,3],S:[2,4,1,2],M:[1,2,1,2]},
   TEST:{P:[4,7,5,9],S:[6,14,3,6],M:[3,6,5,8]},
 };
+// Test part-timers: from what a man really bowled in Tests (his share of his side's overs in the real Test plans,
+// WORLD.tplans) - not his ODI allowance. Without a real plan (added and generated Tests) a part-time spinner with a
+// fair Test rating would otherwise bowl like a stock bowler (Gayle 40 overs a Test).
+const TEST_PT_SHARE=.10,TEST_PT_MIN=270;
+let TEST_WORK=null;
+function testWork(){
+  if(TEST_WORK)return TEST_WORK;
+  const o=new Map(),t=new Map();
+  for(const r of WORLD.tests||[]){
+    const T=WORLD.tplans&&WORLD.tplans[r[7]];if(!T)continue;
+    for(const tid in T){const x=WORLD.txi&&WORLD.txi[r[7]]&&WORLD.txi[r[7]][tid];if(!x)continue;
+      for(const m of T[tid]){let n=0;const c={};for(const ch of m){const i='abcdefghijk'.indexOf(ch);if(i<0)continue;n++;c[x[i]]=(c[x[i]]||0)+1;}
+        for(const p of x.slice(0,11)){t.set(p,(t.get(p)||0)+n);if(c[p])o.set(p,(o.get(p)||0)+c[p]);}}}
+  }
+  TEST_WORK={o,t};return TEST_WORK;
+}
+// true / false from his real Test workload; null when he hasn't enough real Tests to say
+const testShare=pid=>{const W=testWork(),t=W.t.get(pid)||0;return t>=TEST_PT_MIN?(W.o.get(pid)||0)/t:null;};
+function testPartTimer(pid){const s=testShare(pid);return s==null?null:s<TEST_PT_SHARE;}
+// a part-timer's overs in a Test innings with no real plan: about what he'd bowl in a long one (Gayle 11, Sarwan 4)
+const testPtCap=pid=>Math.max(4,Math.round(testShare(pid)*160));
 function bowlEngInit(M,I){
   const x=M.xi[I.bowl],B=[];let total=0;
   const mod=pid=>(M.mods&&M.mods.bowl[pid])||0;   // form and fatigue move a bowler's rating a step
@@ -328,7 +352,8 @@ function bowlEngInit(M,I){
   x.bat.forEach((pid,i)=>{
     const a=pAttr(pid,M.date,M.fmt);
     if(pid===x.wk)return;   // the keeper keeps
-    if(a.style!=='N'&&a.rating<=6&&a.max>0)add(pid,a.style,a.rating,M.fmt==='TEST'?999:Math.max(1,Math.round(a.max*perBowler(M)/10)),a.max<=PART_TIME_MAX);
+    const tp=M.fmt==='TEST'?testPartTimer(pid):null,pt=tp??(a.max<=PART_TIME_MAX);
+    if(a.style!=='N'&&a.rating<=6&&a.max>0)add(pid,a.style,a.rating,M.fmt==='TEST'?(tp?testPtCap(pid):999):Math.max(1,Math.round(a.max*perBowler(M)/10)),pt);
   });
   // Safety net: not enough overs (or bowlers) -> top-order part-timers, weak.
   const need=M.fmt==='TEST'?5:M.maxOv;
@@ -366,8 +391,8 @@ function phaseBonus(M,I,style,over){
   if(style==='M')return age<=10?0:4;
   return 0;
 }
-// Tests: a rating step is worth more, and part-timers come on as changes (tuned so the top four bowlers bowl ~88% of a Test innings, as in 2,701 real ones since 2002)
-const PART_TIME_MAX=7,TEST_RATING_W=7,TEST_PT_PEN=8;
+// Tests: a rating step is worth more, and part-timers come on as changes (tuned so the top four bowlers bowl ~88-91% of a Test innings, as in 2,701 real ones since 2002; part-timers - testPartTimer, testPtCap - ~7% of the overs where there is no real plan, as in the real ones)
+const PART_TIME_MAX=7,TEST_RATING_W=7,TEST_PT_PEN=11;
 function chooseBowler(M,I,over){
   const E=I.eng,B=E.B;
   if(M.fmt==='TEST'&&over>1&&(over-E.newBallAt)>=NEW_BALL&&!M.manualCaptain?.[I.bowl])E.newBallAt=over;
