@@ -267,9 +267,11 @@ function batColour(M,pid,pos,bowlTeam){
     lv=clamp(lv,0,2);const lo=Math.floor(lv);
     return'RGB'[Math.min(2,blendDraw(M,pid)<lv-lo?lo+1:lo)];
   }
-  // the position lift (a derived colour batting higher plays a step up) - in a Test only in the top six: a genuine
-  // tail-ender at 8 or 9 stays RED, or he bats like a No.6 for days (real Tests: No.9 averages 16, No.11 under 9)
-  const lift=COL_RANK[pc]<COL_RANK[own]&&(M.fmt!=='TEST'||pc==='B');
+  // the position lift (a derived colour batting higher plays a step up) - in a Test only for a man whose place in the
+  // XI is in the top six: a genuine tail-ender at 8 or 9 stays RED (real Tests: No.9 averages 16, No.11 under 9), and
+  // so does a nightwatchman or a tail-ender you send in at 3 (McGrath was making 145 at 3 against the World XI)
+  const slot=M.fmt==='TEST'&&M.xi&&M.xi[batTeam]?M.xi[batTeam].bat.indexOf(pid)+1:0;
+  const lift=COL_RANK[pc]<COL_RANK[own]&&(M.fmt!=='TEST'||posColour(slot>0?slot:pos)==='B');
   let col=!a.bat||a.batSrc==='h'||a.batSrc==='e'||(c.length===2&&vsFull)?own:lift?'BGR'[COL_RANK[own]-1]:own;
   if(tier)col='BGR'[Math.min(2,COL_RANK[col]+1)];
   if(f)col='BGR'[clamp(COL_RANK[col]-f,0,2)];
@@ -501,7 +503,8 @@ function captainBowler(M,I,over){
 function nightwatch(M,I){
   const clk=testClock(M)%90,k=I.wkts+1;
   if(testDay(M)>=5||clk<84||I.wkts>=7||k>5||I.target&&I.target-I.runs<60)return false;
-  const cand=[7,8,9].map(i=>I.order[i]).filter(p=>p!=null&&!I.bt[p]&&pAttr(p,M.date,M.fmt).style!=='N')
+  // a lower-order bowler (the No.9 or 10), as real nightwatchmen are - not the No.8 all-rounder or keeper
+  const cand=[8,9].map(i=>I.order[i]).filter(p=>p!=null&&!I.bt[p]&&pAttr(p,M.date,M.fmt).style!=='N')
     .sort((a,b)=>(COL_RANK[pAttr(a,M.date,M.fmt).bat?.[0]]??2)-(COL_RANK[pAttr(b,M.date,M.fmt).bat?.[0]]??2))[0];
   if(cand==null)return false;
   const j=I.order.indexOf(cand);I.order.splice(j,1);I.order.splice(k,0,cand);

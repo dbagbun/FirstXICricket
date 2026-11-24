@@ -42,8 +42,16 @@ def bat_value(fmt, inns):
     return avg if fmt == 'TEST' else avg * (runs / max(1, balls))   # T20: average x strike rate / 100
 
 
-def colour(fmt, inns):
+SHRINK = 10   # Tests: an era average counts as if SHRINK more dismissals at his career average were added
+
+
+def colour(fmt, inns, prior=None):
     v = bat_value(fmt, inns); b, g = FMTS[fmt]['bat_cut']
+    if fmt == 'TEST' and prior is not None:
+        # a few innings (a tail-ender's 61 and a string of not-outs) must not make a No.10 GREEN: pull the window
+        # towards his career average in proportion to how few dismissals it rests on
+        runs = sum(i[1] for i in inns); outs = sum(1 for i in inns if i[3])
+        v = (runs + SHRINK * prior) / (outs + SHRINK)
     return 'B' if v >= b else 'G' if v >= g else 'R'
 
 
@@ -123,13 +131,13 @@ def main():
                 r = max(r, 5 if balls < C['cap5'] else 4)
             return r
 
-        def bat_colour(inns):
+        def bat_colour(inns, prior=None):
             if len(inns) < C['min_inn']:
                 return ''
-            c = colour(fmt, inns)
+            c = colour(fmt, inns, prior)
             f = [i for i in inns if i[4]]
             if len(f) >= C['min_full']:
-                cf = colour(fmt, f)
+                cf = colour(fmt, f, prior)
                 if RANK[cf] > RANK[c]:
                     return c + cf
             return c
@@ -138,13 +146,14 @@ def main():
         for pid in set(bat[fmt]) | set(bowl[fmt]):
             B, W = bat[fmt].get(pid, []), bowl[fmt].get(pid, [])
             ys = sorted({x[0] for x in B} | {x[0] for x in W})
+            prior = bat_value(fmt, B) if len(B) >= C['min_inn'] else None   # his career average (Tests)
             era, last = [], None
             for y in range(ys[0], ys[-1] + 1):
                 r = rate(window(W, y, C['pool'])) if W else 0
                 wb = [x for x in B if y - ERA_YEARS <= x[0] < y]
                 if len(wb) < C['min_inn']:
                     wb = [x for x in B if x[0] < y]
-                c = bat_colour(wb) if len(wb) >= C['min_inn'] else bat_colour(sorted(B)[:C['min_inn'] * 2])
+                c = bat_colour(wb, prior) if len(wb) >= C['min_inn'] else bat_colour(sorted(B)[:C['min_inn'] * 2], prior)
                 if (r, c) != last:
                     era.append([y, r, c]); last = (r, c)
             fx[str(pid)][k] = era
