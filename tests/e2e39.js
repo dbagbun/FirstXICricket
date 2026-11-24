@@ -15,7 +15,8 @@ ok(col[0]==='R'&&col[1]==='B'&&col[2]==='G','Namibia\'s opener: RED v England, B
 const rate=(a,b,d,n)=>G(`(()=>{let wn=0,t=0;for(let i=0;i<${n};i++){const M=buildMatch({fmt:'ODI',custom:true,a:${a},b:${b},date:'${d}',venue:'X',city:'',title:'t',key:'r${a}${b}'+i});M.sim=true;M.friendly=true;doToss(M);simMatch(M);if(!M.result.winner)continue;t++;if(M.result.winner===${a})wn++;}return wn/t;})()`);
 const nzim=rate(18,10,'2003-02-20',120);ok(nzim<=.08,'Namibia v Zimbabwe: '+Math.round(100*nzim)+'%');
 const nned=rate(18,14,'2003-02-20',120);ok(nned>=.25,'Namibia v the Netherlands still a contest: '+Math.round(100*nned)+'%');
-const ire=rate(13,11,'2007-03-17',120);ok(ire>=.04,'Ireland 2007 v Bangladesh can win: '+Math.round(100*ire)+'%');
+// (~4-5% over 800 matches; part-timers bowling their real share - 03-engine odiShare - took it from 5.0 to 3.8)
+const ire=rate(13,11,'2007-03-17',300);ok(ire>=.025,'Ireland 2007 v Bangladesh can win: '+(100*ire).toFixed(1)+'%');
 w.go('settings');$('[data-set="assocTiers"][data-val="off"]').click();
 ok(G(`S.settings.assocTiers`)==='off'&&G(`buildMatch({fmt:'ODI',custom:true,a:18,b:10,date:'2003-02-20',venue:'X',city:'',title:'t',key:'off'}).assocTiers`)===false,'switched off for new matches');
 const off=rate(18,10,'2003-02-20',120);ok(off>nzim,'and Namibia win more often without it: '+Math.round(100*off)+'%');

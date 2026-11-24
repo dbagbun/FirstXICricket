@@ -344,6 +344,22 @@ const testShare=pid=>{const W=testWork(),t=W.t.get(pid)||0;return t>=TEST_PT_MIN
 function testPartTimer(pid){const s=testShare(pid);return s==null?null:s<TEST_PT_SHARE;}
 // a part-timer's overs in a Test innings with no real plan: about what he'd bowl in a long one (Gayle 11, Sarwan 4)
 const testPtCap=pid=>Math.max(4,Math.round(testShare(pid)*160));
+// ODIs the same way, from the real ODI plans (WORLD.plans, not the averaged ones of added ODIs): with no plan (the
+// game's own fixtures, your own XI, custom cups) a man who really bowled under ODI_PT_SHARE of his side's overs is
+// capped near what he really bowled (~1.6x his share of 50 overs) - else part-timers bowl twice their real share.
+const ODI_PT_SHARE=.08,ODI_PT_MIN=150;
+let ODI_WORK=null;
+function odiShare(pid){
+  if(!ODI_WORK){
+    const o=new Map(),t=new Map(),ex=new Set(WORLD.extra||[]);
+    for(const r of WORLD.fixtures){const P=WORLD.plans[r[7]];if(!P||ex.has(r[0]))continue;
+      for(const tid in P){if(P[tid].avg)continue;const x=WORLD.xi[r[7]]&&WORLD.xi[r[7]][tid];if(!x)continue;
+        let n=0;const c={};for(const ch of P[tid].map){const i='abcdefghijk'.indexOf(ch);if(i<0)continue;n++;c[x[i]]=(c[x[i]]||0)+1;}
+        for(const p of x.slice(0,11)){t.set(p,(t.get(p)||0)+n);if(c[p])o.set(p,(o.get(p)||0)+c[p]);}}}
+    ODI_WORK={o,t};
+  }
+  const t=ODI_WORK.t.get(pid)||0;return t>=ODI_PT_MIN?(ODI_WORK.o.get(pid)||0)/t:null;
+}
 function bowlEngInit(M,I){
   const x=M.xi[I.bowl],B=[];let total=0;
   const mod=pid=>(M.mods&&M.mods.bowl[pid])||0;   // form and fatigue move a bowler's rating a step
@@ -353,7 +369,9 @@ function bowlEngInit(M,I){
     const a=pAttr(pid,M.date,M.fmt);
     if(pid===x.wk)return;   // the keeper keeps
     const tp=M.fmt==='TEST'?testPartTimer(pid):null,pt=tp??(a.max<=PART_TIME_MAX);
-    if(a.style!=='N'&&a.rating<=6&&a.max>0)add(pid,a.style,a.rating,M.fmt==='TEST'?(tp?testPtCap(pid):999):Math.max(1,Math.round(a.max*perBowler(M)/10)),pt);
+    let mx=M.fmt==='TEST'?(tp?testPtCap(pid):999):Math.max(1,Math.round(a.max*perBowler(M)/10));
+    if(M.fmt==='ODI'&&!M.plans[I.bowl]){const sh=odiShare(pid);if(sh!=null&&sh<ODI_PT_SHARE)mx=Math.min(mx,Math.max(2,Math.round(sh*50*1.6)));}
+    if(a.style!=='N'&&a.rating<=6&&a.max>0)add(pid,a.style,a.rating,mx,pt);
   });
   // Safety net: not enough overs (or bowlers) -> top-order part-timers, weak.
   const need=M.fmt==='TEST'?5:M.maxOv;
