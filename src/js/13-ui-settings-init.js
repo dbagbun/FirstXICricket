@@ -74,6 +74,7 @@ RENDER.settings=(el)=>{
     <div class="spread"><span>Umpires &amp; DRS</span>${seg('drs',[['era','Real dates'],['on','DRS always'],['off','Perfect umpires']])}</div>
     <div class="spread"><span>Bowler quality and wickets (good bowlers get the top order out, part-timers less)</span>${seg('bowlEdge',[['on','Real-life'],['off','Workbook only']])}</div>
     <div class="spread"><span>Weakest associates (Namibia, Canada, USA ...) a colour lower v Test nations</span>${seg('assocTiers',[['on','On'],['off','Off']])}</div>
+    <div class="spread"><span>ODI batting: players between colours average what they really did (some innings a colour up or down)</span>${seg('odiBlend',[['on','Real averages'],['off','Colours only']])}</div>
     <div class="spread"><span>Batting colours</span>${seg('batColours',[['player','Player'],['position','Classic (by position)']])}</div>
     <div class="spread"><span>After the real calendar (2026)</span>${seg('future',[['on','Carry on into the future'],['off','Stop']])}</div>
     ${HAS_T20_DESIGN?`<div class="spread"><span>T20 run-rate cards</span>${seg('t20cards',[['designed','T20 cards (RR_T6-T12)'],['provisional','Original (ODI cards + RR_8/9)']])}</div>`:''}
@@ -104,7 +105,7 @@ RENDER.settings=(el)=>{
   </div>
   <div class="card" style="margin-top:14px"><h3>Data</h3><p class="sub">From Cricsheet: ${FIX.length.toLocaleString()} ODIs, ${TFIX.length.toLocaleString()} Tests and ${IFIX.length.toLocaleString()} T20Is (${fmtDate(CAREER_START)} - ${fmtDate(LAST_REAL)}) with their real XIs and bowling plans, ${Object.keys(WORLD.players).length.toLocaleString()} players. Built from ${esc(WORLD.source||'the First XI workbook')}.</p></div>`;
   $$('[data-set]').forEach(b=>b.onclick=()=>{const k=b.dataset.set,v=b.dataset.val;st[k]=k==='ballDelay'?+v:v==='true'?true:v==='false'?false:v;
-    if(S.live&&S.live.state!=='done'){if(k==='dice')S.live.manual=v==='manual';if(k==='captain')S.live.manualCaptain=v==='manual'?captainOf(S.live):null;if(k==='batColours')S.live.batMode=v;if(k==='t20cards')S.live.t20cards=v;if(k==='assocTiers')S.live.assocTiers=v!=='off';if(k==='bowlEdge')S.live.bowlEdge=v!=='off';}
+    if(S.live&&S.live.state!=='done'){if(k==='dice')S.live.manual=v==='manual';if(k==='captain')S.live.manualCaptain=v==='manual'?captainOf(S.live):null;if(k==='batColours')S.live.batMode=v;if(k==='t20cards')S.live.t20cards=v;if(k==='assocTiers')S.live.assocTiers=v!=='off';if(k==='odiBlend')S.live.odiBlend=v!=='off';if(k==='bowlEdge')S.live.bowlEdge=v!=='off';}
     if(k==='broadcast'||k==='font')applyBroadcast();
     if(k==='t20wc')iccToggle(v==='on');
     if(k==='t20is')fxDirty();

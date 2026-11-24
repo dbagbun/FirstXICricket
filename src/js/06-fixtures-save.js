@@ -130,6 +130,7 @@ function selectAndMods(M,fx){
   if(my&&!fx.friendly&&M.teams.includes(my)&&M.xi[my]){const r=pickXI(fx,my,M.xi[my]);M.xi[my]=r.xi;M.selNotes=r.notes;}
   meIntoXI(M);
   M.assocTiers=S.settings.assocTiers!=='off';
+  M.odiBlend=S.settings.odiBlend!=='off';   // ODI colours blended towards real averages (03-engine batColour)
   M.bowlEdge=S.settings.bowlEdge!=='off';   // bowler quality and wickets (03-engine BOWL_EDGE)
   M.mods=matchMods(M);drsSetup(M);M.t20cards=S.settings.t20cards||'designed';
 }

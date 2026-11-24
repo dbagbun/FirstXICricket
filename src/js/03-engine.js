@@ -237,19 +237,41 @@ function bowlEdgeCol(M,I,C,bcol,roll,col){
 const WEAK_ASSOC={12:['2008-01-01','9999'],13:['0','2006-12-31'],16:['0','9999'],17:['0','9999'],18:['0','9999'],19:['0','9999'],
   20:['0','9999'],21:['0','9999'],22:['0','9999'],23:['0','9999'],24:['0','9999'],25:['0','9999']};
 const weakAssoc=(t,date)=>{const w=WEAK_ASSOC[+t];return!!w&&!!date&&date>=w[0]&&date<=w[1];};
+// ODI colour blend: three colours give three averages (in the game BLUE ~40, GREEN ~14, RED ~10), while real
+// averages run from 7 to 50 - a 25-average No.3 played BLUE (40), a 24-average No.7 GREEN (14). With M.odiBlend (Settings,
+// on unless switched off) a batter whose real ODI average for the era (WORLD.oavg, tools/odi_averages.py) sits between
+// his colour's level and the next plays some innings a colour up or down, in proportion, so over time he averages what
+// he really did (the position lift is a stand-in for exactly this, so it's not added); weaker v Test nations, the
+// associate tiers and form still apply on top. Colours set in the editor and players with no real ODI record (fewer
+// than 10 innings, generated players) keep the colour rules. The cards are untouched.
+const ODI_LEVEL={B:40.1,G:13.7,R:10.1};
+function odiAvgAt(pid,date){const L=WORLD.oavg&&WORLD.oavg[pid];if(!L)return null;const y=+String(date).slice(0,4);let v=null;for(const e of L){if(e[0]<=y)v=e[1];else break;}return v;}
+const odiLevel=a=>a>=ODI_LEVEL.G?1+Math.min(1,(a-ODI_LEVEL.G)/(ODI_LEVEL.B-ODI_LEVEL.G)):Math.max(0,(a-ODI_LEVEL.R)/(ODI_LEVEL.G-ODI_LEVEL.R));
+// one draw per batter per innings (the same all innings long, the same on a replay)
+function blendDraw(M,pid){let h=7;for(const ch of String(M.id))h=(h*31+ch.charCodeAt(0))|0;return(((h^((M.inns||[]).length*97+pid*131))*2654435761)>>>0)%1000/1000;}
 function batColour(M,pid,pos,bowlTeam){
   const pc=posColour(pos);
   if(M.batMode==='position')return pc;
   const a=pAttr(pid,M.date,M.fmt),c=a.bat||pc;
   const vsFull=!!TEAMS.get(+bowlTeam)?.full;
   const own=c.length===2?c[vsFull?1:0]:c;
+  const batTeam=M.teams?M.teams.find(t=>t!==+bowlTeam):0;
+  const tier=vsFull&&batTeam&&weakAssoc(batTeam,M.date)&&M.assocTiers!==false;   // weakest associates: a colour lower
+  const f=M.mods&&M.mods.bat[pid];   // form: hot +1 (GREEN plays BLUE), cold -1 (BLUE plays GREEN)
+  // ODI blend: from his real average for the era instead of the colour and the position lift (see ODI_LEVEL), then
+  // weaker v Test nations if his colours say so, the associate tier and form - one draw per innings between the
+  // two colours either side
+  const av=M.fmt==='ODI'&&M.odiBlend!==false&&a.bat&&a.batSrc!=='e'?odiAvgAt(pid,M.date):null;
+  if(av!=null){
+    let lv=odiLevel(av)-(c.length===2&&vsFull?COL_RANK[c[1]]-COL_RANK[c[0]]:0)-(tier?1:0)+(f||0);
+    lv=clamp(lv,0,2);const lo=Math.floor(lv);
+    return'RGB'[Math.min(2,blendDraw(M,pid)<lv-lo?lo+1:lo)];
+  }
   // the position lift (a derived colour batting higher plays a step up) - in a Test only in the top six: a genuine
   // tail-ender at 8 or 9 stays RED, or he bats like a No.6 for days (real Tests: No.9 averages 16, No.11 under 9)
   const lift=COL_RANK[pc]<COL_RANK[own]&&(M.fmt!=='TEST'||pc==='B');
   let col=!a.bat||a.batSrc==='h'||a.batSrc==='e'||(c.length===2&&vsFull)?own:lift?'BGR'[COL_RANK[own]-1]:own;
-  const batTeam=M.teams?M.teams.find(t=>t!==+bowlTeam):0;
-  if(vsFull&&batTeam&&weakAssoc(batTeam,M.date)&&M.assocTiers!==false)col='BGR'[Math.min(2,COL_RANK[col]+1)];
-  const f=M.mods&&M.mods.bat[pid];   // form: hot +1 (GREEN plays BLUE), cold -1 (BLUE plays GREEN)
+  if(tier)col='BGR'[Math.min(2,COL_RANK[col]+1)];
   if(f)col='BGR'[clamp(COL_RANK[col]-f,0,2)];
   return col;
 }
