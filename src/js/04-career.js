@@ -7,6 +7,7 @@ function newCareer(opts={}){
     settings:{dice:'auto',captain:'auto',knockouts:'timeline',batColours:'player',ratings:'era',history:'after',selection:'auto',form:'on',broadcast:'standard',font:'barlow',voice:false,voiceRate:1.05,future:'on',drs:'era',t20wc:'on',t20cards:'designed',assocTiers:'on',odiBlend:'on',bowlEdge:'on',badges:'flags',t20is:'on',myTeam:+opts.myTeam||0,ballDelay:250,sound:false,tv:true},
     t20iFrom:'',      // real T20Is from this date ('' = all; old saves get theirs from where they were)
     ctSplit:1,        // catches in the field and as keeper kept apart (older saves: splitCatches)
+    msV:2,            // every milestone's first ten told their order, five-fors every 5th, ten-wicket matches (older saves: msNthFew)
     xfSeen:[...EXTRA_FX],   // added ODIs, Tests and T20Is this career already knows about (extraFxCheck)
     rkSteady:2,       // steadier player rankings, real-style team ratings (older saves: rankSteady)
     done:{},          // fixture no / test id -> match id
@@ -153,7 +154,8 @@ const MS_DEFS=[
   {cat:'Career Runs',key:s=>s.r,thr:[1000,2000,3000,5000,7500,10000,12500,15000],txt:t=>t.toLocaleString()+' career runs'},
   {cat:'Centuries',key:s=>s.c100,thr:[1,10,20,30,40],txt:t=>t===1?'Maiden century':t+' career centuries'},
   {cat:'Career Wickets',key:s=>s.bw,thr:[50,100,150,200,300,400,500],txt:t=>t+' career wickets'},
-  {cat:'Five-wicket hauls',key:s=>s.w5,thr:[1,5,10,20],txt:t=>t===1?'First five-wicket haul':t+' five-wicket hauls'},
+  {cat:'Five-wicket hauls',key:s=>s.w5,thr:[1,...Array.from({length:14},(_,i)=>5*(i+1))],txt:t=>t===1?'First five-wicket haul':t+' five-wicket hauls'},
+  {cat:'Ten-wicket matches',key:s=>s.w10||0,thr:[1,...Array.from({length:6},(_,i)=>5*(i+1))],txt:t=>t===1?'First ten-wicket match':t+' ten-wicket matches'},   // Tests only (w10)
   {cat:'Career Catches',key:s=>s.ct,thr:[25,50,75,100,150],txt:t=>t+' career catches'},
   {cat:'Keeping dismissals',key:s=>(s.ctk||0)+s.st,thr:[50,100,150,200,250,300,400],txt:t=>t+' dismissals as keeper'},
   {cat:'Caps',key:s=>s.m,thr:[50,100,150,200],txt:t=>t+' caps'},
@@ -162,10 +164,21 @@ const MS_DEFS=[
 // How many players reached each career milestone before (per format, in this career's records): S.msN[fmt:cat:thr].
 // Rebuilt from S.ms for saves that don't have it yet.
 const MS_COUNTED=new Set(MS_DEFS.map(d=>d.cat));
-// The order is said only where it means something: never for a first (maiden century, first five-for), and only for the
-// first MS_NTH_SHOW to get there (the 6th to 5,000 runs, not the 45th to 1,000). It's counted either way.
+// The order is said for the first MS_NTH_SHOW to reach any career milestone ("100 career wickets - the 1st player to
+// get there"), never for a maiden century or a first five-for (everyone gets one). It's counted either way.
 const MS_NTH_SHOW=10,msIsFirst=(cat,thr)=>thr===1&&(cat==='Centuries'||cat==='Five-wicket hauls');
-const MS_NTH_MIN={'Career Runs':5000,'Centuries':10,'Career Wickets':200,'Five-wicket hauls':10,'Career Catches':100,'Caps':100,'Keeping dismissals':100,'All-rounder':1};
+const msShowNth=(cat,thr,nth)=>!!nth&&!msIsFirst(cat,thr)&&nth<=MS_NTH_SHOW;
+const MS_NTH_TXT=nth=>` - the ${ordinal(nth)} player to get there`;
+// Saves from before every milestone said it (and before the five-for steps of 5 and ten-wicket matches): add it to
+// the first ten of each, and mark the new milestones a player has already passed - quietly, counted but not
+// back-dated - so the next match doesn't log them late. Once (S.msV).
+function msNthFew(){
+  if(!S||(S.msV||0)>=2)return;S.msV=2;
+  for(const m of S.ms||[])if(m.nth&&MS_COUNTED.has(m.cat)&&msShowNth(m.cat,m.thr,m.nth)&&!/player to get there/.test(m.text))m.text+=MS_NTH_TXT(m.nth);
+  const N=msCount();S.msKeys=S.msKeys||{};
+  for(const f of FORMATS)for(const[pid,s]of Object.entries(S.stats[f]||{}))for(const d of MS_DEFS)for(const t of d.thr)if(d.key(s)>=t){
+    const k=f+':'+(+pid)+':'+d.cat+':'+t;if(!S.msKeys[k]){S.msKeys[k]=1;N[f+':'+d.cat+':'+t]=(N[f+':'+d.cat+':'+t]||0)+1;}}
+}
 function msCount(){if(!S.msN){S.msN={};for(const m of S.ms)if(MS_COUNTED.has(m.cat)){const k=m.fmt+':'+m.cat+':'+m.thr;S.msN[k]=(S.msN[k]||0)+1;}}return S.msN;}
 function logMilestone(fmt,pid,cat,thr,E,text,extra){
   const k=fmt+':'+(+pid)+':'+cat+':'+thr;
@@ -173,7 +186,7 @@ function logMilestone(fmt,pid,cat,thr,E,text,extra){
   S.msKeys[k]=1;
   let nth=0;
   if(MS_COUNTED.has(cat)){const N=msCount(),c=fmt+':'+cat+':'+thr;nth=N[c]=(N[c]||0)+1;
-    if(nth<=MS_NTH_SHOW&&!msIsFirst(cat,thr)&&thr>=(MS_NTH_MIN[cat]??Infinity))text+=` - the ${ordinal(nth)} player to get there`;}
+    if(msShowNth(cat,thr,nth))text+=MS_NTH_TXT(nth);}
   const m={fmt,pid:+pid,cat,thr,mid:E?E.id:'',date:E?E.date:'',text,team:extra?.team||0};
   if(nth)m.nth=nth;
   S.ms.push(m);return m;

@@ -1,7 +1,7 @@
 // e2e54: catches add up. A catch in the field (ct) and a catch as the keeper (ctk) are kept apart in the stats, as the
 // records keep them; bowled / lbw carry no fielder; the records' Most catches equals the players' Ct and Most
 // keeping dismissals their WkCt + St; keeping dismissals have their own milestone; an older save is recounted once.
-// The "nth player to get there" is said only for the big milestones.
+// The "nth player to get there": the first 10 at every milestone.
 const {JSDOM}=require('jsdom'),fs=require('fs');
 const html=fs.readFileSync(process.argv[2]||'dist/first-xi.html','utf8');
 let fail=0;const ok=(c,m)=>{if(!c){fail++;console.log('FAIL',m);}};
@@ -23,8 +23,8 @@ ok(wk.list.length>=5&&wk.list.every(([a,b])=>a===b)&&wk.sorted,'Most catches (wi
 G(`openPlayer(${G(`recordsData('ODI').ro[0].pid`)})`);ok(/RO/.test(w.document.querySelector('#modal-box').textContent),'the player page shows run outs');G(`closeModal()`);
 ok(G(`S.ms.some(m=>m.cat==='Keeping dismissals')`),'keeping dismissals milestones');
 // the order: only for the big milestones
-ok(G(`S.ms.filter(m=>/player to get there/.test(m.text)).every(m=>m.thr>=MS_NTH_MIN[m.cat]&&m.nth<=10)`),'the order only for the big ones and the first 10');
-ok(G(`S.ms.filter(m=>m.cat==='Career Catches'&&m.thr===25).every(m=>!/player to get there/.test(m.text))`),'not for 25 catches');
+ok(G(`S.ms.filter(m=>/player to get there/.test(m.text)).every(m=>m.nth<=10)`),'the order for the first 10');
+ok(G(`S.ms.filter(m=>m.cat==='Career Catches'&&m.thr===25).every(m=>/player to get there/.test(m.text)===(m.nth<=10))`),'25 catches: the first ten told, not the 11th');
 // an older save: catches as keeper counted in with the rest, no ctk, no ctSplit
 const want=G(`(()=>{const o={};for(const f of['ODI','TEST'])for(const[p,s]of Object.entries(S.stats[f]))o[f+p]=[s.ct,s.ctk];return o;})()`);
 G(`for(const f of FORMATS)for(const s of Object.values(S.stats[f]||{})){s.ct+=s.ctk||0;delete s.ctk;}delete S.ctSplit;

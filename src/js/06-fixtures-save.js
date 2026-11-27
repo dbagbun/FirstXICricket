@@ -242,11 +242,11 @@ function loadSlot(i){
   for(const f of FORMATS)S.fast[f]=S.fast[f]||{f50:null,f100:null};
   if(S.rk)for(const k of['team','yr','bat','bowl'])for(const f of FORMATS)S.rk[k][f]=S.rk[k][f]||{};
   if(!S.rk)rebuildRankings();
-  splitCatches();rankSteady();
+  splitCatches();msNthFew();rankSteady();
   return true;
 }
 function exportCareer(){return JSON.stringify(S);}
-function importCareer(text){const d=parseSave(text);if(!d)return false;S=d;realT20From();extraFxCheck();S.msKeys=S.msKeys||{};S.ms=S.ms||[];splitCatches();rankSteady();saveGame();return true;}
+function importCareer(text){const d=parseSave(text);if(!d)return false;S=d;realT20From();extraFxCheck();S.msKeys=S.msKeys||{};S.ms=S.ms||[];splitCatches();msNthFew();rankSteady();saveGame();return true;}
 // A career saved before the real T20Is were added picks them up from its current date, not back in 2005.
 // ODIs, Tests and T20Is added to the data after Cricsheet (tools/extra_odis.py: WORLD.extra / textra / iextra): a save
 // already past one when it first sees it skips it (S.skipFx - unplayable there), so a career never jumps back in time;

@@ -54,7 +54,7 @@ function openPlayer(pid){
   const a=pAttr(pid),rows=FORMATS.map(f=>[f,S.stats[f][pid]]).filter(x=>x[1]),gp=genP(pid);
   const era=(WORLD.players[pid]||[])[7]||[],bowls=a.style!=='N';
   const recent=S.matches.filter(E=>E.teams.some(t=>E.xi[t].slice(0,11).includes(pid))).slice(-8).reverse();
-  const ms=S.ms.filter(m=>m.pid===pid).slice(-10).reverse();
+  const ms=S.ms.filter(m=>m.pid===pid).reverse(),msRow=m=>`<div>🏅 ${esc(m.text)} <span class="muted">${fmtDate(m.date)} · ${m.fmt}</span></div>`;
   const line=(E)=>{const parts=[];for(const I of E.inns){const b=I.bt.find(r=>r[0]===pid);if(b)parts.push(b[1]+(b[5]?'':'*'));const w=I.bw.find(r=>r[0]===pid);if(w)parts.push(w[4]+'/'+w[3]);}return parts.join(', ')||'dnb';};
   openModal(`<h2>${esc(pName(pid))}</h2>
   ${gp?`<div class="sub" style="margin:-6px 0 8px">Age ${ageOf(gp,careerDate())} · ${esc(teamName(gp.t))}${gp.real?'':` · potential ${'★'.repeat(6-gp.pot)}`}${gp.ret&&gp.ret<=careerDate()?` · <span class="red">retired ${gp.ret.slice(0,4)}</span>`:''}</div>`:''}
@@ -79,7 +79,7 @@ function openPlayer(pid){
   ${playerShotsHTML(pid)}
   ${nemesisHTML(pid)}
   ${(()=>{const st=storyOf(pid);return st.length>1?`<details style="margin-top:10px"><summary class="muted" style="cursor:pointer">Career story</summary>${st.map(([d,t])=>`<div><span class="muted">${fmtDate(d)}</span> ${esc(t)}</div>`).join('')}</details>`:'';})()}
-  ${ms.length?`<h3>Milestones</h3>${ms.map(m=>`<div>🏅 ${esc(m.text)} <span class="muted">${fmtDate(m.date)} · ${m.fmt}</span></div>`).join('')}`:''}`);
+  ${ms.length?`<h3>Milestones</h3>${ms.slice(0,10).map(msRow).join('')}${ms.length>10?`<details style="margin-top:4px"><summary class="muted" style="cursor:pointer">All milestones (${ms.length})</summary>${ms.slice(10).map(msRow).join('')}</details>`:''}`:''}`);
   $('#pa-edit').onclick=()=>$('#pa-form').classList.toggle('hidden');
   $('#pa-cmp').onclick=()=>{Q_F.mode='cmp';Q_F.c1=pName(pid);Q_F.c2='';const f=FORMATS.find(f=>S.stats[f][pid]);if(f)Q_F.fmt=f;closeModal();go('query');};
   $('#pa-save').onclick=()=>{S.attrEdits[pid]={style:$('#pa-style').value,rating:+$('#pa-rating').value,max:clamp(+$('#pa-max').value,0,10),bat:$('#pa-bat').value};if(S.attrEdits[pid].style==='N')Object.assign(S.attrEdits[pid],{rating:7,max:0});saveGame();openPlayer(pid);};
