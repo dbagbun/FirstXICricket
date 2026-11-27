@@ -1,7 +1,7 @@
 // ═══ RECORDS, PLAYERS, RESULTS, MILESTONES ═══
 let REC_F={fmt:'ODI',grp:'Batting'};
 RENDER.records=(el)=>{
-  const D=recordsData(REC_F.fmt),keys=REC_GROUPS.find(g=>g[0]===REC_F.grp)[1],min=REC_MIN[REC_F.fmt];
+  const D=recordsData(REC_F.fmt),keys=REC_GROUPS.find(g=>g[0]===REC_F.grp)[1].filter(k=>k!=='w10'||REC_F.fmt==='TEST'),min=REC_MIN[REC_F.fmt];
   const rowHTML=(k,r,i)=>{
     const who=r.pid?plink(r.pid):r.a?`${esc(pName(r.a))} &amp; ${esc(pName(r.b))}`:esc(r.label||'');
     const ctx=r.mid?`<span class="muted" style="font-size:12px">${r.team?esc(r.team)+' ':''}${r.vs?'v '+esc(r.vs)+' · ':''}${fmtDate(r.date)}</span>`:`<span class="muted" style="font-size:12px">${esc(r.team||'')}</span>`;

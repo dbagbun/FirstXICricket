@@ -41,6 +41,16 @@ ok(G(`(()=>{const L=S.ms.filter(m=>m.cat==='Career Runs'&&m.thr===1000&&m.nth<=1
 {const c={};for(const m of G(`S.ms.map(m=>m.pid)`))c[m]=(c[m]||0)+1;const big=+Object.keys(c).find(k=>c[k]>10);
  if(big){G(`openPlayer(${big})`);const box=$('#modal-box');ok(box.querySelectorAll('details').length>=1&&new RegExp('All milestones \\('+c[big]+'\\)').test(box.textContent),'a profile lists all '+c[big]+' milestones (latest ten, then the rest)');G('closeModal()');}
  else ok(true,'no player with more than ten milestones yet');}
+// ten-wicket matches next to the five-fors: profile (Tests), records, stats query, comparison
+{const p=G(`(()=>{const e=Object.entries(S.stats.TEST).filter(([k,s])=>s.w10>0).sort((a,b)=>b[1].w10-a[1].w10)[0];return e?+e[0]:0;})()`);
+ if(p){const n=G(`S.stats.TEST[${p}].w10`);G(`openPlayer(${p})`);const tb=[...$('#modal-box').querySelectorAll('table')].find(t=>/10w/.test(t.textContent));
+  const hdr=tb?[...tb.rows[0].cells].map(c=>c.textContent):[],row=tb?[...tb.rows[1].cells].map(c=>c.textContent):[];
+  ok(tb&&hdr[hdr.indexOf('10w')-1]==='5w'&&row[hdr.indexOf('10w')]===String(n),'the profile\'s Test table: 10w next to 5w ('+n+')');
+  ok([...$('#modal-box').querySelectorAll('table')].filter(t=>/10w/.test(t.textContent)).length===1,'only in the Test table');G('closeModal()');
+  ok(G(`recordsData('TEST').w10[0].v`)===n&&G(`REC_GROUPS.find(g=>g[0]==='Bowling')[1].indexOf('w10')`)===G(`REC_GROUPS.find(g=>g[0]==='Bowling')[1].indexOf('w5')+1`),'records: Most ten-wicket matches after Most five-wicket hauls');
+  const q=G(`queryStats({fmt:'TEST'}).bowl.find(x=>x.pid===${p})`);ok(q&&q.w10===n,'the stats query counts them ('+(q&&q.w10)+')');
+  ok(/Ten-wicket matches/.test(G(`compareHTML(${p},null,'TEST')`))&&!/Ten-wicket matches/.test(G(`compareHTML(${p},null,'ODI')`)),'the comparison shows them for Tests');}
+ else ok(true,'no ten-wicket match yet');}
 ok(G(`S.matches.every(E=>!E.rk)`),'quick sims skip the ranking moves');
 // a match you play
 const r=G(`(()=>{const fx=nextFixture();const M=buildMatch(fx);doToss(M);simMatch(M);const E=S.matches[S.matches.length-1];return{rk:E.rk||[],fmt:E.fmt,id:E.id,teams:E.teams,men:E.teams.flatMap(t=>E.xi[t].slice(0,11))};})()`);

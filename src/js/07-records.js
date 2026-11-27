@@ -2,7 +2,7 @@
 const REC_MIN={ODI:{inn:20,balls:500,wkts:30,bb:600,cap:10},TEST:{inn:15,balls:1000,wkts:30,bb:1500,cap:8},T20:{inn:12,balls:250,wkts:20,bb:300,cap:8},LEAGUE:{inn:12,balls:250,wkts:20,bb:300,cap:8}};
 const REC_GROUPS=[
   ['Batting',['runs','hs','avg','sr','c100','c50','f6','f4','fast50','fast100','ducks']],
-  ['Bowling',['wkts','bbi','bbm','bavg','econ','bsr','w5','md']],
+  ['Bowling',['wkts','bbi','bbm','bavg','econ','bsr','w5','w10','md']],   // w10: Tests only
   ['Fielding',['ct','wkd','wkct','st','ro']],
   ['Captaincy',['capw','cappct']],
   ['Partnerships',['part','p1','p2','p3','p4','p5','p6','p7','p8','p9','p10']],
@@ -11,7 +11,7 @@ const REC_GROUPS=[
 ];
 const REC_NAME={runs:'Most runs',hs:'Highest individual score',avg:'Highest batting average',sr:'Highest strike rate',c100:'Most hundreds',c50:'Most fifties',
   f6:'Most sixes',f4:'Most fours',fast50:'Fastest fifty',fast100:'Fastest hundred',ducks:'Most ducks',wkts:'Most wickets',bbi:'Best bowling in an innings',
-  bbm:'Best bowling in a match',bavg:'Best bowling average',econ:'Best economy rate',bsr:'Best bowling strike rate',w5:'Most five-wicket hauls',md:'Most maidens',
+  bbm:'Best bowling in a match',bavg:'Best bowling average',econ:'Best economy rate',bsr:'Best bowling strike rate',w5:'Most five-wicket hauls',w10:'Most ten-wicket matches',md:'Most maidens',
   ct:'Most catches (fielder)',wkd:'Most wicketkeeping dismissals',wkct:'Most catches (wicketkeeper)',st:'Most stumpings',ro:'Most run outs',capw:'Most wins as captain',cappct:'Best win % as captain',
   part:'Highest partnership (any wicket)',tot:'Highest team totals',low:'Lowest completed totals',winr:'Biggest wins by runs',winw:'Biggest wins by wickets',
   teamwl:'Team results',motm:'Most Man of the Match awards',caps:'Most caps'};
@@ -41,6 +41,7 @@ function recordsData(fmt){
   D.econ=top(P,x=>bowlEcon(x.s),x=>f2(bowlEcon(x.s)),1,x=>x.s.bb>=min.bb);
   D.bsr=top(P,x=>bowlSR(x.s),x=>f1(bowlSR(x.s)),1,x=>x.s.bw>=min.wkts);
   D.w5=top(P,x=>x.s.w5,x=>x.s.w5,-1,x=>x.s.w5>0);
+  D.w10=top(P,x=>x.s.w10||0,x=>x.s.w10||0,-1,x=>(x.s.w10||0)>0);
   D.md=top(P,x=>x.s.md,x=>x.s.md,-1,x=>x.s.md>0);
   D.ro=top(P,x=>x.s.ro,x=>x.s.ro,-1,x=>x.s.ro>0);
   D.st=top(P,x=>x.s.st,x=>x.s.st,-1,x=>x.s.st>0);

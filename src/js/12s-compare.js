@@ -28,7 +28,7 @@ function compareHTML(a,b,fmt){
   const st=p=>S.stats[fmt][p]||null;
   if(!ps.some(st))return`<div class="empty">No ${FMT_NAME[fmt]} career for ${ps.map(p=>esc(pName(p))).join(' or ')} yet.</div>`;
   const rows=[['Matches',s=>s.m,1],['Runs',s=>s.r,1],['Batting average',s=>batAvg(s),1,f2],['Strike rate',s=>batSR(s),1,f1],['Hundreds',s=>s.c100,1],['Fifties',s=>s.c50,1],['Highest',s=>s.hs,1,(v,s)=>v+(s.hsNo?'*':'')],
-    ['Wickets',s=>s.bw,1],['Bowling average',s=>s.bw?bowlAvg(s):null,-1,f2],['Economy',s=>s.bb?bowlEcon(s):null,-1,f2],['Five-fors',s=>s.w5,1],['Best',s=>s.best[0]*1000-s.best[1],1,(v,s)=>s.best[0]+'/'+s.best[1]],['Catches',s=>s.ct,1],['Man of the Match',s=>s.motm,1]];
+    ['Wickets',s=>s.bw,1],['Bowling average',s=>s.bw?bowlAvg(s):null,-1,f2],['Economy',s=>s.bb?bowlEcon(s):null,-1,f2],['Five-fors',s=>s.w5,1],['Ten-wicket matches',s=>s.w10||0,1],['Best',s=>s.best[0]*1000-s.best[1],1,(v,s)=>s.best[0]+'/'+s.best[1]],['Catches',s=>s.ct,1],['Man of the Match',s=>s.motm,1]];
   const tbl=`<table class="num"><tr><th></th>${ps.map((p,k)=>`<th class="r"><span style="color:${CMP_COL[k]}">●</span> ${plink(p)}</th>`).join('')}</tr>
     ${rows.map(([lab,f,dir,fmtv])=>{const v=ps.map(p=>st(p)?f(st(p)):null);if(v.every(x=>x==null||x===0))return'';
       const best=ps.length===2&&v[0]!=null&&v[1]!=null&&v[0]!==v[1]?((v[0]-v[1])*dir>0?0:1):-1;

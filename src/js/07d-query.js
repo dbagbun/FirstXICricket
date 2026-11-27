@@ -27,14 +27,15 @@ function queryStats(q){
         if(r[1]>=100)x.c100++;else if(r[1]>=50)x.c50++;bat.set(r[0],x);
       });
       if((!q.team||I.bowl===+q.team)&&(!q.opp||I.bat===+q.opp))for(const w of I.bw){
-        const x=bowl.get(w[0])||{pid:w[0],m:new Set(),bb:0,br:0,bw:0,md:0,best:[0,0],w5:0};
+        const x=bowl.get(w[0])||{pid:w[0],m:new Set(),bb:0,br:0,bw:0,md:0,best:[0,0],w5:0,mw:{}};
         x.m.add(E.id);x.bb+=w[1];x.br+=w[3];x.bw+=w[4];x.md+=w[2];if(w[4]>=5)x.w5++;
+        if(E.fmt==='TEST')x.mw[E.id]=(x.mw[E.id]||0)+w[4];   // wickets in the match, for ten-wicket matches
         if(w[4]>x.best[0]||(w[4]===x.best[0]&&w[3]<x.best[1]))x.best=[w[4],w[3]];bowl.set(w[0],x);
       }
     }
   }
   const B=[...bat.values()].map(x=>({...x,m:x.m.size,avg:x.inn-x.no?x.r/(x.inn-x.no):NaN,sr:x.b?100*x.r/x.b:NaN}));
-  const W=[...bowl.values()].map(x=>({...x,m:x.m.size,avg:x.bw?x.br/x.bw:NaN,econ:x.bb?x.br/(x.bb/6):NaN,sr:x.bw?x.bb/x.bw:NaN}));
+  const W=[...bowl.values()].map(x=>({...x,w10:Object.values(x.mw).filter(v=>v>=10).length,m:x.m.size,avg:x.bw?x.br/x.bw:NaN,econ:x.bb?x.br/(x.bb/6):NaN,sr:x.bw?x.bb/x.bw:NaN}));
   return{bat:B.sort((a,b)=>b.r-a.r),bowl:W.sort((a,b)=>b.bw-a.bw||a.br-b.br)};
 }
 // Head to head: one batter against one bowler (or everyone), from the per-innings matchups
